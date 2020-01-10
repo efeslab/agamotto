@@ -3,11 +3,15 @@
  */
 
 #include "klee/klee.h"
+#include <immintrin.h>
 
 int get_sign(int x) {
   if (x == 0)
      return 0;
   
+  _mm_clwb(0);
+  _mm_sfence();
+
   if (x < 0)
      return -1;
   else 

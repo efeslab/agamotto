@@ -59,6 +59,13 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b, Module &M) {
         continue;
 
       switch (ii->getIntrinsicID()) {
+
+      //for now, just ignore instruction
+      case Intrinsic::x86_clwb:
+      case Intrinsic::x86_sse_sfence:
+        ii->eraseFromParent();
+        break;
+
       case Intrinsic::vastart:
       case Intrinsic::vaend:
       case Intrinsic::fabs:
