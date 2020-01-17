@@ -268,8 +268,10 @@ void KModule::optimiseAndPrepare(
 
   // Add internal functions which are not used to check if instructions
   // have been already visited
-  if (opts.CheckDivZero)
+  if (opts.CheckDivZero) {
     addInternalFunction("klee_div_zero_check");
+    addInternalFunction("klee_div_one_check");
+  }
   if (opts.CheckOvershift)
     addInternalFunction("klee_overshift_check");
 

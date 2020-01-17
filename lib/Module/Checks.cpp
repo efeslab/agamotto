@@ -60,6 +60,9 @@ bool DivCheckPass::runOnModule(Module &M) {
         // Check if the operand is already checked by "klee_div_zero_check"
         if (KleeIRMetaData::hasAnnotation(I, "klee.check.div", "True"))
           continue;
+        // Check if the operand is already checked by "klee_div_one_check"
+        if (KleeIRMetaData::hasAnnotation(I, "klee.check.div1", "True"))
+          continue;
         divInstruction.push_back(binOp);
       }
     }
@@ -74,6 +77,9 @@ bool DivCheckPass::runOnModule(Module &M) {
   auto divZeroCheckFunction =
       M.getOrInsertFunction("klee_div_zero_check", Type::getVoidTy(ctx),
                             Type::getInt64Ty(ctx) KLEE_LLVM_GOIF_TERMINATOR);
+  auto divOneCheckFunction =
+      M.getOrInsertFunction("klee_div_one_check", Type::getVoidTy(ctx),
+                            Type::getInt64Ty(ctx) KLEE_LLVM_GOIF_TERMINATOR);
 
   for (auto &divInst : divInstruction) {
     llvm::IRBuilder<> Builder(divInst /* Inserts before divInst*/);
@@ -83,6 +89,8 @@ bool DivCheckPass::runOnModule(Module &M) {
                               "int_cast_to_i64");
     Builder.CreateCall(divZeroCheckFunction, denominator);
     md.addAnnotation(*divInst, "klee.check.div", "True");
+    Builder.CreateCall(divOneCheckFunction, denominator);
+    md.addAnnotation(*divInst, "klee.check.div1", "True");
   }
 
   return true;
