@@ -81,7 +81,9 @@ namespace klee {
       NURS_RP,
       NURS_ICnt,
       NURS_CPICnt,
-      NURS_QC
+      NURS_QC,
+      // (iangneal): Option for driving search towards NVM-modifying instructions.
+      NURS_NVM
     };
   };
 
@@ -136,14 +138,16 @@ namespace klee {
       InstCount,
       CPInstCount,
       MinDistToUncovered,
-      CoveringNew
+      CoveringNew,
+      // (iangneal): The NVM-modifying weight type.
+      NVMModifying
     };
 
   private:
     DiscretePDF<ExecutionState*> *states;
     WeightType type;
     bool updateWeights;
-    
+
     double getWeight(ExecutionState*);
 
   public:
@@ -158,14 +162,16 @@ namespace klee {
     void printName(llvm::raw_ostream &os) {
       os << "WeightedRandomSearcher::";
       switch(type) {
-      case Depth              : os << "Depth\n"; return;
-      case RP                 : os << "RandomPath\n"; return;
-      case QueryCost          : os << "QueryCost\n"; return;
-      case InstCount          : os << "InstCount\n"; return;
-      case CPInstCount        : os << "CPInstCount\n"; return;
-      case MinDistToUncovered : os << "MinDistToUncovered\n"; return;
-      case CoveringNew        : os << "CoveringNew\n"; return;
-      default                 : os << "<unknown type>\n"; return;
+        case Depth              : os << "Depth\n"; return;
+        case RP                 : os << "RandomPath\n"; return;
+        case QueryCost          : os << "QueryCost\n"; return;
+        case InstCount          : os << "InstCount\n"; return;
+        case CPInstCount        : os << "CPInstCount\n"; return;
+        case MinDistToUncovered : os << "MinDistToUncovered\n"; return;
+        case CoveringNew        : os << "CoveringNew\n"; return;
+        // (iangneal): For the NVMModifying weight.
+        case NVMModifying       : os << "NVMModifying\n"; return;
+        default                 : os << "<unknown type>\n"; return;
       }
     }
   };
