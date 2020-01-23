@@ -173,7 +173,10 @@ WeightedRandomSearcher::WeightedRandomSearcher(WeightType _type)
   case RP:
     updateWeights = false;
     break;
-  case InstCount:
+  // (iangneal): NVMModifying will update the weights, as the priority of a
+  // state changes relative to the current instruction/basic block of the
+  // program, as it is a function of the number of NVM-modifying successors.
+  case NVMModifying:
   case CPInstCount:
   case QueryCost:
   case MinDistToUncovered:
@@ -195,40 +198,44 @@ ExecutionState &WeightedRandomSearcher::selectState() {
 
 double WeightedRandomSearcher::getWeight(ExecutionState *es) {
   switch(type) {
-  default:
-  case Depth:
-    return es->depth;
-  case RP:
-    return std::pow(0.5, es->depth);
-  case InstCount: {
-    uint64_t count = theStatisticManager->getIndexedValue(stats::instructions,
-                                                          es->pc->info->id);
-    double inv = 1. / std::max((uint64_t) 1, count);
-    return inv * inv;
-  }
-  case CPInstCount: {
-    StackFrame &sf = es->stack.back();
-    uint64_t count = sf.callPathNode->statistics.getValue(stats::instructions);
-    double inv = 1. / std::max((uint64_t) 1, count);
-    return inv;
-  }
-  case QueryCost:
-    return (es->queryCost.toSeconds() < .1) ? 1. : 1./ es->queryCost.toSeconds();
-  case CoveringNew:
-  case MinDistToUncovered: {
-    uint64_t md2u = computeMinDistToUncovered(es->pc,
-                                              es->stack.back().minDistToUncoveredOnReturn);
-
-    double invMD2U = 1. / (md2u ? md2u : 10000);
-    if (type==CoveringNew) {
-      double invCovNew = 0.;
-      if (es->instsSinceCovNew)
-        invCovNew = 1. / std::max(1, (int) es->instsSinceCovNew - 1000);
-      return (invCovNew * invCovNew + invMD2U * invMD2U);
-    } else {
-      return invMD2U * invMD2U;
+    default:
+    case Depth:
+      return es->depth;
+    case RP:
+      return std::pow(0.5, es->depth);
+    case InstCount: {
+      uint64_t count = theStatisticManager->getIndexedValue(stats::instructions,
+                                                            es->pc->info->id);
+      double inv = 1. / std::max((uint64_t) 1, count);
+      return inv * inv;
     }
-  }
+    case CPInstCount: {
+      StackFrame &sf = es->stack.back();
+      uint64_t count = sf.callPathNode->statistics.getValue(stats::instructions);
+      double inv = 1. / std::max((uint64_t) 1, count);
+      return inv;
+    }
+    case QueryCost:
+      return (es->queryCost.toSeconds() < .1) ? 1. : 1./ es->queryCost.toSeconds();
+    case CoveringNew:
+    case MinDistToUncovered: {
+      uint64_t md2u = computeMinDistToUncovered(es->pc,
+                                                es->stack.back().minDistToUncoveredOnReturn);
+
+      double invMD2U = 1. / (md2u ? md2u : 10000);
+      if (type==CoveringNew) {
+        double invCovNew = 0.;
+        if (es->instsSinceCovNew)
+          invCovNew = 1. / std::max(1, (int) es->instsSinceCovNew - 1000);
+        return (invCovNew * invCovNew + invMD2U * invMD2U);
+      } else {
+        return invMD2U * invMD2U;
+      }
+    }
+    case NVMModifying: {
+      // (iangneal): TODO get information from the analytics pass.
+      return es->depth;
+    }
   }
 }
 
