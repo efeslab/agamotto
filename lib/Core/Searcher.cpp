@@ -173,10 +173,6 @@ WeightedRandomSearcher::WeightedRandomSearcher(WeightType _type)
   case RP:
     updateWeights = false;
     break;
-  // (iangneal): NVMModifying will update the weights, as the priority of a
-  // state changes relative to the current instruction/basic block of the
-  // program, as it is a function of the number of NVM-modifying successors.
-  case NVMModifying:
   case CPInstCount:
   case QueryCost:
   case MinDistToUncovered:
@@ -231,10 +227,6 @@ double WeightedRandomSearcher::getWeight(ExecutionState *es) {
       } else {
         return invMD2U * invMD2U;
       }
-    }
-    case NVMModifying: {
-      // (iangneal): TODO get information from the analytics pass.
-      return es->depth;
     }
   }
 }
@@ -300,8 +292,45 @@ RandomPathSearcher::update(ExecutionState *current,
                            const std::vector<ExecutionState *> &removedStates) {
 }
 
-bool RandomPathSearcher::empty() { 
-  return executor.states.empty(); 
+bool RandomPathSearcher::empty() {
+  return executor.states.empty();
+}
+
+///
+
+NVMPathSearcher::NVMPathSearcher(Executor &exec) : executor(exec) {}
+
+NVMPathSearcher::~NVMPathSearcher() {}
+
+ExecutionState &NVMPathSearcher::selectState() {
+  unsigned flips=0, bits=0;
+  PTreeNode *n = executor.processTree->root.get();
+  while (!n->state) {
+    if (!n->left) {
+      n = n->right.get();
+    } else if (!n->right) {
+      n = n->left.get();
+    } else {
+      if (bits==0) {
+        flips = theRNG.getInt32();
+        bits = 32;
+      }
+      --bits;
+      n = (flips&(1<<bits)) ? n->left.get() : n->right.get();
+    }
+  }
+
+  return *n->state;
+}
+
+void
+NVMPathSearcher::update(ExecutionState *current,
+                           const std::vector<ExecutionState *> &addedStates,
+                           const std::vector<ExecutionState *> &removedStates) {
+}
+
+bool NVMPathSearcher::empty() {
+  return executor.states.empty();
 }
 
 ///

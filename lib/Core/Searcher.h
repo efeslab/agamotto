@@ -83,7 +83,7 @@ namespace klee {
       NURS_CPICnt,
       NURS_QC,
       // (iangneal): Option for driving search towards NVM-modifying instructions.
-      NURS_NVM
+      NVM_Mod
     };
   };
 
@@ -138,9 +138,7 @@ namespace klee {
       InstCount,
       CPInstCount,
       MinDistToUncovered,
-      CoveringNew,
-      // (iangneal): The NVM-modifying weight type.
-      NVMModifying
+      CoveringNew
     };
 
   private:
@@ -169,8 +167,6 @@ namespace klee {
         case CPInstCount        : os << "CPInstCount\n"; return;
         case MinDistToUncovered : os << "MinDistToUncovered\n"; return;
         case CoveringNew        : os << "CoveringNew\n"; return;
-        // (iangneal): For the NVMModifying weight.
-        case NVMModifying       : os << "NVMModifying\n"; return;
         default                 : os << "<unknown type>\n"; return;
       }
     }
@@ -193,6 +189,27 @@ namespace klee {
     }
   };
 
+  /**
+   * (iangneal); The heuristic driver for NVM-modifying states.
+   *
+   * Essentially, we want the most NVM successors.
+   */
+  class NVMPathSearcher : public Searcher {
+    Executor &executor;
+
+  public:
+    NVMPathSearcher(Executor &exec);
+    ~NVMPathSearcher();
+
+    ExecutionState &selectState();
+    void update(ExecutionState *current,
+                const std::vector<ExecutionState *> &addedStates,
+                const std::vector<ExecutionState *> &removedStates);
+    bool empty();
+    void printName(llvm::raw_ostream &os) {
+      os << "NVMPathSearcher\n";
+    }
+  };
 
   extern llvm::cl::opt<bool> UseIncompleteMerge;
   class MergeHandler;
