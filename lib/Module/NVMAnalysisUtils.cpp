@@ -162,3 +162,37 @@ list<const Function*> utils::getNestedFunctionCalls(const BasicBlock *bb) {
 
     return fns;
 }
+
+Value* utils::getNvmPtrLocFromAnno(const Instruction &i) {
+  if (!utils::checkInstrinicInst(i, "annotation", nullptr)) {
+      return nullptr;
+  }
+
+  Value* annotation = i.getOperand(1);
+  Value *ann = annotation->stripPointerCasts();
+  auto *ex = ValueAsMetadata::getConstant(ann);
+
+  auto *g = dyn_cast<GlobalVariable>(ex->getValue());
+  if (g) {
+      auto *r = dyn_cast<ConstantDataSequential>(g->getInitializer());
+      if (r) {
+          auto name = r->getAsCString();
+          if ("nvmptr" == name) {
+              return utils::getPtrLoc(i.getOperand(0));
+          }
+      }
+  }
+
+  return nullptr;
+}
+
+unordered_set<const Value*> getNvmPtrLocs(const Function &f) {
+  unordered_set<const Value*> s;
+  for (auto &b : f) {
+    for (auto &i : b) {
+      Value *v = utils::getNvmPtrLoc(i);
+      if (v) s.insert(v);
+    }
+  }
+  return s;
+}
