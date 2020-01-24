@@ -11,6 +11,7 @@
 #define KLEE_PASSES_H
 
 #include "klee/Config/Version.h"
+#include "NVMAnalysisUtils.h"
 
 #include "llvm/ADT/Triple.h"
 #include "llvm/CodeGen/IntrinsicLowering.h"
@@ -204,6 +205,23 @@ public:
   OptNonePass() : llvm::ModulePass(ID) {}
   bool runOnModule(llvm::Module &M) override;
 };
+
+/**
+ * (iangneal): The heuristic that makes our NVM bug finding scalable.
+ */
+class NVMAnalysisPass : public llvm::ModulePass {
+public:
+  static char ID;
+  NVMAnalysisPass() : llvm::ModulePass(ID) {}
+  bool runOnModule(llvm::Module &M) override;
+private:
+
+};
+
 } // namespace klee
 
 #endif /* KLEE_PASSES_H */
+/*
+ * vim: set tabstop=2 softtabstop=2 shiftwidth=2:
+ * vim: set filetype=cpp:
+ */
