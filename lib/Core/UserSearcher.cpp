@@ -38,6 +38,9 @@ cl::list<Searcher::CoreSearchType> CoreSearch(
                    "randomly select a state to explore"),
         clEnumValN(Searcher::RandomPath, "random-path",
                    "use Random Path Selection (see OSDI'08 paper)"),
+        // (iangneal): Enable use of the NVM heuristic from the command line.
+        clEnumValN(Searcher::NVM_Mod, "nvm",
+                   "use NVM-Modifying Heuristic (upcoming OSDI'20 paper)"),
         clEnumValN(Searcher::NURS_CovNew, "nurs:covnew",
                    "use Non Uniform Random Search (NURS) with Coverage-New"),
         clEnumValN(Searcher::NURS_MD2U, "nurs:md2u",
@@ -48,9 +51,7 @@ cl::list<Searcher::CoreSearchType> CoreSearch(
                    "use NURS with Instr-Count"),
         clEnumValN(Searcher::NURS_CPICnt, "nurs:cpicnt",
                    "use NURS with CallPath-Instr-Count"),
-        clEnumValN(Searcher::NURS_QC, "nurs:qc", "use NURS with Query-Cost"),
-        // (iangneal): Enable use of the NVM heuristic from the command line.
-        clEnumValN(Searcher::NURS_NVM, "nurs:nvm", "use NURS with NVM-Modifying")
+        clEnumValN(Searcher::NURS_QC, "nurs:qc", "use NURS with Query-Cost")
             KLEE_LLVM_CL_VAL_END),
     cl::cat(SearchCat));
 
@@ -114,6 +115,8 @@ Searcher *getNewSearcher(Searcher::CoreSearchType type, Executor &executor) {
   case Searcher::BFS: searcher = new BFSSearcher(); break;
   case Searcher::RandomState: searcher = new RandomSearcher(); break;
   case Searcher::RandomPath: searcher = new RandomPathSearcher(executor); break;
+  // (iangneal): Initialize NVM heuristic.
+  case Searcher::NVM_Mod: searcher = new NVMPathSearcher(executor); break;
   case Searcher::NURS_CovNew: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::CoveringNew); break;
   case Searcher::NURS_MD2U: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::MinDistToUncovered); break;
   case Searcher::NURS_Depth: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::Depth); break;
@@ -121,11 +124,6 @@ Searcher *getNewSearcher(Searcher::CoreSearchType type, Executor &executor) {
   case Searcher::NURS_ICnt: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::InstCount); break;
   case Searcher::NURS_CPICnt: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::CPInstCount); break;
   case Searcher::NURS_QC: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::QueryCost); break;
-  // (iangneal): Initialize NVM heuristic.
-  case Searcher::NURS_NVM: {
-    searcher = new WeightedRandomSearcher(WeightedRandomSearcher::NVMModifying);
-    break;
-  }
   }
 
   return searcher;
