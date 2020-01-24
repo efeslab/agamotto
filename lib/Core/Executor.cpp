@@ -1427,6 +1427,20 @@ void Executor::executeCall(ExecutionState &state,
       // FIXME: We should validate that the target didn't do something bad
       // with va_end, however (like call it twice).
       break;
+
+      // Non-volatile memory intrinsics
+    case Intrinsic::x86_clflushopt:
+      klee_warning_once(
+        0, "program contains not-yet-supported clflushopt intrinsic");
+      break;
+    case Intrinsic::x86_clwb:
+      klee_warning_once(
+        0, "program contains not-yet-supported clwb intrinsic");
+      break;
+    case Intrinsic::x86_sse_sfence:
+      klee_warning_once(
+        0, "program contains not-yet-supported sfence intrinsic");
+      break;
         
     case Intrinsic::vacopy:
       // va_copy should have been lowered.

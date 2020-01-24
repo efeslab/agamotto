@@ -64,6 +64,13 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b, Module &M) {
       case Intrinsic::fabs:
         break;
 
+        // Leave non-volatile memory intrinsics untouched.
+        // The interpreter will detect and act upon these.
+      case Intrinsic::x86_clflushopt:
+      case Intrinsic::x86_clwb:
+      case Intrinsic::x86_sse_sfence:
+        break;
+
         // Lower vacopy so that object resolution etc is handled by
         // normal instructions.
         //
