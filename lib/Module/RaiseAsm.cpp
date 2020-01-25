@@ -58,6 +58,30 @@ bool RaiseAsmPass::runOnInstruction(Module &M, Instruction *I) {
   if (TLI->ExpandInlineAsm(ci))
     return true;
 
+  // Non-volatile memory library PMDK encodes NVM intrinsics as inline assembly.
+  // Convert these back into the NVM intrinsics.
+  if (triple.getArch() == llvm::Triple::x86_64) {
+    Function *intrinsicFunction = nullptr;
+
+    // clflushopt
+    if (ia->getAsmString() == ".byte 0x66; clflush $0") {
+      intrinsicFunction = Intrinsic::getDeclaration(&M, Intrinsic::x86_clflushopt);
+    }
+    // clwb
+    else if (ia->getAsmString() == ".byte 0x66; xsaveopt $0") {
+      intrinsicFunction = Intrinsic::getDeclaration(&M, Intrinsic::x86_clwb);
+    }
+
+    if (intrinsicFunction) {
+      IRBuilder<> Builder(I);
+      auto addressOperand = ci->getArgOperand(0);
+      auto intrinsicCall = Builder.CreateCall(intrinsicFunction,
+                         llvm::ArrayRef<llvm::Value*>(&addressOperand, 1));
+      I->eraseFromParent();
+      return true;
+    }
+  }
+
   if (triple.getArch() == llvm::Triple::x86_64 &&
       (triple.getOS() == llvm::Triple::Linux ||
        triple.getOS() == llvm::Triple::Darwin ||
