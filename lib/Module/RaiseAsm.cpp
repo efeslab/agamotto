@@ -75,7 +75,7 @@ bool RaiseAsmPass::runOnInstruction(Module &M, Instruction *I) {
     if (intrinsicFunction) {
       IRBuilder<> Builder(I);
       auto addressOperand = ci->getArgOperand(0);
-      auto intrinsicCall = Builder.CreateCall(intrinsicFunction,
+      Builder.CreateCall(intrinsicFunction,
                          llvm::ArrayRef<llvm::Value*>(&addressOperand, 1));
       I->eraseFromParent();
       return true;
