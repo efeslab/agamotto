@@ -1,4 +1,4 @@
-//===-- NVMAnalysisPass.cpp -------------------------------------*- C++ -*-===//
+//===-- NvmAnalysisPass.cpp -------------------------------------*- C++ -*-===//
 //
 //                     The KLEE Symbolic Virtual Machine
 //
@@ -20,9 +20,9 @@
 using namespace llvm;
 
 namespace klee {
-  char NVMAnalysisPass::ID = 0;
+  char NvmAnalysisPass::ID = 0;
 
-  bool NVMAnalysisPass::runOnModule(Module &M) {
+  bool NvmAnalysisPass::runOnModule(Module &M) {
 
     return false;
   }

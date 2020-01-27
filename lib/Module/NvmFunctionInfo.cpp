@@ -1,9 +1,134 @@
-#include "NVMFunctionInfo.h"
+#include "NvmFunctionInfo.h"
 
 using namespace llvm;
 using namespace std;
 using namespace klee;
 
+/* Begin NvmFunctionCallDesc */
+
+NvmFunctionCallDesc::NvmFunctionCallDesc(const Function *fn, const
+    unordered_set<unsigned> &nvm_args) : fn_(fn), nvm_args_(nvm_args) { }
+
+size_t NvmFunctionCallDesc::HashFn::operator()(const NvmFunctionCallDesc& x) const
+{
+  size_t hash_val = hash<const Function*>(x.Fn());
+  for (unsigned i : x.NvmArgs()) {
+    hash_val ^= i;
+  }
+
+  return hash_val;
+}
+
+bool operator==(const NvmFunctionCallDesc &rhs, const NvmFunctionCallDesc &lhs) {
+  return rhs.Fn() == lhs.Fn() && rhs.NvmArgs() == lhs.NvmArgs();
+}A
+
+/* End NvmFunctionCallDesc */
+
+/* Begin NvmFunctionCallInfo */
+
+NvmFunctionCallInfo::NvmFunctionCallInfo(
+        const NvmFunctionInfo &parent,
+        const Function* fn,
+        const unordered_set<unsigned> &nvm_args,
+        const unordered_set<const Function*> &blacklist) :
+    parent_(parent), fn_(fn), nvm_args_(nvm_args), blacklist_(blacklist)
+{
+  blacklist_.insert(fn);
+  init();
+}
+
+NvmFunctionCallInfo::NvmFunctionCallInfo(
+        const NvmFunctionInfo &parent,
+        const Function* fn,
+        const std::unordered_set<unsigned> &nvm_args) :
+    parent_(parent), fn_(fn), nvm_args_(nvm_args), blacklist_({fn})
+{
+  init();
+}
+
+void NvmFunctionCallInfo::init() {
+  getNvmInfo();
+  computeFactors();
+}
+
+void NvmFunctionCallInfo::getNvmInfo() {
+  nvm_ptr_locs_ = utils::getNvmPtrLocs(*fn_);
+
+  for (const Value *loc : nvm_ptr_locs_) {
+    auto ptrs = utils::getPtrsFromLoc(loc);
+    nvm_ptrs_.insert(ptrs.begin(), ptrs.end());
+  }
+
+  // (iangneal): LLVM 10 supports a getArg function, but LLVM 8 does not.
+  for (unsigned a : nvm_args_) {
+    const Argument *arg = fn_->arg_begin() + a;
+    nvm_ptrs_.insert(arg);
+  }
+
+  // Now that we have all the pointers, we can find all the derivatives.
+  utils::getDerivativePtrs(nvm_ptrs_);
+
+  // Now we find all the instructions which modify NVM.
+  for (const Value *ptr : nvm_ptrs_) {
+    utils::getModifiers(ptr, nvm_mods_);
+  }
+
+  for (const BasicBlock &bb : *fn_) {
+    for (const Instruction &i : bb) {
+      // Get all the fences and treat them like NVM modifying instructions.
+      if (utils::isFence(i)) nvm_mods_.insert(&i);
+      // If this is a nested function call, remember it for later when we have
+      // to compute the recursive factors.
+      const CallInst *ci = utils::getNestedFunctionCallInst(&i);
+      if (ci) nested_calls_.insert(ci);
+    }
+  }
+}
+
+size_t getFnMag(const llvm::Function *, std::unordered_set<const llvm::Function*>&) {
+  if
+}
+void NvmFunctionCallInfo::computeFactors() {
+  // Importance factor.
+  // -- Since we already have all the instructions, we can just get their
+  // parent basic blocks instead of iterating over all of the blocks.
+  for (const Value *v : nvm_mods_) {
+    const Instruction *i = dyn_cast<Instruction>(v);
+    if (!i) continue;
+
+    imp_factor[i->getParent()]++;
+  }
+
+  // Nested Factor.
+  // -- A function has users. Maybe we can use those for nested calls.
+
+  // Successor factor.
+  // -- We can
+}
+
+/* End NvmFunctionInfo */
+
+/* Begin NvmFunctionInfo */
+NvmFunctionInfo::NvmFunctionInfo(Module &m): m_(m) {};
+
+const NVMFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d) {
+  unordered_set<const Function*> bl;
+  return get(d, bl);
+}
+
+const NVMFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d,
+    const unordered_set<const Function*> &bl) {
+
+  // This is allowed because shared_ptr is falsy.
+  if (fn_info_[d]) return fn_info_[d].get();
+
+  // If we can't construct the new instance, abort. Likely recursion.
+  if (!fn_info_[d] && bl.find(d.Fn()) != bl.end()) return nullptr;
+
+  return (fn_info_[d] = make_shared(d, bl));
+}
+#if 0
 FunctionInfo::FunctionInfo(ModulePass &mp, const Module &mod)
     : mp_(mp), mod_(mod)
 {
@@ -83,7 +208,7 @@ void FunctionInfo::initManip() {
     }
 }
 
-bool FunctionInfo::manipulatesNVM(const Function *fn, unordered_set<int> nvmArgs) {
+bool FunctionInfo::manipulatesNvm(const Function *fn, unordered_set<int> nvmArgs) {
     const auto &fname = fn->getName();
     tuple<string, unordered_set<int>> key(fname, nvmArgs);
 
@@ -142,7 +267,7 @@ bool FunctionInfo::manipulatesNVM(const Function *fn, unordered_set<int> nvmArgs
             }
 
             // Step 3: Check if this is a function call. If it is, set up the
-            // arg set and check if it manipulatesNVM.
+            // arg set and check if it manipulatesNvm.
             const CallInst *ci = dyn_cast<CallInst>(&i);
             if (nullptr != ci && !ci->isInlineAsm() &&
                 !isa<IntrinsicInst>(&i) && !isa<InlineAsm>(&i)) {
@@ -162,7 +287,7 @@ bool FunctionInfo::manipulatesNVM(const Function *fn, unordered_set<int> nvmArgs
                         ++n;
                     }
 
-                    if (manipulatesNVM(ci->getCalledFunction(), cargs)) {
+                    if (manipulatesNvm(ci->getCalledFunction(), cargs)) {
                         fn_manip_nvm = true;
                     }
                 } else {
@@ -178,12 +303,12 @@ bool FunctionInfo::manipulatesNVM(const Function *fn, unordered_set<int> nvmArgs
     return fn_manip_nvm;
 }
 
-bool FunctionInfo::manipulatesNVM(const Function *fn) {
+bool FunctionInfo::manipulatesNvm(const Function *fn) {
     bool does_manip = false;
     for (const Argument &arg : fn->args()) {
         unordered_set<int> args;
         args.insert(arg.getArgNo());
-        does_manip |= manipulatesNVM(fn, args);
+        does_manip |= manipulatesNvm(fn, args);
     }
 
     return does_manip;
@@ -775,3 +900,5 @@ void FunctionInfo::dumpUnique() {
     }
     errs() << "\n-------------------------------------------------------\n";
 }
+#endif
+/* vim: set tabstop=2 softtabstop=2 shiftwidth=2: */
