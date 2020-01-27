@@ -782,6 +782,7 @@ static const char *modelledExternals[] = {
   "klee_warning",
   "klee_warning_once",
   "klee_stack_trace",
+  "llvm.var.annotation",
   "llvm.dbg.declare",
   "llvm.dbg.value",
   "llvm.x86.clflushopt",

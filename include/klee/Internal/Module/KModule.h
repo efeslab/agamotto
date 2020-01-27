@@ -61,6 +61,7 @@ namespace klee {
     ~KFunction();
 
     unsigned getArgRegister(unsigned index) { return index; }
+    KInstruction *getKInstruction(llvm::Instruction *inst);
   };
 
 
@@ -143,6 +144,9 @@ namespace klee {
 
     /// Return an id for the given constant, creating a new one if necessary.
     unsigned getConstantID(llvm::Constant *c, KInstruction* ki);
+
+    // Return the KInstruction that corresponds to some LLVM Instruction.
+    KInstruction *getKInstruction(llvm::Instruction *inst);
 
     /// Run passes that check if module is valid LLVM IR and if invariants
     /// expected by KLEE's Executor hold.

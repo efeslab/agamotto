@@ -384,6 +384,12 @@ KConstant* KModule::getKConstant(const Constant *c) {
   return NULL;
 }
 
+KInstruction *KModule::getKInstruction(llvm::Instruction *inst) {
+  llvm::Function *f = inst->getFunction();
+  KFunction *kf = functionMap[f];
+  return kf->getKInstruction(inst);
+}
+
 unsigned KModule::getConstantID(Constant *c, KInstruction* ki) {
   if (KConstant *kc = getKConstant(c))
     return kc->id;  
@@ -491,6 +497,23 @@ KFunction::KFunction(llvm::Function *_function,
       instructions[i++] = ki;
     }
   }
+}
+
+KInstruction *KFunction::getKInstruction(llvm::Instruction *inst) {
+  // Find the instruction's index within its basic block.
+  // XXX: This is hacky but there's no other way we know of.
+  BasicBlock *bb = inst->getParent();
+  size_t indexInBB = 0;
+  for (auto it = bb->begin(); it != bb->end(); ++it) {
+    if (&*it == inst)
+      break;
+    ++indexInBB;
+  }
+
+  // Add that index to the index where the BB begins in the instruction list
+  auto bbEntryIndex = basicBlockEntry[bb];
+
+  return instructions[bbEntryIndex + indexInBB];
 }
 
 KFunction::~KFunction() {

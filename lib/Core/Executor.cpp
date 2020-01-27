@@ -1356,6 +1356,18 @@ static inline const llvm::fltSemantics *fpWidthToSemantics(unsigned width) {
   }
 }
 
+static llvm::StringRef getAnnotationStringFromAnnotationCall(KInstruction *ki) {
+  llvm::Value *annotation = ki->inst->getOperand(1)->stripPointerCasts();
+  // Get first operand of GEP instruction.
+  auto *constant = ValueAsMetadata::getConstant(annotation)->getValue();
+  if (auto *global = dyn_cast<GlobalVariable>(constant)) {
+    if (auto *initter = dyn_cast<ConstantDataSequential>(global->getInitializer())) {
+      return initter->getAsCString();
+    }
+  }
+  return llvm::StringRef();
+}
+
 void Executor::executeCall(ExecutionState &state, 
                            KInstruction *ki,
                            Function *f,
@@ -1441,6 +1453,27 @@ void Executor::executeCall(ExecutionState &state,
       klee_warning_once(
         0, "program contains not-yet-supported sfence intrinsic");
       break;
+
+      // XXX: For now, we detect non-volatile memory using an
+      // annotation __attribute__. In future we should detect these addresses
+      // automatically.
+    case Intrinsic::var_annotation: {
+      // Check if it is the "nvmvar" annotation.
+      // The first operand to the annotation is a pointer, the second
+      // is which annotation is being applied.
+      auto annotationStr = getAnnotationStringFromAnnotationCall(ki);
+      if (annotationStr == "nvmvar") {
+        llvm::Instruction *bitcastInst =
+          dyn_cast<Instruction>(ki->inst->getOperand(0));
+        KInstruction *bitcastKInst = kmodule->getKInstruction(bitcastInst);
+        // Get the address of the variable being annotated.
+        ref<Expr> address = eval(bitcastKInst, 0, state).value;
+        executeNonVolatileMemoryAnnotation(state, cast<ConstantExpr>(address));
+      } else {
+        klee_warning("Unsupported annotation: %s", annotationStr.str().c_str());
+      }
+      break;
+    }
         
     case Intrinsic::vacopy:
       // va_copy should have been lowered.
@@ -3595,6 +3628,10 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           terminateStateOnError(state, "memory error: object read only",
                                 ReadOnly);
         } else {
+          if (mo->isNonVolatile) {
+            // TODO: track persistence epochs
+            klee_message("Modifying non-volatile MemoryObject");
+          }
           ObjectState *wos = state.addressSpace.getWriteable(mo, os);
           wos->write(offset, value);
         }          
@@ -3662,6 +3699,20 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                             NULL, getAddressInfo(*unbound, address));
     }
   }
+}
+
+void Executor::executeNonVolatileMemoryAnnotation(ExecutionState &state,
+                                                  ref<ConstantExpr> address) {
+  ObjectPair op;
+  if (!state.addressSpace.resolveOne(address, op)) {
+    klee_error("could not resolve address of 'nvmvar' annotation.");
+  }
+
+  const MemoryObject *mo = op.first;
+  mo->isNonVolatile = true;
+  std::string name;
+  mo->getAllocInfo(name);
+  /* klee_message("Found non-volatile memory pointer: %s", name.c_str()); */
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state, 

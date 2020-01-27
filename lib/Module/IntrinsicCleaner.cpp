@@ -71,6 +71,11 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b, Module &M) {
       case Intrinsic::x86_sse_sfence:
         break;
 
+        // XXX: For now we annotate NVM variables with llvm.annotation.
+        // Also fix main.cpp when you remove this.
+      case Intrinsic::var_annotation:
+        break;
+
         // Lower vacopy so that object resolution etc is handled by
         // normal instructions.
         //
