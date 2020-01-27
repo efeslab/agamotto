@@ -83,7 +83,7 @@ namespace klee {
       NURS_CPICnt,
       NURS_QC,
       // (iangneal): Option for driving search towards NVM-modifying instructions.
-      NVM_Mod
+      NvmMod
     };
   };
 
@@ -194,12 +194,12 @@ namespace klee {
    *
    * Essentially, we want the most NVM successors.
    */
-  class NVMPathSearcher : public Searcher {
+  class NvmPathSearcher : public Searcher {
     Executor &executor;
 
   public:
-    NVMPathSearcher(Executor &exec);
-    ~NVMPathSearcher();
+    NvmPathSearcher(Executor &exec);
+    ~NvmPathSearcher();
 
     ExecutionState &selectState();
     void update(ExecutionState *current,
@@ -207,7 +207,7 @@ namespace klee {
                 const std::vector<ExecutionState *> &removedStates);
     bool empty();
     void printName(llvm::raw_ostream &os) {
-      os << "NVMPathSearcher\n";
+      os << "NvmPathSearcher\n";
     }
   };
 
