@@ -1,4 +1,4 @@
-#include "NVMAnalysisUtils.h"
+#include "NvmAnalysisUtils.h"
 
 using namespace klee;
 using namespace llvm;
@@ -147,17 +147,24 @@ void utils::getModifiers(const Value* ptr, unordered_set<const Value*> &s) {
     }
 }
 
+const CallInst* utils::getNestedFunctionCallInst(const Instruction* i) {
+  const CallInst *ci = dyn_cast<CallInst>(i);
+  if (ci && !ci->isInlineAsm()) {
+    const Function *cfn = ci->getCalledFunction();
+    if (cfn && !cfn->isIntrinsic()) {
+      return ci;
+    }
+  }
+
+  return nullptr;
+}
+
 list<const Function*> utils::getNestedFunctionCalls(const BasicBlock *bb) {
     list<const Function*> fns;
 
     for (const Instruction &i : *bb) {
-        const CallInst *ci = dyn_cast<CallInst>(&i);
-        if (ci && !ci->isInlineAsm()) {
-            const Function *cfn = ci->getCalledFunction();
-            if (cfn && !cfn->isIntrinsic()) {
-                fns.push_back(cfn);
-            }
-        }
+      const CallInst *ci = utils::getCalledFunctionCallInst(&i);
+      if (ci) fns.push_back(ci->getCalledFunction());
     }
 
     return fns;
@@ -190,9 +197,23 @@ unordered_set<const Value*> getNvmPtrLocs(const Function &f) {
   unordered_set<const Value*> s;
   for (auto &b : f) {
     for (auto &i : b) {
-      Value *v = utils::getNvmPtrLoc(i);
+      Value *v = utils::getNvmPtrLocFromAnno(i);
       if (v) s.insert(v);
     }
   }
   return s;
 }
+
+unordered_set<const Value*> getPtrsFromLoc(const Value *ptr_loc) {
+  unordered_set<const Value*> s;
+
+  for (auto *u : ptr_loc->users()) {
+    // if is assignment
+    if (isa<LoadInst>(u)) {
+      s.insert(u);
+    }
+  }
+
+  return s;
+}
+/* vim: set tabstop=2 softtabstop=2 shiftwidth=2: */

@@ -15,6 +15,7 @@
 #include <queue>
 #include <string>
 #include <deque>
+#include <memory>
 
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
@@ -34,12 +35,45 @@
 #include "llvm/IR/Dominators.h"
 #include "llvm/Analysis/PostDominators.h"
 
-#include "NVMAnalysisUtils.h"
+#include "NvmAnalysisUtils.h"
 
+/**
+ *
+ * TODO: (iangneal)
+ * ASSUMPTIONS: This all currently hinges on pointers to NVM being local variables
+ * or function arguments. No pointers are checked in the global scope. This limitation
+ * will need to be addressed at some point.
+ */
 
 namespace klee {
 
-  class NVMFunctionInfo;
+  class NvmFunctionInfo;
+  class NvmFunctionCallInfo;
+
+  class NvmBasicBlockInfo;
+
+  /**
+   * A desciption of a call to a function with NVM relevant information.
+   * Encodes the function that is called and which arguments are pointers to
+   * NVM.
+   */
+  class NvmFunctionCallDesc {
+    private:
+      const llvm::Function *fn_;
+      const std::unordered_set<unsigned> nvm_args_;
+    public:
+      NvmFunctionCallDesc(const llvm::Function*, const std::unordered_set<unsigned>&);
+
+      const llvm::Function* Fn() const { return fn_; }
+
+      const std::unordered_set<unsigned>& NvmArgs() const { return nvm_args_ };
+
+      struct HashFn : public std::unary_function<NvmFunctionCallDesc, size_t> {
+        size_t operator()(const NvmFunctionCallDesc&) const;
+      };
+
+      friend bool operator==(const NvmFunctionCallDesc &rhs, const NvmFunctionCallDesc &lhs);
+  }
 
   /**
    * (iangneal): Part of my refactoring efforts.
@@ -49,22 +83,102 @@ namespace klee {
    * can query this object for information like the number of interesting
    * basic blocks, etc.
    */
-  class NVMFunctionCallInfo {
+  class NvmFunctionCallInfo {
     private:
+      const NvmFunctionInfo &parent_;
+      // The defining characteristics of this Function call.
+      const llvm::Function *fn_;
+      const std::unordered_set<unsigned> nvm_args_;
+      // -- We need a blacklist either for recursive calls or if, for some
+      // reason, you had weird interdependent function calls.
+      const std::unordered_set<const Function*> blacklist_;
+
+      // The locations at which pointers to NVM are stored for this call.
+      std::unordered_set<const llvm::Value*> nvm_ptr_locs_;
+      // The pointers defined in this function that point to NVM.
+      std::unordered_set<const llvm::Value*> nvm_ptrs_;
+      // The instructions that modify NVM. Also includes sfences.
+      std::unordered_set<const llvm::Value*> nvm_mods_;
+      // The instructions that are nested function calls.
+      std::unordered_set<const CallInst*> nested_calls_;
+
+      // Numbers for our factors.
+      // -- "Importance factor": The number of modifiers in a single basic block.
+      std::unordered_map<const BasicBlock*, size_t> imp_factor_;
+      // -- "Nested factor": An intermediate calculation which adds in the
+      // nested call's magnitude.
+      std::unordered_map<const BasicBlock*, size_t> imp_nested_;
+      // -- "Successor factor": The number of modifiers of this basic block and
+      // the maximum across it's successors, including nested calls. This is
+      // essentially the heuristic.
+      std::unordered_set<const BasicBlock*, size_t> succ_factor_;
+      // -- "Magnitude": The maximum number of modifiers in a single path of
+      // this function (single traversal, one pass through loops). This
+      // calculation is a way of caching for other functions which may use this
+      // function as a nested call.
+      size_t magnitude_;
+
+      /**
+       * 1. Get the NVM pointers and pointer locations that are explicitly
+       * defined in the function body.
+       * 2. Get the NVM pointers from the argument list.
+       * 3. Find all derivative pointers.
+       * 4. Now that we have all the derivative pointers, we can get all the
+       * interesting basic blocks in this function.
+       */
+      void getNvmInfo();
+
+      /**
+       * Get the magnitude of the specified function.
+       */
+      size_t getFnMag(const llvm::Function*, std::unordered_set<const llvm::Function*>&);
+
+      /**
+       * Compute all of the heuristic values we're going to need.
+       */
+      void computeFactors();
+
+      /**
+       * The body of initialization. Useful for the constructor overloading.
+       */
+      void init();
 
     public:
-      NVMFunctionCallInfo(const NVMFunctionInfo &parent,
-                          const Function* fn,
-                          const std::unordered_set<unsigned> &nvmArgs);
+      NvmFunctionCallInfo(const NvmFunctionInfo &parent,
+                          const NvmFunctionCallDesc& desc);
+                          const llvm::Function *fn,
+                          const std::unordered_set<unsigned> &nvm_args);
+
+      NvmFunctionCallInfo(const NvmFunctionInfo &parent,
+                          const llvm::Function *fn,
+                          const std::unordered_set<unsigned> &nvm_args,
+                          const std::unordered_set<const Function*> &blacklist);
+
+      size_t getMagnitude() const { return magnitude_; }
   };
 
+  class NvmFunctionInfo {
+    private:
+      Module &m_;
+      std::unordered_map<NvmFunctionCallDesc,
+                         NvmFunctionCallDesc::HashFn,
+                         std::shared_ptr<NVMFunctionCallInfo>> fn_info_;
+    public:
+      NvmFunctionInfo(Module&);
+
+      const NVMFunctionCallInfo* get(const NvmFunctionCallDesc&);
+      // With a blacklist to prevent recursion.
+      const NVMFunctionCallInfo* get(const NvmFunctionCallDesc&,
+          std::unordered_set<const llvm::Function*>&);
+
+  }
+#if 0
   /**
-   *
    * ASSUMPTIONS:
    * - An NVM pointer must be a direct pointer.
    * - There are no global variables used.
    */
-  class NVMFunctionInfo {
+  class NvmFunctionInfo {
       private:
           unordered_map<string, size_t> paths_total;
           unordered_map<string, size_t> paths_total_rec;
@@ -146,7 +260,7 @@ namespace klee {
 
 
       public:
-          NVMFunctionInfo(ModulePass &mp, const Module &mod);
+          NvmFunctionInfo(ModulePass &mp, const Module &mod);
 
           /**
            * A function which manipulates NVM does a combination of at least
@@ -157,9 +271,9 @@ namespace klee {
            * itself or from a function argument.
            * 3) Calls a function which manipulates NVM.
            */
-          bool manipulatesNVM(const Function *fn, unordered_set<int> nvmArgs);
+          bool manipulatesNvm(const Function *fn, unordered_set<int> nvmArgs);
 
-          bool manipulatesNVM(const Function *fn);
+          bool manipulatesNvm(const Function *fn);
 
           void dumpManip(const Function *fn);
 
@@ -293,6 +407,7 @@ namespace klee {
           void dumpPathsThrough();
           void dumpUnique();
   };
+#endif
 }
 #endif //__NVM_FUNCTION_INFO_H__
 /*

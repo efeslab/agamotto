@@ -108,6 +108,12 @@ namespace klee::utils {
       llvm::Value*> &s);
 
   /**
+   * Returns a pointer to the CallInst if the given Instruction is a non-intrinsic
+   * which we can examine. Otherwise, returns nullptr.
+   */
+  const llvm::CallInst* getNestedFunctionCallInst(const llvm::Instruction*);
+
+  /**
    * Finds all of the function calls nested within the given basic block and
    * returns them in a list ordered from first encountered to last encountered.
    */
@@ -138,6 +144,14 @@ namespace klee::utils {
    * Returns all of them as an unordered set to prevent accidental duplicates.
    */
   std::unordered_set<const llvm::Value*> getNvmPtrLocs(const llvm::Function &f);
+
+  /**
+   * Given a pointer location (a.k.a, a T**), get all pointers that equal it's
+   * contents (i.e., all T* which are created by loading from T**).
+   *
+   * Do we need this and getPtrsFromStoredLocs?
+   */
+  std::unordered_set<const llvm::Value*> getPtrsFromLoc(const llvm::Value*);
 }
 #endif //__NVM_ANALYSIS_UTILS_H__
 /*
