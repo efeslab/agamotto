@@ -48,9 +48,6 @@
 namespace klee {
 
   class NvmFunctionInfo;
-  class NvmFunctionCallInfo;
-
-  class NvmBasicBlockInfo;
 
   /**
    * A desciption of a call to a function with NVM relevant information.
@@ -159,12 +156,12 @@ namespace klee {
 
   class NvmFunctionInfo {
     private:
-      llvm::ModulePass &mp_;
+      llvm::ModulePass *mp_;
       std::unordered_map<NvmFunctionCallDesc,
                          std::shared_ptr<NvmFunctionCallInfo>,
                          NvmFunctionCallDesc::HashFn> fn_info_;
     public:
-      NvmFunctionInfo(llvm::ModulePass&);
+      NvmFunctionInfo(llvm::ModulePass*);
 
       const NvmFunctionCallInfo* get(const NvmFunctionCallDesc&);
       // With a blacklist to prevent recursion.

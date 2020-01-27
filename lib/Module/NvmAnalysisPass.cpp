@@ -17,12 +17,24 @@
 #include "klee/Internal/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <unordered_set>
+
 using namespace llvm;
+using namespace std;
 
 namespace klee {
   char NvmAnalysisPass::ID = 0;
 
+  NvmAnalysisPass::NvmAnalysisPass() : llvm::ModulePass(ID), nfi_(this) {}
+
   bool NvmAnalysisPass::runOnModule(Module &M) {
+    // Create the function call description for the entry.
+    const Function *main = M.getFunction("main");
+    unordered_set<unsigned> empty_args;
+    NvmFunctionCallDesc desc(main, empty_args);
+
+    // Initialize all functions called from main.
+    (void)nfi_.get(desc);
 
     return false;
   }
