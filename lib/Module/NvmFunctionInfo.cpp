@@ -161,7 +161,7 @@ void NvmFunctionCallInfo::computeFactors() {
 /* End NvmFunctionInfo */
 
 /* Begin NvmFunctionInfo */
-NvmFunctionInfo::NvmFunctionInfo(ModulePass &mp): mp_(mp) {};
+NvmFunctionInfo::NvmFunctionInfo(ModulePass *mp): mp_(mp) {};
 
 const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d) {
   unordered_set<const Function*> bl;
@@ -181,12 +181,12 @@ const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d,
 }
 
 const DominatorTree& NvmFunctionInfo::getDomTree(const Function* fn) {
-  return mp_.getAnalysis<DominatorTreeWrapperPass>(
+  return mp_->getAnalysis<DominatorTreeWrapperPass>(
       *const_cast<Function*>(fn)).getDomTree();
 }
 
 const PostDominatorTree& NvmFunctionInfo::getPostDomTree(const Function* fn) {
-  return mp_.getAnalysis<PostDominatorTreeWrapperPass>(
+  return mp_->getAnalysis<PostDominatorTreeWrapperPass>(
       *const_cast<Function*>(fn)).getPostDomTree();
 }
 

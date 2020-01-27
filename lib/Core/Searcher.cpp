@@ -298,11 +298,11 @@ bool RandomPathSearcher::empty() {
 
 ///
 
-NVMPathSearcher::NVMPathSearcher(Executor &exec) : executor(exec) {}
+NvmPathSearcher::NvmPathSearcher(Executor &exec) : executor(exec) {}
 
-NVMPathSearcher::~NVMPathSearcher() {}
+NvmPathSearcher::~NvmPathSearcher() {}
 
-ExecutionState &NVMPathSearcher::selectState() {
+ExecutionState &NvmPathSearcher::selectState() {
   unsigned flips=0, bits=0;
   PTreeNode *n = executor.processTree->root.get();
   while (!n->state) {
@@ -324,12 +324,12 @@ ExecutionState &NVMPathSearcher::selectState() {
 }
 
 void
-NVMPathSearcher::update(ExecutionState *current,
-                           const std::vector<ExecutionState *> &addedStates,
-                           const std::vector<ExecutionState *> &removedStates) {
+NvmPathSearcher::update(ExecutionState *current,
+                        const std::vector<ExecutionState *> &addedStates,
+                        const std::vector<ExecutionState *> &removedStates) {
 }
 
-bool NVMPathSearcher::empty() {
+bool NvmPathSearcher::empty() {
   return executor.states.empty();
 }
 

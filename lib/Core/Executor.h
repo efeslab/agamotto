@@ -91,7 +91,7 @@ class Executor : public Interpreter {
   friend class StatsTracker;
   friend class MergeHandler;
   // (iangneal): Needed so that we can access the root module for analysis.
-  friend class NVMPathSearcher;
+  friend class NvmPathSearcher;
 
 public:
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;

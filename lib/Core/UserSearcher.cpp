@@ -39,7 +39,7 @@ cl::list<Searcher::CoreSearchType> CoreSearch(
         clEnumValN(Searcher::RandomPath, "random-path",
                    "use Random Path Selection (see OSDI'08 paper)"),
         // (iangneal): Enable use of the NVM heuristic from the command line.
-        clEnumValN(Searcher::NVM_Mod, "nvm",
+        clEnumValN(Searcher::NvmMod, "nvm",
                    "use NVM-Modifying Heuristic (upcoming OSDI'20 paper)"),
         clEnumValN(Searcher::NURS_CovNew, "nurs:covnew",
                    "use Non Uniform Random Search (NURS) with Coverage-New"),
@@ -116,7 +116,7 @@ Searcher *getNewSearcher(Searcher::CoreSearchType type, Executor &executor) {
   case Searcher::RandomState: searcher = new RandomSearcher(); break;
   case Searcher::RandomPath: searcher = new RandomPathSearcher(executor); break;
   // (iangneal): Initialize NVM heuristic.
-  case Searcher::NVM_Mod: searcher = new NVMPathSearcher(executor); break;
+  case Searcher::NvmMod: searcher = new NvmPathSearcher(executor); break;
   case Searcher::NURS_CovNew: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::CoveringNew); break;
   case Searcher::NURS_MD2U: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::MinDistToUncovered); break;
   case Searcher::NURS_Depth: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::Depth); break;
