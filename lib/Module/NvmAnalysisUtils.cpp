@@ -163,7 +163,7 @@ list<const Function*> utils::getNestedFunctionCalls(const BasicBlock *bb) {
     list<const Function*> fns;
 
     for (const Instruction &i : *bb) {
-      const CallInst *ci = utils::getCalledFunctionCallInst(&i);
+      const CallInst *ci = utils::getNestedFunctionCallInst(&i);
       if (ci) fns.push_back(ci->getCalledFunction());
     }
 

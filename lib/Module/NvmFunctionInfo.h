@@ -66,14 +66,14 @@ namespace klee {
 
       const llvm::Function* Fn() const { return fn_; }
 
-      const std::unordered_set<unsigned>& NvmArgs() const { return nvm_args_ };
+      const std::unordered_set<unsigned>& NvmArgs() const { return nvm_args_; };
 
       struct HashFn : public std::unary_function<NvmFunctionCallDesc, size_t> {
         size_t operator()(const NvmFunctionCallDesc&) const;
       };
 
       friend bool operator==(const NvmFunctionCallDesc &rhs, const NvmFunctionCallDesc &lhs);
-  }
+  };
 
   /**
    * (iangneal): Part of my refactoring efforts.
@@ -85,13 +85,13 @@ namespace klee {
    */
   class NvmFunctionCallInfo {
     private:
-      const NvmFunctionInfo &parent_;
+      NvmFunctionInfo *parent_;
       // The defining characteristics of this Function call.
       const llvm::Function *fn_;
       const std::unordered_set<unsigned> nvm_args_;
       // -- We need a blacklist either for recursive calls or if, for some
       // reason, you had weird interdependent function calls.
-      const std::unordered_set<const Function*> blacklist_;
+      std::unordered_set<const llvm::Function*> blacklist_;
 
       // The locations at which pointers to NVM are stored for this call.
       std::unordered_set<const llvm::Value*> nvm_ptr_locs_;
@@ -100,18 +100,18 @@ namespace klee {
       // The instructions that modify NVM. Also includes sfences.
       std::unordered_set<const llvm::Value*> nvm_mods_;
       // The instructions that are nested function calls.
-      std::unordered_set<const CallInst*> nested_calls_;
+      std::unordered_set<const llvm::CallInst*> nested_calls_;
 
       // Numbers for our factors.
       // -- "Importance factor": The number of modifiers in a single basic block.
-      std::unordered_map<const BasicBlock*, size_t> imp_factor_;
+      std::unordered_map<const llvm::BasicBlock*, size_t> imp_factor_;
       // -- "Nested factor": An intermediate calculation which adds in the
       // nested call's magnitude.
-      std::unordered_map<const BasicBlock*, size_t> imp_nested_;
+      std::unordered_map<const llvm::BasicBlock*, size_t> imp_nested_;
       // -- "Successor factor": The number of modifiers of this basic block and
       // the maximum across it's successors, including nested calls. This is
       // essentially the heuristic.
-      std::unordered_set<const BasicBlock*, size_t> succ_factor_;
+      std::unordered_map<const llvm::BasicBlock*, size_t> succ_factor_;
       // -- "Magnitude": The maximum number of modifiers in a single path of
       // this function (single traversal, one pass through loops). This
       // calculation is a way of caching for other functions which may use this
@@ -129,9 +129,11 @@ namespace klee {
       void getNvmInfo();
 
       /**
-       * Get the magnitude of the specified function.
+       * Calculates the successor factor of a specific basic block. Recursive.
+       * Tracks backedges to avoid repeated loop traversals.
        */
-      size_t getFnMag(const llvm::Function*, std::unordered_set<const llvm::Function*>&);
+      void computeSuccessorFactor(const llvm::BasicBlock*,
+                                  const std::unordered_set<const llvm::BasicBlock*>&);
 
       /**
        * Compute all of the heuristic values we're going to need.
@@ -143,35 +145,35 @@ namespace klee {
        */
       void init();
 
-    public:
-      NvmFunctionCallInfo(const NvmFunctionInfo &parent,
-                          const NvmFunctionCallDesc& desc);
-                          const llvm::Function *fn,
-                          const std::unordered_set<unsigned> &nvm_args);
 
-      NvmFunctionCallInfo(const NvmFunctionInfo &parent,
-                          const llvm::Function *fn,
-                          const std::unordered_set<unsigned> &nvm_args,
-                          const std::unordered_set<const Function*> &blacklist);
+    public:
+      NvmFunctionCallInfo(NvmFunctionInfo *parent,
+                          const NvmFunctionCallDesc &desc);
+
+      NvmFunctionCallInfo(NvmFunctionInfo *parent,
+                          const NvmFunctionCallDesc &desc,
+                          const std::unordered_set<const llvm::Function*> &blacklist);
 
       size_t getMagnitude() const { return magnitude_; }
   };
 
   class NvmFunctionInfo {
     private:
-      Module &m_;
+      llvm::ModulePass &mp_;
       std::unordered_map<NvmFunctionCallDesc,
-                         NvmFunctionCallDesc::HashFn,
-                         std::shared_ptr<NVMFunctionCallInfo>> fn_info_;
+                         std::shared_ptr<NvmFunctionCallInfo>,
+                         NvmFunctionCallDesc::HashFn> fn_info_;
     public:
-      NvmFunctionInfo(Module&);
+      NvmFunctionInfo(llvm::ModulePass&);
 
-      const NVMFunctionCallInfo* get(const NvmFunctionCallDesc&);
+      const NvmFunctionCallInfo* get(const NvmFunctionCallDesc&);
       // With a blacklist to prevent recursion.
-      const NVMFunctionCallInfo* get(const NvmFunctionCallDesc&,
-          std::unordered_set<const llvm::Function*>&);
+      const NvmFunctionCallInfo* get(const NvmFunctionCallDesc&,
+          const std::unordered_set<const llvm::Function*>&);
 
-  }
+      const llvm::DominatorTree& getDomTree(const llvm::Function*);
+      const llvm::PostDominatorTree& getPostDomTree(const llvm::Function*);
+  };
 #if 0
   /**
    * ASSUMPTIONS:

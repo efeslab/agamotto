@@ -11,7 +11,7 @@ NvmFunctionCallDesc::NvmFunctionCallDesc(const Function *fn, const
 
 size_t NvmFunctionCallDesc::HashFn::operator()(const NvmFunctionCallDesc& x) const
 {
-  size_t hash_val = hash<const Function*>(x.Fn());
+  size_t hash_val = hash<const Function*>{}(x.Fn());
   for (unsigned i : x.NvmArgs()) {
     hash_val ^= i;
   }
@@ -21,28 +21,26 @@ size_t NvmFunctionCallDesc::HashFn::operator()(const NvmFunctionCallDesc& x) con
 
 bool operator==(const NvmFunctionCallDesc &rhs, const NvmFunctionCallDesc &lhs) {
   return rhs.Fn() == lhs.Fn() && rhs.NvmArgs() == lhs.NvmArgs();
-}A
+}
 
 /* End NvmFunctionCallDesc */
 
 /* Begin NvmFunctionCallInfo */
 
 NvmFunctionCallInfo::NvmFunctionCallInfo(
-        const NvmFunctionInfo &parent,
-        const Function* fn,
-        const unordered_set<unsigned> &nvm_args,
+        NvmFunctionInfo *parent,
+        const NvmFunctionCallDesc &desc,
         const unordered_set<const Function*> &blacklist) :
-    parent_(parent), fn_(fn), nvm_args_(nvm_args), blacklist_(blacklist)
+    parent_(parent), fn_(desc.Fn()), nvm_args_(desc.NvmArgs()), blacklist_(blacklist)
 {
-  blacklist_.insert(fn);
+  blacklist_.insert(fn_);
   init();
 }
 
 NvmFunctionCallInfo::NvmFunctionCallInfo(
-        const NvmFunctionInfo &parent,
-        const Function* fn,
-        const std::unordered_set<unsigned> &nvm_args) :
-    parent_(parent), fn_(fn), nvm_args_(nvm_args), blacklist_({fn})
+        NvmFunctionInfo *parent,
+        const NvmFunctionCallDesc &desc) :
+    parent_(parent), fn_(desc.Fn()), nvm_args_(desc.NvmArgs()), blacklist_({desc.Fn()})
 {
   init();
 }
@@ -86,9 +84,34 @@ void NvmFunctionCallInfo::getNvmInfo() {
   }
 }
 
-size_t getFnMag(const llvm::Function *, std::unordered_set<const llvm::Function*>&) {
-  if
+void NvmFunctionCallInfo::computeSuccessorFactor(
+    const BasicBlock *bb, const unordered_set<const BasicBlock*> &be) {
+
+  if (succ_factor_.find(bb) != succ_factor_.end()) return;
+
+  size_t max_imp = 0;
+  for (const BasicBlock *succ : successors(bb)) {
+      const DominatorTree &dom = parent_->getDomTree(fn_);
+      const PostDominatorTree &pdom = parent_->getPostDomTree(fn_);
+
+      bool is_succ_loop_body = false;
+      for (const BasicBlock *lbb : be) {
+          is_succ_loop_body |= pdom.dominates(lbb, succ);
+      }
+      if (is_succ_loop_body) continue;
+
+      unordered_set<const BasicBlock*> beSucc(be.begin(), be.end());
+      if (dom.dominates(succ, bb)) {
+          beSucc.insert(bb);
+      }
+
+      computeSuccessorFactor(succ, beSucc);
+      max_imp = max_imp > succ_factor_[succ] ? max_imp : succ_factor_[succ];
+  }
+
+  succ_factor_[bb] = imp_nested_[bb] + max_imp;
 }
+
 void NvmFunctionCallInfo::computeFactors() {
   // Importance factor.
   // -- Since we already have all the instructions, we can just get their
@@ -97,27 +120,55 @@ void NvmFunctionCallInfo::computeFactors() {
     const Instruction *i = dyn_cast<Instruction>(v);
     if (!i) continue;
 
-    imp_factor[i->getParent()]++;
+    imp_factor_[i->getParent()]++;
   }
 
   // Nested Factor.
-  // -- A function has users. Maybe we can use those for nested calls.
+  // -- Initial value is that of the importance factor.
+  imp_nested_.insert(imp_factor_.begin(), imp_factor_.end());
+  // -- Add up the nested calls.
+  for (const CallInst *ci : nested_calls_) {
+    // Create the description of this nested call.
+    const Function *cfn = ci->getCalledFunction();
+    unordered_set<unsigned> args;
+    for (unsigned i = 0; ci->arg_begin() + i != ci->arg_end(); ++i) {
+      const Use *use = ci->arg_begin() + i;
+      // If this argument is an NVM pointer, add the argno to the list.
+      if (nvm_ptrs_.find(use->get()) != nvm_ptrs_.end()) args.insert(i);
+    }
+
+    NvmFunctionCallDesc nested_desc(cfn, args);
+    const NvmFunctionCallInfo *nci = parent_->get(nested_desc, blacklist_);
+    if (nci) {
+      // If we were able to resolve the nested call, increment the block that
+      // contains this instruction.
+      const BasicBlock *bb = ci->getParent();
+      imp_nested_[bb] += nci->getMagnitude();
+    }
+  }
 
   // Successor factor.
-  // -- We can
+  // -- Now, we just start at the beginning and recurse our way down.
+  const BasicBlock &entry = fn_->getEntryBlock();
+  unordered_set<const llvm::BasicBlock*> empty_backedges;
+  computeSuccessorFactor(&entry, empty_backedges);
+
+  // Magnitude.
+  // -- This is simply the successor factor at the entry block!
+  magnitude_ = succ_factor_[&entry];
 }
 
 /* End NvmFunctionInfo */
 
 /* Begin NvmFunctionInfo */
-NvmFunctionInfo::NvmFunctionInfo(Module &m): m_(m) {};
+NvmFunctionInfo::NvmFunctionInfo(ModulePass &mp): mp_(mp) {};
 
-const NVMFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d) {
+const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d) {
   unordered_set<const Function*> bl;
   return get(d, bl);
 }
 
-const NVMFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d,
+const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d,
     const unordered_set<const Function*> &bl) {
 
   // This is allowed because shared_ptr is falsy.
@@ -126,8 +177,19 @@ const NVMFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d,
   // If we can't construct the new instance, abort. Likely recursion.
   if (!fn_info_[d] && bl.find(d.Fn()) != bl.end()) return nullptr;
 
-  return (fn_info_[d] = make_shared(d, bl));
+  return (fn_info_[d] = make_shared<NvmFunctionCallInfo>(this, d, bl)).get();
 }
+
+const DominatorTree& NvmFunctionInfo::getDomTree(const Function* fn) {
+  return mp_.getAnalysis<DominatorTreeWrapperPass>(
+      *const_cast<Function*>(fn)).getDomTree();
+}
+
+const PostDominatorTree& NvmFunctionInfo::getPostDomTree(const Function* fn) {
+  return mp_.getAnalysis<PostDominatorTreeWrapperPass>(
+      *const_cast<Function*>(fn)).getPostDomTree();
+}
+
 #if 0
 FunctionInfo::FunctionInfo(ModulePass &mp, const Module &mod)
     : mp_(mp), mod_(mod)
