@@ -19,10 +19,6 @@ size_t NvmFunctionCallDesc::HashFn::operator()(const NvmFunctionCallDesc& x) con
   return hash_val;
 }
 
-bool operator==(const NvmFunctionCallDesc &rhs, const NvmFunctionCallDesc &lhs) {
-  return rhs.Fn() == lhs.Fn() && rhs.NvmArgs() == lhs.NvmArgs();
-}
-
 /* End NvmFunctionCallDesc */
 
 /* Begin NvmFunctionCallInfo */
@@ -90,10 +86,12 @@ void NvmFunctionCallInfo::computeSuccessorFactor(
   if (succ_factor_.find(bb) != succ_factor_.end()) return;
 
   size_t max_imp = 0;
-  for (const BasicBlock *succ : successors(bb)) {
-      const DominatorTree &dom = parent_->getDomTree(fn_);
-      const PostDominatorTree &pdom = parent_->getPostDomTree(fn_);
 
+  Function *mfn = const_cast<Function*>(fn_);
+  DominatorTree dom(*mfn);
+  PostDominatorTree pdom(*mfn);
+
+  for (const BasicBlock *succ : successors(bb)) {
       bool is_succ_loop_body = false;
       for (const BasicBlock *lbb : be) {
           is_succ_loop_body |= pdom.dominates(lbb, succ);
@@ -158,10 +156,18 @@ void NvmFunctionCallInfo::computeFactors() {
   magnitude_ = succ_factor_[&entry];
 }
 
+void NvmFunctionCallInfo::dumpInfo() const {
+  errs() << "Function " << fn_->getName() << " with arguments <";
+  for (unsigned i : nvm_args_) {
+    errs() << i << ", ";
+  }
+  errs() << "> as NVM pointers as a magnitude of " << magnitude_ << "\n";
+}
+
 /* End NvmFunctionInfo */
 
 /* Begin NvmFunctionInfo */
-NvmFunctionInfo::NvmFunctionInfo(ModulePass *mp): mp_(mp) {};
+//NvmFunctionInfo::NvmFunctionInfo(ModulePass *mp): mp_(mp) {};
 
 const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d) {
   unordered_set<const Function*> bl;
@@ -180,15 +186,25 @@ const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d,
   return (fn_info_[d] = make_shared<NvmFunctionCallInfo>(this, d, bl)).get();
 }
 
+void NvmFunctionInfo::dumpAllInfo() const {
+  for (const auto &t : fn_info_) {
+    t.second->dumpInfo();
+  }
+}
+
+#if 0
 const DominatorTree& NvmFunctionInfo::getDomTree(const Function* fn) {
-  return mp_->getAnalysis<DominatorTreeWrapperPass>(
-      *const_cast<Function*>(fn)).getDomTree();
+  return DominatorTree(*fn);
+  //return mp_->getAnalysis<DominatorTreeWrapperPass>(
+  //    *const_cast<Function*>(fn)).getDomTree();
 }
 
 const PostDominatorTree& NvmFunctionInfo::getPostDomTree(const Function* fn) {
-  return mp_->getAnalysis<PostDominatorTreeWrapperPass>(
-      *const_cast<Function*>(fn)).getPostDomTree();
+  return PostDominatorTree(*fn);
+  //return mp_->getAnalysis<PostDominatorTreeWrapperPass>(
+  //    *const_cast<Function*>(fn)).getPostDomTree();
 }
+#endif
 
 #if 0
 FunctionInfo::FunctionInfo(ModulePass &mp, const Module &mod)

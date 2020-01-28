@@ -193,7 +193,7 @@ Value* utils::getNvmPtrLocFromAnno(const Instruction &i) {
   return nullptr;
 }
 
-unordered_set<const Value*> getNvmPtrLocs(const Function &f) {
+unordered_set<const Value*> utils::getNvmPtrLocs(const Function &f) {
   unordered_set<const Value*> s;
   for (auto &b : f) {
     for (auto &i : b) {
@@ -204,7 +204,7 @@ unordered_set<const Value*> getNvmPtrLocs(const Function &f) {
   return s;
 }
 
-unordered_set<const Value*> getPtrsFromLoc(const Value *ptr_loc) {
+unordered_set<const Value*> utils::getPtrsFromLoc(const Value *ptr_loc) {
   unordered_set<const Value*> s;
 
   for (auto *u : ptr_loc->users()) {

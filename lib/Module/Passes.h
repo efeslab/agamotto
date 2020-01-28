@@ -211,12 +211,14 @@ public:
  */
 class NvmAnalysisPass : public llvm::ModulePass {
 private:
-  NvmFunctionInfo nfi_;
+  NvmFunctionInfo *nfip_;
 
 public:
   static char ID;
-  NvmAnalysisPass();
+  NvmAnalysisPass(NvmFunctionInfo *nfip);
   bool runOnModule(llvm::Module &M) override;
+
+  llvm::StringRef getPassName() const override { return "NvmAnalysisPass"; }
 };
 
 } // namespace klee
