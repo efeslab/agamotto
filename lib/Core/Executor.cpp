@@ -23,6 +23,7 @@
 #include "StatsTracker.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
+#include "../Module/NvmFunctionInfo.h"
 
 #include "klee/Common.h"
 #include "klee/Config/Version.h"
@@ -1504,7 +1505,14 @@ void Executor::executeCall(ExecutionState &state,
     // from just an instruction (unlike LLVM).
     KFunction *kf = kmodule->functionMap[f];
 
-    state.pushFrame(state.prevPC, kf);
+    // (iangneal): We need to propagate NVM info
+    NvmPathSearcher *nvmSearcher = dynamic_cast<NvmPathSearcher*>(searcher);
+    if (userSearcherRequiresNvmAnalysis()) {
+      state.pushFrame(state.prevPC, kf, nvmSearcher->nvmInfo());
+    } else {
+      state.pushFrame(state.prevPC, kf);
+    }
+
     state.pc = kf->instructions;
 
     if (statsTracker)

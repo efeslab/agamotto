@@ -20,6 +20,8 @@
 #include <queue>
 #include <set>
 #include <vector>
+#include <functional>
+#include <utility>
 
 namespace llvm {
   class BasicBlock;
@@ -199,6 +201,21 @@ namespace klee {
     Executor &exec_;
     NvmFunctionInfo &nvm_info_;
 
+    typedef std::pair<ExecutionState*, size_t> priority_pair;
+
+    struct priority_less : public std::less<priority_pair> {
+      bool operator()(const priority_pair &rhs, const priority_pair &lhs) {
+        return rhs.second < lhs.second;
+      }
+    };
+
+    // C++ doesn't let us override only part of the template defaults, or if
+    // we do, must be right to left. Oh well.
+    // https://stackoverflow.com/questions/31840974/c-templates-override-some-but-not-all-default-arguments
+    std::priority_queue<priority_pair,
+                        std::vector<priority_pair>,
+                        priority_less> states;
+
   public:
     NvmPathSearcher(Executor &exec);
     ~NvmPathSearcher();
@@ -211,6 +228,8 @@ namespace klee {
     void printName(llvm::raw_ostream &os) {
       os << "NvmPathSearcher\n";
     }
+
+    NvmFunctionInfo &nvmInfo() { return nvm_info_; }
   };
 
   extern llvm::cl::opt<bool> UseIncompleteMerge;

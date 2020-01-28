@@ -20,10 +20,12 @@
 #include "../../lib/Core/AddressSpace.h"
 #include "../../lib/Core/PersistentMemoryState.h"
 #include "klee/Internal/Module/KInstIterator.h"
+#include "../../lib/Module/NvmFunctionInfo.h"
 
 #include <map>
 #include <set>
 #include <vector>
+#include <unordered_set>
 
 namespace klee {
 class Array;
@@ -41,6 +43,10 @@ struct StackFrame {
   KInstIterator caller;
   KFunction *kf;
   CallPathNode *callPathNode;
+
+  /// (iangneal): Describe which of the function arguments were NVM.
+  std::unordered_set<unsigned> nvmArgs;
+  NvmFunctionCallDesc nvmDesc;
 
   std::vector<const MemoryObject *> allocas;
   Cell *locals;
@@ -164,6 +170,8 @@ public:
   ExecutionState *branch();
 
   void pushFrame(KInstIterator caller, KFunction *kf);
+  // (iangneal): To propagate NVM argument information.
+  void pushFrame(KInstIterator caller, KFunction *kf, const NvmFunctionInfo &nvmInfo);
   void popFrame();
 
   void addSymbolic(const MemoryObject *mo, const Array *array);
