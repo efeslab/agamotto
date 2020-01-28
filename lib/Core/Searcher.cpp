@@ -298,13 +298,21 @@ bool RandomPathSearcher::empty() {
 
 ///
 
-NvmPathSearcher::NvmPathSearcher(Executor &exec) : executor(exec) {}
+NvmPathSearcher::NvmPathSearcher(Executor &exec) : exec_(exec)
+{
+  legacy::PassManager pm;
+  // The "add" function will destroy the pass for us.
+  pm.add(new NvmAnalysisPass(&nvm_info_));
+  pm.run(*(exec_.kmodule->module));
+
+  nvm_info_.dumpAllInfo();
+}
 
 NvmPathSearcher::~NvmPathSearcher() {}
 
 ExecutionState &NvmPathSearcher::selectState() {
   unsigned flips=0, bits=0;
-  PTreeNode *n = executor.processTree->root.get();
+  PTreeNode *n = exec_.processTree->root.get();
   while (!n->state) {
     if (!n->left) {
       n = n->right.get();
@@ -330,7 +338,7 @@ NvmPathSearcher::update(ExecutionState *current,
 }
 
 bool NvmPathSearcher::empty() {
-  return executor.states.empty();
+  return exec_.states.empty();
 }
 
 ///

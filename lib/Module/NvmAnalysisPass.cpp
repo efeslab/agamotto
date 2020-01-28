@@ -15,6 +15,8 @@
 #include "Passes.h"
 #include "klee/Config/Version.h"
 #include "klee/Internal/Support/ErrorHandling.h"
+#include "llvm/IR/Dominators.h"
+#include "llvm/Analysis/PostDominators.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <unordered_set>
@@ -25,7 +27,8 @@ using namespace std;
 namespace klee {
   char NvmAnalysisPass::ID = 0;
 
-  NvmAnalysisPass::NvmAnalysisPass() : llvm::ModulePass(ID), nfi_(this) {}
+  NvmAnalysisPass::NvmAnalysisPass(NvmFunctionInfo *nfip) :
+    llvm::ModulePass(ID), nfip_(nfip) {}
 
   bool NvmAnalysisPass::runOnModule(Module &M) {
     // Create the function call description for the entry.
@@ -34,8 +37,7 @@ namespace klee {
     NvmFunctionCallDesc desc(main, empty_args);
 
     // Initialize all functions called from main.
-    (void)nfi_.get(desc);
-
+    (void)nfip_->get(desc);
     return false;
   }
 }
