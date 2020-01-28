@@ -107,6 +107,10 @@ bool klee::userSearcherRequiresMD2U() {
 	  std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_QC) != CoreSearch.end());
 }
 
+bool klee::userSearcherRequiresNvmAnalysis() {
+  return (std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NvmMod)
+      != CoreSearch.end());
+}
 
 Searcher *getNewSearcher(Searcher::CoreSearchType type, Executor &executor) {
   Searcher *searcher = NULL;
