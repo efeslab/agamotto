@@ -107,6 +107,7 @@ namespace klee {
     // Functions which are part of KLEE runtime
     std::set<const llvm::Function*> internalFunctions;
 
+    // (iangneal): Describes the NVM info of the functions.
     NvmFunctionInfo nvmInfo;
 
   private:

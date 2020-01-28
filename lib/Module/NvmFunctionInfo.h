@@ -57,8 +57,10 @@ namespace klee {
   class NvmFunctionCallDesc {
     private:
       const llvm::Function *fn_;
-      const std::unordered_set<unsigned> nvm_args_;
+      std::unordered_set<unsigned> nvm_args_;
     public:
+      NvmFunctionCallDesc();
+      NvmFunctionCallDesc(const llvm::Function*);
       NvmFunctionCallDesc(const llvm::Function*, const std::unordered_set<unsigned>&);
 
       const llvm::Function* Fn() const { return fn_; }
@@ -73,6 +75,7 @@ namespace klee {
         return rhs.Fn() == lhs.Fn() && rhs.NvmArgs() == lhs.NvmArgs();
       }
 
+      void dumpInfo() const;
   };
 
   /**
@@ -156,17 +159,23 @@ namespace klee {
 
       size_t getMagnitude() const { return magnitude_; }
 
+      size_t getSuccessorFactor(const llvm::BasicBlock *bb) const;
+
+      /**
+       * If the given instruction is part of this function, determine which of
+       * it's call arguments are NVM pointers.
+       */
+      std::unordered_set<unsigned> queryNvmArgs(const llvm::CallInst*) const;
+
       void dumpInfo() const;
   };
 
   class NvmFunctionInfo {
     private:
-      //llvm::ModulePass *mp_;
       std::unordered_map<NvmFunctionCallDesc,
                          std::shared_ptr<NvmFunctionCallInfo>,
                          NvmFunctionCallDesc::HashFn> fn_info_;
     public:
-      //NvmFunctionInfo(llvm::ModulePass*);
       NvmFunctionInfo() = default;
 
       const NvmFunctionCallInfo* get(const NvmFunctionCallDesc&);
