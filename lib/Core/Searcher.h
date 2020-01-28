@@ -11,6 +11,7 @@
 #define KLEE_SEARCHER_H
 
 #include "klee/Internal/System/Time.h"
+#include "../Module/Passes.h"
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
@@ -190,12 +191,13 @@ namespace klee {
   };
 
   /**
-   * (iangneal); The heuristic driver for NVM-modifying states.
+   * (iangneal): The heuristic driver for NVM-modifying states.
    *
    * Essentially, we want the most NVM successors.
    */
   class NvmPathSearcher : public Searcher {
-    Executor &executor;
+    Executor &exec_;
+    NvmFunctionInfo nvm_info_;
 
   public:
     NvmPathSearcher(Executor &exec);

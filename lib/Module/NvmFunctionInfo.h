@@ -69,7 +69,10 @@ namespace klee {
         size_t operator()(const NvmFunctionCallDesc&) const;
       };
 
-      friend bool operator==(const NvmFunctionCallDesc &rhs, const NvmFunctionCallDesc &lhs);
+      friend bool operator==(const NvmFunctionCallDesc &rhs, const NvmFunctionCallDesc &lhs) {
+        return rhs.Fn() == lhs.Fn() && rhs.NvmArgs() == lhs.NvmArgs();
+      }
+
   };
 
   /**
@@ -152,24 +155,29 @@ namespace klee {
                           const std::unordered_set<const llvm::Function*> &blacklist);
 
       size_t getMagnitude() const { return magnitude_; }
+
+      void dumpInfo() const;
   };
 
   class NvmFunctionInfo {
     private:
-      llvm::ModulePass *mp_;
+      //llvm::ModulePass *mp_;
       std::unordered_map<NvmFunctionCallDesc,
                          std::shared_ptr<NvmFunctionCallInfo>,
                          NvmFunctionCallDesc::HashFn> fn_info_;
     public:
-      NvmFunctionInfo(llvm::ModulePass*);
+      //NvmFunctionInfo(llvm::ModulePass*);
+      NvmFunctionInfo() = default;
 
       const NvmFunctionCallInfo* get(const NvmFunctionCallDesc&);
       // With a blacklist to prevent recursion.
       const NvmFunctionCallInfo* get(const NvmFunctionCallDesc&,
           const std::unordered_set<const llvm::Function*>&);
 
-      const llvm::DominatorTree& getDomTree(const llvm::Function*);
-      const llvm::PostDominatorTree& getPostDomTree(const llvm::Function*);
+      void dumpAllInfo() const;
+
+      //const llvm::DominatorTree& getDomTree(const llvm::Function*);
+      //const llvm::PostDominatorTree& getPostDomTree(const llvm::Function*);
   };
 #if 0
   /**
