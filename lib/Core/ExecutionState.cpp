@@ -149,19 +149,37 @@ ExecutionState *ExecutionState::branch() {
   return falseState;
 }
 
+void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf,
+    const NvmFunctionInfo &nvmInfo) {
+  StackFrame new_frame(caller, kf);
+  const CallInst *ci = dyn_cast<CallInst>(caller->inst);
+  if (!stack.empty() && ci) {
+    new_frame.nvmArgs = nvmInfo.getNvmArgs(stack.back().nvmDesc, ci);
+  }
+  errs() << "--- " << this << " - pushFrame ";
+  errs() << kf << "->" << kf->function << "->" << kf->function->getName() << "\n";
+  new_frame.nvmDesc = NvmFunctionCallDesc(kf->function, new_frame.nvmArgs);
+  errs() << "\t---\n";
+  new_frame.nvmDesc.dumpInfo();
+
+  stack.push_back(new_frame);
+  stack.back().nvmDesc.dumpInfo();
+  errs() << "\t---\n";
+}
+
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {
-  stack.push_back(StackFrame(caller,kf));
+  stack.emplace_back(caller, kf);
 }
 
 void ExecutionState::popFrame() {
   StackFrame &sf = stack.back();
-  for (std::vector<const MemoryObject*>::iterator it = sf.allocas.begin(), 
+  for (std::vector<const MemoryObject*>::iterator it = sf.allocas.begin(),
          ie = sf.allocas.end(); it != ie; ++it)
     addressSpace.unbindObject(*it);
   stack.pop_back();
 }
 
-void ExecutionState::addSymbolic(const MemoryObject *mo, const Array *array) { 
+void ExecutionState::addSymbolic(const MemoryObject *mo, const Array *array) {
   mo->refCount++;
   symbolics.push_back(std::make_pair(mo, array));
 }

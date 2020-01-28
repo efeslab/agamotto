@@ -3784,10 +3784,15 @@ void Executor::runFunctionAsMain(Function *f,
   }
 
   ExecutionState *state = new ExecutionState(kmodule->functionMap[f]);
-  
-  if (pathWriter) 
+  // (iangneal): I want to start my stack frame with the main function
+  if (userSearcherRequiresNvmAnalysis()) {
+    state->stack.back().nvmDesc = NvmFunctionCallDesc(
+        kmodule->functionMap[f]->function);
+  }
+
+  if (pathWriter)
     state->pathOS = pathWriter->open();
-  if (symPathWriter) 
+  if (symPathWriter)
     state->symPathOS = symPathWriter->open();
 
 
