@@ -90,7 +90,7 @@ unordered_set<const Value*> utils::getPtrsFromStoredLocs(const Value *ptr) {
         const StoreInst *si = dyn_cast<StoreInst>(u);
         if (nullptr != si
             && ptr == si->getValueOperand()) {
-            errs() << "\t\t(store): " << *si << "\n";
+            //errs() << "\t\t(store): " << *si << "\n";
             const Value *store_loc = si->getPointerOperand();
 
             for (const auto *su : store_loc->users()) {
@@ -98,7 +98,7 @@ unordered_set<const Value*> utils::getPtrsFromStoredLocs(const Value *ptr) {
                 const LoadInst *li = dyn_cast<LoadInst>(su);
                 if (nullptr != li
                     && store_loc == li->getPointerOperand()) {
-                    errs() << "\t\t\t(load): " << *li << "\n";
+                    //errs() << "\t\t\t(load): " << *li << "\n";
 
                     ptrs.insert(li);
                 }

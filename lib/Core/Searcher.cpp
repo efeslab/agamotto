@@ -330,7 +330,18 @@ ExecutionState &NvmPathSearcher::selectState() {
 void
 NvmPathSearcher::update(ExecutionState *current,
                         const std::vector<ExecutionState *> &addedStates,
-                        const std::vector<ExecutionState *> &removedStates) {
+                        const std::vector<ExecutionState *> &removedStates)
+{
+  errs() << "Current state is " << current << "\n";
+  // Info about state.
+  if (current && current->stack.size()) {
+    for (const auto &sf : current->stack) {
+      errs() << "\t";
+      sf.nvmDesc.dumpInfo();
+    }
+    //current->stack.back().nvmDesc.dumpInfo();
+    //nvm_info_.findInfo(current->stack.back().nvmDesc)->dumpInfo();
+  }
 }
 
 bool NvmPathSearcher::empty() {

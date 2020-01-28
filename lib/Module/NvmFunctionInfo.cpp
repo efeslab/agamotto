@@ -6,6 +6,10 @@ using namespace klee;
 
 /* Begin NvmFunctionCallDesc */
 
+NvmFunctionCallDesc::NvmFunctionCallDesc() : fn_(nullptr), nvm_args_() { }
+
+NvmFunctionCallDesc::NvmFunctionCallDesc(const Function *fn) : fn_(fn), nvm_args_() { }
+
 NvmFunctionCallDesc::NvmFunctionCallDesc(const Function *fn, const
     unordered_set<unsigned> &nvm_args) : fn_(fn), nvm_args_(nvm_args) { }
 
@@ -17,6 +21,18 @@ size_t NvmFunctionCallDesc::HashFn::operator()(const NvmFunctionCallDesc& x) con
   }
 
   return hash_val;
+}
+
+void NvmFunctionCallDesc::dumpInfo() const {
+  if (fn_) {
+    errs() << "Function " << fn_ << "->" << fn_->getName() << " with arguments <";
+  } else {
+    errs() << "Function (nullptr) with arguments <";
+  }
+  for (unsigned i : nvm_args_) {
+    errs() << i << ", ";
+  }
+  errs() << ">\n";
 }
 
 /* End NvmFunctionCallDesc */
@@ -164,10 +180,31 @@ void NvmFunctionCallInfo::dumpInfo() const {
   errs() << "> as NVM pointers as a magnitude of " << magnitude_ << "\n";
 }
 
-/* End NvmFunctionInfo */
+size_t NvmFunctionCallInfo::getSuccessorFactor(const BasicBlock *bb) const {
+  return succ_factor_.at(bb);
+}
+
+unordered_set<unsigned> NvmFunctionCallInfo::queryNvmArgs(const CallInst *ci) const {
+  // Create the description of this nested call.
+  unordered_set<unsigned> args;
+  for (unsigned i = 0; ci->arg_begin() + i != ci->arg_end(); ++i) {
+    const Use *use = ci->arg_begin() + i;
+    // If this argument is an NVM pointer, add the argno to the list.
+    if (nvm_ptrs_.find(use->get()) != nvm_ptrs_.end()) args.insert(i);
+  }
+
+  return args;
+}
+
+
+/* End NvmFunctionCallInfo */
 
 /* Begin NvmFunctionInfo */
 //NvmFunctionInfo::NvmFunctionInfo(ModulePass *mp): mp_(mp) {};
+
+const NvmFunctionCallInfo* NvmFunctionInfo::findInfo(const NvmFunctionCallDesc& d) {
+  return fn_info_.at(d).get();
+}
 
 const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d) {
   unordered_set<const Function*> bl;
@@ -177,11 +214,11 @@ const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d) {
 const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d,
     const unordered_set<const Function*> &bl) {
 
-  // This is allowed because shared_ptr is falsy.
-  if (fn_info_[d]) return fn_info_[d].get();
+  if (fn_info_.find(d) != fn_info_.end()) return fn_info_[d].get();
 
   // If we can't construct the new instance, abort. Likely recursion.
-  if (!fn_info_[d] && bl.find(d.Fn()) != bl.end()) return nullptr;
+  if (fn_info_.find(d) == fn_info_.end()
+      && bl.find(d.Fn()) != bl.end()) return nullptr;
 
   return (fn_info_[d] = make_shared<NvmFunctionCallInfo>(this, d, bl)).get();
 }
