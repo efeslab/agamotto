@@ -197,7 +197,7 @@ namespace klee {
    */
   class NvmPathSearcher : public Searcher {
     Executor &exec_;
-    NvmFunctionInfo nvm_info_;
+    NvmFunctionInfo &nvm_info_;
 
   public:
     NvmPathSearcher(Executor &exec);

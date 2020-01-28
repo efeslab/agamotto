@@ -10,6 +10,7 @@
 #define DEBUG_TYPE "KModule"
 
 #include "Passes.h"
+#include "NvmFunctionInfo.h"
 
 #include "klee/Config/Version.h"
 #include "klee/Internal/Module/Cell.h"
@@ -21,6 +22,8 @@
 #include "klee/Internal/Support/ModuleUtil.h"
 #include "klee/Interpreter.h"
 #include "klee/OptionCategories.h"
+
+#include "../Core/UserSearcher.h"
 
 #if LLVM_VERSION_CODE >= LLVM_VERSION(4, 0)
 #include "llvm/Bitcode/BitcodeWriter.h"
@@ -233,6 +236,15 @@ void KModule::instrument(const Interpreter::ModuleOptions &opts) {
   // optimize is seeing what is as close as possible to the final
   // module.
   legacy::PassManager pm;
+
+  // XXX: (iangneal) We can eventually change the pass so it accepts KLEE's
+  // raised ASM for uniformity, but since it was built on raw LLVM IR, it's best
+  // to do everything beforehand.
+  if (userSearcherRequiresNvmAnalysis()) {
+    // (iangneal) The "add" function will destroy the pass for us.
+    pm.add(new NvmAnalysisPass(&nvmInfo));
+  }
+
   pm.add(new RaiseAsmPass());
 
   // This pass will scalarize as much code as possible so that the Executor

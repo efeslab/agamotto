@@ -15,6 +15,8 @@
 
 #include "llvm/ADT/ArrayRef.h"
 
+#include "../../../../lib/Module/NvmFunctionInfo.h"
+
 #include <map>
 #include <memory>
 #include <set>
@@ -104,6 +106,8 @@ namespace klee {
 
     // Functions which are part of KLEE runtime
     std::set<const llvm::Function*> internalFunctions;
+
+    NvmFunctionInfo nvmInfo;
 
   private:
     // Mark function with functionName as part of the KLEE runtime

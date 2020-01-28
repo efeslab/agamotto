@@ -298,13 +298,9 @@ bool RandomPathSearcher::empty() {
 
 ///
 
-NvmPathSearcher::NvmPathSearcher(Executor &exec) : exec_(exec)
+NvmPathSearcher::NvmPathSearcher(Executor &exec) :
+  exec_(exec), nvm_info_(exec_.kmodule->nvmInfo)
 {
-  legacy::PassManager pm;
-  // The "add" function will destroy the pass for us.
-  pm.add(new NvmAnalysisPass(&nvm_info_));
-  pm.run(*(exec_.kmodule->module));
-
   nvm_info_.dumpAllInfo();
 }
 
