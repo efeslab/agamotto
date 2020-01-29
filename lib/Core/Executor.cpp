@@ -1468,7 +1468,7 @@ void Executor::executeCall(ExecutionState &state,
         KInstruction *bitcastKInst = kmodule->getKInstruction(bitcastInst);
         // Get the address of the variable being annotated.
         ref<Expr> address = eval(bitcastKInst, 0, state).value;
-        executeNonVolatileMemoryAnnotation(state, cast<ConstantExpr>(address));
+        executePersistentMemoryAnnotation(state, cast<ConstantExpr>(address));
       } else {
         klee_warning("Unsupported annotation: %s", annotationStr.str().c_str());
       }
@@ -3628,7 +3628,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           terminateStateOnError(state, "memory error: object read only",
                                 ReadOnly);
         } else {
-          if (mo->isNonVolatile) {
+          if (mo->isPersistent) {
             // TODO: track persistence epochs
             klee_message("Modifying non-volatile MemoryObject");
           }
@@ -3701,7 +3701,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   }
 }
 
-void Executor::executeNonVolatileMemoryAnnotation(ExecutionState &state,
+void Executor::executePersistentMemoryAnnotation(ExecutionState &state,
                                                   ref<ConstantExpr> address) {
   ObjectPair op;
   if (!state.addressSpace.resolveOne(address, op)) {
@@ -3709,7 +3709,7 @@ void Executor::executeNonVolatileMemoryAnnotation(ExecutionState &state,
   }
 
   const MemoryObject *mo = op.first;
-  mo->isNonVolatile = true;
+  mo->isPersistent = true;
   std::string name;
   mo->getAllocInfo(name);
   /* klee_message("Found non-volatile memory pointer: %s", name.c_str()); */

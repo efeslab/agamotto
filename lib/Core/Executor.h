@@ -309,7 +309,7 @@ private:
                               ref<Expr> value /* undef if read */,
                               KInstruction *target /* undef if write */);
 
-  void executeNonVolatileMemoryAnnotation(ExecutionState &state,
+  void executePersistentMemoryAnnotation(ExecutionState &state,
                                           ref<ConstantExpr> address);
 
   void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
