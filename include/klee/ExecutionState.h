@@ -18,6 +18,7 @@
 
 // FIXME: We do not want to be exposing these? :(
 #include "../../lib/Core/AddressSpace.h"
+#include "../../lib/Core/PersistentMemoryState.h"
 #include "klee/Internal/Module/KInstIterator.h"
 
 #include <map>
@@ -93,6 +94,9 @@ public:
 
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;
+
+  /// @brief Tracks the state of persistent memory regions.
+  PersistentMemoryState pmemState;
 
   /// @brief Constraints collected so far
   ConstraintManager constraints;

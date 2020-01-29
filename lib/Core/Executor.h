@@ -312,6 +312,11 @@ private:
   void executePersistentMemoryAnnotation(ExecutionState &state,
                                           ref<ConstantExpr> address);
 
+  void executePersistentMemoryFlush(ExecutionState &state,
+                                    ref<ConstantExpr> address);
+
+  void executePersistentMemoryFence(ExecutionState &state);
+
   void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
                            const std::string &name);
 

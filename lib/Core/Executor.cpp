@@ -1445,13 +1445,16 @@ void Executor::executeCall(ExecutionState &state,
       klee_warning_once(
         0, "program contains not-yet-supported clflushopt intrinsic");
       break;
-    case Intrinsic::x86_clwb:
-      klee_warning_once(
-        0, "program contains not-yet-supported clwb intrinsic");
+    case Intrinsic::x86_clwb: {
+      llvm::Value *v = ki->inst->getOperand(0);
+      v = v->stripPointerCasts();
+      KInstruction *kv = kmodule->getKInstruction(dyn_cast<Instruction>(v));
+      ref<Expr> address = getDestCell(state, kv).value;
+      executePersistentMemoryFlush(state, cast<ConstantExpr>(address));
       break;
+    }
     case Intrinsic::x86_sse_sfence:
-      klee_warning_once(
-        0, "program contains not-yet-supported sfence intrinsic");
+      executePersistentMemoryFence(state);
       break;
 
       // XXX: For now, we detect non-volatile memory using an
@@ -3629,8 +3632,9 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                                 ReadOnly);
         } else {
           if (mo->isPersistent) {
-            // TODO: track persistence epochs
             klee_message("Modifying non-volatile MemoryObject");
+            state.pmemState.store(cast<ConstantExpr>(address)->getZExtValue(),
+                                  bytes);
           }
           ObjectState *wos = state.addressSpace.getWriteable(mo, os);
           wos->write(offset, value);
@@ -3676,6 +3680,11 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           terminateStateOnError(*bound, "memory error: object read only",
                                 ReadOnly);
         } else {
+          if (mo->isPersistent) {
+            klee_message("Modifying non-volatile MemoryObject");
+            state.pmemState.store(cast<ConstantExpr>(address)->getZExtValue(),
+                                  bytes);
+          }
           ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
           wos->write(mo->getOffsetExpr(address), value);
         }
@@ -3713,6 +3722,16 @@ void Executor::executePersistentMemoryAnnotation(ExecutionState &state,
   std::string name;
   mo->getAllocInfo(name);
   /* klee_message("Found non-volatile memory pointer: %s", name.c_str()); */
+}
+
+void Executor::executePersistentMemoryFlush(ExecutionState &state,
+                                            ref<ConstantExpr> address) {
+  uint64_t raw_addr = address->getZExtValue();
+  state.pmemState.flush(raw_addr);
+}
+
+void Executor::executePersistentMemoryFence(ExecutionState &state) {
+  state.pmemState.fence();
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state, 
