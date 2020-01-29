@@ -34,7 +34,9 @@ namespace klee {
 /// modifications to the other.
 class PersistentMemoryState {
 public:
-  PersistentMemoryState();
+  static const uint64_t DEFAULT_CACHE_ALIGN = 64;
+
+  PersistentMemoryState(uint64_t cacheLineSize=DEFAULT_CACHE_ALIGN);
 
   /// Mark the persistent range between [base, base+size) as modified.
   void store(uint64_t base, uint64_t size);
@@ -55,6 +57,9 @@ public:
   bool isOrderedBefore(uint64_t baseA, uint64_t sizeA,
                        uint64_t baseB, uint64_t sizeB) const;
 
+  /// Truncate addr to be aligned to cache lines.
+  uint64_t alignToCache(uint64_t addr) const;
+
   void print(llvm::raw_ostream &os) const;
 
 private:
@@ -62,14 +67,14 @@ private:
   /// Epochs are delimited by memory fence instructions.
   unsigned currEpoch;
 
+  /// The configured cache line size.
+  const uint64_t cacheAlign;
+
 public:
   typedef boost::icl::interval<uint64_t>::type addr_range;
 
   /// A persistence epoch "infinitely" in the future (just INT_MAX).
   static const unsigned EPOCH_INF = std::numeric_limits<unsigned>::max();
-
-  /// The assumed cache line size.
-  static const uint64_t CACHE_ALIGN = 64;
 
   struct PersistInterval {
     /// The persistence epoch during which the data was 
@@ -107,6 +112,9 @@ private:
   /// Cache lines are removed from this set if another write is made
   /// to them during the current epoch.
   boost::icl::split_interval_set<uint64_t> flushedThisEpoch;
+
+  /// Round the given addr_range to begin and end at cache boundaries.
+  addr_range alignToCache(const addr_range &range) const;
 
   bool isFullyFlushed(const addr_range &range) const;
 };

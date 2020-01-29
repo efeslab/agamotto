@@ -11,18 +11,6 @@ static inline addr_range make_addr_range(uint64_t base, uint64_t size) {
   return boost::icl::interval<uint64_t>::right_open(base, base+size);
 }
 
-static inline uint64_t round_to_cache_line(uint64_t addr) {
-  return addr - (addr % PersistentMemoryState::CACHE_ALIGN);
-}
-
-// Round the given addr_range to begin and end at cache boundaries.
-static inline addr_range cache_aligned_range(const addr_range &unaligned) {
-  uint64_t begin = round_to_cache_line(unaligned.lower());
-  uint64_t end =
-    round_to_cache_line(unaligned.upper()) + PersistentMemoryState::CACHE_ALIGN;
-  return make_addr_range(begin, end-begin);
-}
-
 bool PersistInterval::overlaps(const PersistInterval &other) const {
   return this->mod_epoch <= other.persist_epoch &&
     this->persist_epoch >= other.mod_epoch;
@@ -33,7 +21,9 @@ bool PersistInterval::operator==(const PersistInterval &other) const {
           this->persist_epoch == other.persist_epoch;
 }
 
-PersistentMemoryState::PersistentMemoryState() : currEpoch(1) {
+PersistentMemoryState::PersistentMemoryState(uint64_t cacheLineSize)
+  : currEpoch(1),
+    cacheAlign(cacheLineSize) {
   llvm::errs() << "init()" << '\n';
   print(llvm::errs());
 }
@@ -51,7 +41,7 @@ void PersistentMemoryState::store(uint64_t base, uint64_t size) {
 
   // Remove the cache lines spanned by the range from the
   // running set of flushed cache lines.
-  addr_range cacheLines = cache_aligned_range(range);
+  addr_range cacheLines = alignToCache(range);
   flushedThisEpoch.erase(cacheLines);
 
   llvm::errs() << "modify(): " << range << '\n';
@@ -61,7 +51,7 @@ void PersistentMemoryState::store(uint64_t base, uint64_t size) {
 void PersistentMemoryState::flush(uint64_t addr) {
   auto range = make_addr_range(addr, 1);
 
-  addr_range cacheLines = cache_aligned_range(range);
+  addr_range cacheLines = alignToCache(range);
   llvm::errs() << "cacheLines = " << cacheLines << '\n';
   flushedThisEpoch.insert(cacheLines);
 
@@ -122,6 +112,16 @@ bool PersistentMemoryState::isOrderedBefore(uint64_t baseA,
   return result;
 }
 
+uint64_t PersistentMemoryState::alignToCache(uint64_t addr) const {
+  return addr - (addr % this->cacheAlign);
+}
+
+addr_range PersistentMemoryState::alignToCache(const addr_range &range) const {
+  uint64_t begin = alignToCache(range.lower());
+  uint64_t end = alignToCache(range.upper()) + this->cacheAlign;
+  return make_addr_range(begin, end-begin);
+}
+
 bool PersistentMemoryState::isFullyFlushed(const addr_range &range) const {
   // All cache lines spanned by this range must exist in
   // lastFlushedEpoch (i.e., must have been flushed at least once)
@@ -129,11 +129,11 @@ bool PersistentMemoryState::isFullyFlushed(const addr_range &range) const {
   const PersistInterval &persistInterval = persistIntervals.find(range)->second;
 
   // Iterate through all cache lines spanned by this range.
-  auto cacheAligned = cache_aligned_range(range);
+  auto cacheAligned = alignToCache(range);
   llvm::errs() << "cacheAligned = " << cacheAligned << '\n';
   for (uint64_t cl = cacheAligned.lower(); cl < range.upper();
-       cl += CACHE_ALIGN) {
-    addr_range cacheLine = make_addr_range(cl, CACHE_ALIGN);
+       cl += this->cacheAlign) {
+    addr_range cacheLine = make_addr_range(cl, this->cacheAlign);
     auto clIt = lastFlushedEpoch.find(cacheLine);
     if (clIt == lastFlushedEpoch.end())
       return false;
