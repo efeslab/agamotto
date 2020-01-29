@@ -115,7 +115,7 @@ bool PersistentMemoryState::isOrderedBefore(uint64_t baseA,
 
   const PersistInterval &piA = persistIntervals.find(rangeA)->second;
   const PersistInterval &piB = persistIntervals.find(rangeB)->second;
-  bool result = !piA.overlaps(piB);
+  bool result = piA.mod_epoch < piB.mod_epoch && !piA.overlaps(piB);
 
   llvm::errs() << "isOrdered(): ";
   llvm::errs() << rangeA << ", " << rangeB << " --> " << result << '\n';
