@@ -184,6 +184,10 @@ size_t NvmFunctionCallInfo::getSuccessorFactor(const BasicBlock *bb) const {
   return succ_factor_.at(bb);
 }
 
+size_t NvmFunctionCallInfo::getImportanceFactor(const llvm::BasicBlock *bb) const {
+  return imp_nested_.at(bb);
+}
+
 unordered_set<unsigned> NvmFunctionCallInfo::queryNvmArgs(const CallInst *ci) const {
   // Create the description of this nested call.
   unordered_set<unsigned> args;

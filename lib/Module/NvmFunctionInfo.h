@@ -161,6 +161,7 @@ namespace klee {
 
       size_t getSuccessorFactor(const llvm::BasicBlock *bb) const;
 
+      size_t getImportanceFactor(const llvm::BasicBlock *bb) const;
       /**
        * If the given instruction is part of this function, determine which of
        * it's call arguments are NVM pointers.
