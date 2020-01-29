@@ -177,7 +177,19 @@ void NvmFunctionCallInfo::dumpInfo() const {
   for (unsigned i : nvm_args_) {
     errs() << i << ", ";
   }
-  errs() << "> as NVM pointers as a magnitude of " << magnitude_ << "\n";
+  errs() << "> as NVM pointers and " << nvm_ptrs_.size()
+    << " overall NVM pointer" << (nvm_ptrs_.size() > 1 ? "s" : "") <<
+    "has a magnitude of " << magnitude_ << "\n";
+
+  for (const auto &p : imp_factor_) {
+    errs() << "\t (IMP FACTOR) BB " << p.first << " => " << p.second << "\n";
+  }
+  for (const auto &p : imp_nested_) {
+    errs() << "\t (IMP NESTED) BB " << p.first << " => " << p.second << "\n";
+  }
+  for (const auto &p : succ_factor_) {
+    errs() << "\t (SUC FACTOR) BB " << p.first << " => " << p.second << "\n";
+  }
 }
 
 size_t NvmFunctionCallInfo::getSuccessorFactor(const BasicBlock *bb) const {

@@ -301,7 +301,7 @@ bool RandomPathSearcher::empty() {
 NvmPathSearcher::NvmPathSearcher(Executor &exec) :
   exec_(exec), nvm_info_(exec_.kmodule->nvmInfo)
 {
-  //nvm_info_.dumpAllInfo();
+  exec_.interpreterHandler->setNvm();
 }
 
 NvmPathSearcher::~NvmPathSearcher() {}
@@ -340,13 +340,15 @@ void NvmPathSearcher::addOrKillState(ExecutionState *execState) {
 
   size_t priority = nvm_info_.findInfo(desc)->getSuccessorFactor(bb);
   if (!priority && generateTest[execState]) {
-    //errs() << "Killing state with test!!\n";
+    //errs() << "\tKilling state with test!!\n";
+    exec_.interpreterHandler->incPathsCutEndTrace();
     exec_.terminateStateEarly(*execState, "State is no longer interesting");
   } else if (!priority) {
-    //errs() << "Killing state!\n";
+    //errs() << "\tKilling state!\n";
+    exec_.interpreterHandler->incPathsCutUninteresting();
     exec_.terminateState(*execState);
   } else {
-    //errs() << "Adding state!\n";
+    //errs() << "\tAdding state!\n";
     states.emplace(execState, priority);
   }
 }
@@ -356,6 +358,7 @@ NvmPathSearcher::update(ExecutionState *current,
                         const std::vector<ExecutionState *> &addedStates,
                         const std::vector<ExecutionState *> &removedStates)
 {
+  //errs() << "Update start: " << states.size() << "\n";
   // Re-insert the current state with a new priority.
   if (current) addOrKillState(current);
 
@@ -365,10 +368,11 @@ NvmPathSearcher::update(ExecutionState *current,
 
   // We will filter when we re-select.
   removed.insert(removedStates.begin(), removedStates.end());
+  //errs() << "Update end: " << states.size() << "\n";
 }
 
 bool NvmPathSearcher::empty() {
-  return exec_.states.empty();
+  return states.empty();
 }
 
 ///

@@ -60,6 +60,7 @@ bool utils::checkInstrinicInst(const Instruction &i...) {
 bool utils::isFlush(const Instruction &i) {
     return checkInstrinicInst(i,
                               "clflush",
+                              "clwb",
                               nullptr) ||
            utils::checkInlineAsmEq(i,
                    ".byte 0x66; clflush $0",
