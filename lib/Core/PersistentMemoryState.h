@@ -28,22 +28,12 @@ public:
     /// The persistence epoch where the data was fully persisted.
     unsigned persist_epoch;
 
-    PersistInterval()
-      : mod_epoch(EPOCH_INF),
-        persist_epoch(EPOCH_INF) {}
-
+    PersistInterval() : mod_epoch(EPOCH_INF), persist_epoch(EPOCH_INF) {}
     PersistInterval(unsigned begin, unsigned end)
-      : mod_epoch(begin),
-        persist_epoch(end) {}
+      : mod_epoch(begin), persist_epoch(end) {}
 
-    bool overlaps(const PersistInterval &other) const {
-            return this->mod_epoch <= other.persist_epoch &&
-              this->persist_epoch >= other.mod_epoch;
-    }
-    bool operator==(const PersistInterval &other) const {
-            return this->mod_epoch == other.mod_epoch &&
-              this->persist_epoch == other.persist_epoch;
-    }
+    bool overlaps(const PersistInterval &other) const;
+    bool operator==(const PersistInterval &other) const;
   };
 
 private:
@@ -52,7 +42,7 @@ private:
   /// The first epoch is 0.
   unsigned currEpoch;
 
-  /// Maps persistent memory ranges (start_addr, end_addr) to a pair
+  /// Maps persistent memory ranges [start_addr, end_addr) to a pair
   /// of ints representing that memory range's persist interval.
   /// The persist interval begins at the epoch of the most recent
   /// modification to the range and ends at the epoch where it
@@ -101,10 +91,13 @@ public:
 
 private:
   bool isFullyFlushed(const addr_range &range) const;
-
-  static addr_range make_addr_range(uint64_t base, uint64_t size);
-  static addr_range cache_aligned_range(const addr_range &unaligned);
 };
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
+                              const PersistentMemoryState::PersistInterval &pi);
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
+                              const PersistentMemoryState::addr_range &range);
 
 } // End klee namespace
 

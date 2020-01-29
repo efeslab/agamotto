@@ -4,47 +4,38 @@
 
 using namespace klee;
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
-                              const PersistentMemoryState::PersistInterval &pi) {
-  os << '[';
-  if (pi.mod_epoch == PersistentMemoryState::EPOCH_INF)
-    os << "INF";
-  else
-    os << pi.mod_epoch;
-  os << ',';
-  if (pi.persist_epoch == PersistentMemoryState::EPOCH_INF)
-    os << "INF";
-  else
-    os << pi.persist_epoch;
-  os << ']';
-  return os;
+using PersistInterval = PersistentMemoryState::PersistInterval;
+using addr_range = PersistentMemoryState::addr_range;
+
+static inline addr_range make_addr_range(uint64_t base, uint64_t size) {
+  return boost::icl::interval<uint64_t>::right_open(base, base+size);
 }
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
-                              const PersistentMemoryState::addr_range &range) {
-  return os << '[' << range.lower() << ',' << range.upper() << ']';
+static inline uint64_t round_to_cache_line(uint64_t addr) {
+  return addr - (addr % PersistentMemoryState::CACHE_ALIGN);
+}
+
+// Round the given addr_range to begin and end at cache boundaries.
+static inline addr_range cache_aligned_range(const addr_range &unaligned) {
+  uint64_t begin = round_to_cache_line(unaligned.lower());
+  uint64_t end =
+    round_to_cache_line(unaligned.upper()) + PersistentMemoryState::CACHE_ALIGN;
+  return make_addr_range(begin, end-begin);
+}
+
+bool PersistInterval::overlaps(const PersistInterval &other) const {
+  return this->mod_epoch <= other.persist_epoch &&
+    this->persist_epoch >= other.mod_epoch;
+}
+
+bool PersistInterval::operator==(const PersistInterval &other) const {
+        return this->mod_epoch == other.mod_epoch &&
+          this->persist_epoch == other.persist_epoch;
 }
 
 PersistentMemoryState::PersistentMemoryState() : currEpoch(1) {
   llvm::errs() << "init()" << '\n';
   print(llvm::errs());
-}
-
-PersistentMemoryState::addr_range
-PersistentMemoryState::make_addr_range(uint64_t base, uint64_t size) {
-  return boost::icl::interval<uint64_t>::right_open(base, base+size);
-}
-
-// Round the given addr_range to begin and end at cache boundaries.
-PersistentMemoryState::addr_range
-PersistentMemoryState::cache_aligned_range(const addr_range &unaligned) {
-  auto begin = unaligned.lower();
-  begin -= begin % CACHE_ALIGN;
-  auto end = unaligned.upper();
-  if (end % CACHE_ALIGN != 0) {
-    end += CACHE_ALIGN - (end % CACHE_ALIGN);
-  }
-  return make_addr_range(begin, end-begin);
 }
 
 void PersistentMemoryState::store(uint64_t base, uint64_t size) {
@@ -154,8 +145,6 @@ bool PersistentMemoryState::isFullyFlushed(const addr_range &range) const {
   return true;
 }
 
-namespace klee {
-
 template<typename SetT>
 static void printSet(const SetT &set, llvm::raw_ostream &os)
 {
@@ -172,8 +161,6 @@ static void printMap(const MapT &map, llvm::raw_ostream &os)
     os << it->first << " : " << it->second << '\n';
   }
 }
-
-} // end namespace klee
 
 void PersistentMemoryState::print(llvm::raw_ostream &os) const {
   os << "======== PERSISTENT MEMORY STATE ========" << '\n';
@@ -196,3 +183,26 @@ void PersistentMemoryState::print(llvm::raw_ostream &os) const {
   }
   os << '\n';
 }
+
+namespace klee {
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const PersistInterval &pi) {
+  os << '[';
+  if (pi.mod_epoch == PersistentMemoryState::EPOCH_INF)
+    os << "INF";
+  else
+    os << pi.mod_epoch;
+  os << ',';
+  if (pi.persist_epoch == PersistentMemoryState::EPOCH_INF)
+    os << "INF";
+  else
+    os << pi.persist_epoch;
+  os << ']';
+  return os;
+}
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const addr_range &range) {
+  return os << '[' << range.lower() << ',' << range.upper() << ']';
+}
+
+} // end namespace klee
