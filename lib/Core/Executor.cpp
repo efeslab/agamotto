@@ -2959,19 +2959,38 @@ void Executor::run(ExecutionState &initialState) {
   std::vector<ExecutionState *> newStates(states.begin(), states.end());
   searcher->update(0, newStates, std::vector<ExecutionState *>());
 
+#if 0
+  for (const ExecutionState* es : states) {
+    errs() << "states: " << es << "\n";
+  }
+  for (const ExecutionState* es : addedStates) {
+    errs() << "++ states: " << es << "\n";
+  }
+  for (const ExecutionState* es : removedStates) {
+    errs() << "-- states: " << es << "\n";
+  }
+#endif
+
+  // (iangneal): XXX the way that this searcher works is that it can delete some
+  // states it doesn't want to run. So, at this point, we could already have
+  // 0 states to check. So, I'm adding the searcher empty check.
   while (!states.empty() && !haltExecution) {
-    ExecutionState &state = searcher->selectState();
-    KInstruction *ki = state.pc;
-    stepInstruction(state);
+    if (!searcher->empty()) {
+      ExecutionState &state = searcher->selectState();
+      KInstruction *ki = state.pc;
+      stepInstruction(state);
 
-    executeInstruction(state, ki);
-    timers.invoke();
-    if (::dumpStates) dumpStates();
-    if (::dumpPTree) dumpPTree();
+      executeInstruction(state, ki);
+      timers.invoke();
+      if (::dumpStates) dumpStates();
+      if (::dumpPTree) dumpPTree();
 
-    checkMemoryUsage();
+      checkMemoryUsage();
 
-    updateStates(&state);
+      updateStates(&state);
+    } else {
+      updateStates(nullptr);
+    }
   }
 
   delete searcher;

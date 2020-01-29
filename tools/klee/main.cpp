@@ -308,6 +308,9 @@ private:
   unsigned m_numTotalTests;     // Number of tests received from the interpreter
   unsigned m_numGeneratedTests; // Number of tests successfully generated
   unsigned m_pathsExplored; // number of paths explored so far
+  unsigned m_pathsCutEndTrace; // number of paths ended early and had interesting blocks.
+  unsigned m_pathsCutUninteresting; // number of paths terminated because they added nothing.
+  bool m_outputNvm;
 
   // used for writing .ktest files
   int m_argc;
@@ -321,7 +324,15 @@ public:
   /// Returns the number of test cases successfully generated so far
   unsigned getNumTestCases() { return m_numGeneratedTests; }
   unsigned getNumPathsExplored() { return m_pathsExplored; }
+  unsigned getNumPathsCutEndTrace() { return m_pathsCutEndTrace; }
+  unsigned getNumPathsCutUninteresting() { return m_pathsCutUninteresting; }
+
+  void setNvm() { m_outputNvm = true; }
+  bool outputNvm() { return m_outputNvm; }
+
   void incPathsExplored() { m_pathsExplored++; }
+  void incPathsCutEndTrace() { m_pathsCutEndTrace++; }
+  void incPathsCutUninteresting() { m_pathsCutUninteresting++; }
 
   void setInterpreter(Interpreter *i);
 
@@ -1545,6 +1556,12 @@ int main(int argc, char **argv, char **envp) {
         << instructions << "\n";
   stats << "KLEE: done: completed paths = "
         << handler->getNumPathsExplored() << "\n";
+  if (handler->outputNvm()) {
+    stats << "\tKLEE-NVM: done: paths terminated (uninteresting, no tests) = "
+          << handler->getNumPathsCutUninteresting() << "\n";
+    stats << "\tKLEE-NVM: done: paths terminated (after last relevant block, gen tests) = "
+          << handler->getNumPathsCutEndTrace() << "\n";
+  }
   stats << "KLEE: done: generated tests = "
         << handler->getNumTestCases() << "\n";
 
