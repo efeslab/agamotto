@@ -153,15 +153,15 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf,
   if (!stack.empty() && ci) {
     new_frame.nvmArgs = nvmInfo.getNvmArgs(stack.back().nvmDesc, ci);
   }
-  errs() << "--- " << this << " - pushFrame ";
-  errs() << kf << "->" << kf->function << "->" << kf->function->getName() << "\n";
+  //errs() << "--- " << this << " - pushFrame ";
+  //errs() << kf << "->" << kf->function << "->" << kf->function->getName() << "\n";
   new_frame.nvmDesc = NvmFunctionCallDesc(kf->function, new_frame.nvmArgs);
-  errs() << "\t---\n";
-  new_frame.nvmDesc.dumpInfo();
+  //errs() << "\t---\n";
+  //new_frame.nvmDesc.dumpInfo();
 
   stack.push_back(new_frame);
-  stack.back().nvmDesc.dumpInfo();
-  errs() << "\t---\n";
+  //stack.back().nvmDesc.dumpInfo();
+  //errs() << "\t---\n";
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {

@@ -301,30 +301,54 @@ bool RandomPathSearcher::empty() {
 NvmPathSearcher::NvmPathSearcher(Executor &exec) :
   exec_(exec), nvm_info_(exec_.kmodule->nvmInfo)
 {
-  nvm_info_.dumpAllInfo();
+  //nvm_info_.dumpAllInfo();
 }
 
 NvmPathSearcher::~NvmPathSearcher() {}
 
-ExecutionState &NvmPathSearcher::selectState() {
-  unsigned flips=0, bits=0;
-  PTreeNode *n = exec_.processTree->root.get();
-  while (!n->state) {
-    if (!n->left) {
-      n = n->right.get();
-    } else if (!n->right) {
-      n = n->left.get();
-    } else {
-      if (bits==0) {
-        flips = theRNG.getInt32();
-        bits = 32;
-      }
-      --bits;
-      n = (flips&(1<<bits)) ? n->left.get() : n->right.get();
-    }
+ExecutionState* NvmPathSearcher::filterState(ExecutionState *execState) {
+  const auto iter = removed.find(execState);
+  if (iter != removed.end()) {
+    removed.erase(iter);
+    return nullptr;
   }
 
-  return *n->state;
+  return execState;
+}
+
+ExecutionState &NvmPathSearcher::selectState() {
+  do {
+    const priority_pair &pp = states.top();
+    lastState = filterState(pp.first);
+    states.pop();
+  } while (!lastState);
+
+  return *lastState;
+}
+
+void NvmPathSearcher::addOrKillState(ExecutionState *execState) {
+  // We need the current basic block and the function description to determine
+  // the heuristic value.
+  const NvmFunctionCallDesc &desc = execState->stack.back().nvmDesc;
+  const BasicBlock *bb = execState->pc->inst->getParent();
+
+  // Check if this is interesting intrinsicly.
+  size_t importance = nvm_info_.findInfo(desc)->getSuccessorFactor(bb);
+  if (importance) {
+    generateTest[execState] = true;
+  }
+
+  size_t priority = nvm_info_.findInfo(desc)->getSuccessorFactor(bb);
+  if (!priority && generateTest[execState]) {
+    //errs() << "Killing state with test!!\n";
+    exec_.terminateStateEarly(*execState, "State is no longer interesting");
+  } else if (!priority) {
+    //errs() << "Killing state!\n";
+    exec_.terminateState(*execState);
+  } else {
+    //errs() << "Adding state!\n";
+    states.emplace(execState, priority);
+  }
 }
 
 void
@@ -332,16 +356,15 @@ NvmPathSearcher::update(ExecutionState *current,
                         const std::vector<ExecutionState *> &addedStates,
                         const std::vector<ExecutionState *> &removedStates)
 {
-  errs() << "Current state is " << current << "\n";
-  // Info about state.
-  if (current && current->stack.size()) {
-    for (const auto &sf : current->stack) {
-      errs() << "\t";
-      sf.nvmDesc.dumpInfo();
-    }
-    //current->stack.back().nvmDesc.dumpInfo();
-    //nvm_info_.findInfo(current->stack.back().nvmDesc)->dumpInfo();
+  // Re-insert the current state with a new priority.
+  if (current) addOrKillState(current);
+
+  for (ExecutionState *execState : addedStates) {
+    addOrKillState(execState);
   }
+
+  // We will filter when we re-select.
+  removed.insert(removedStates.begin(), removedStates.end());
 }
 
 bool NvmPathSearcher::empty() {
