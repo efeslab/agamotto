@@ -216,6 +216,18 @@ namespace klee {
                         std::vector<priority_pair>,
                         priority_less> states;
 
+    std::unordered_set<ExecutionState*> removed;
+    ExecutionState *lastState;
+
+    std::unordered_map<ExecutionState*, bool> generateTest;
+
+    /**
+     * Given the recently-run or newly created state, either run it or kill
+     * it depending on whether or not it has any remaining interesting states.
+     */
+    void addOrKillState(ExecutionState *);
+    ExecutionState* filterState(ExecutionState *);
+
   public:
     NvmPathSearcher(Executor &exec);
     ~NvmPathSearcher();
