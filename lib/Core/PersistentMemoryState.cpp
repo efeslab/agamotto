@@ -36,9 +36,6 @@ void PersistentMemoryState::store(uint64_t base, uint64_t size) {
   PersistInterval newInterval(currEpoch, EPOCH_INF);
   persistIntervals.set(std::make_pair(range, newInterval));
 
-  // Put it in the dirty set until its interval gets resolved.
-  dirtyRanges.set(std::make_pair(range, currEpoch));
-
   // Remove the cache lines spanned by the range from the
   // running set of flushed cache lines.
   addr_range cacheLines = alignToCache(range);
@@ -60,26 +57,19 @@ void PersistentMemoryState::flush(uint64_t addr) {
 }
 
 void PersistentMemoryState::fence() {
-  // Commit the pending flushes for this epoch.
-  auto cacheLineIt = flushedThisEpoch.begin();
-  while (cacheLineIt != flushedThisEpoch.end()) {
-    lastFlushedEpoch.set(make_pair(*cacheLineIt++, currEpoch));
+  // Commit all flushes performed during this epoch, updating the persist_epoch
+  // of any covered address ranges with unresolved persist intervals.
+  // Use add() instead of set() so we invoke PersistInterval's custom
+  // operator++(), which will leave mod_epoch untouched (actually, use
+  // add_intersection() so it only affects existing ranges).
+  PersistInterval updatedPersistEpoch(EPOCH_INF, currEpoch);
+  for (auto it = flushedThisEpoch.begin(); it != flushedThisEpoch.end(); ++it) {
+    auto range = *it;
+    add_intersection(persistIntervals, persistIntervals,
+                     std::make_pair(range, updatedPersistEpoch));
   }
+
   flushedThisEpoch.clear();
-
-  // Check to see if any dirty ranges are now known to be persisted fully.
-  auto dirtyIt = dirtyRanges.begin();
-  while (dirtyIt != dirtyRanges.end()) {
-    addr_range dirtyRange = (dirtyIt++)->first;
-    llvm::errs() << "dirtyRange: " << dirtyRange << '\n';
-    if (isFullyFlushed(dirtyRange)) {
-      dirtyRanges.erase(dirtyRange);
-      PersistInterval pi = persistIntervals.find(dirtyRange)->second;
-      pi.persist_epoch = currEpoch;
-      persistIntervals.set(std::make_pair(dirtyRange, pi));
-    }
-  }
-
   ++currEpoch;
 
   llvm::errs() << "fence()" << '\n';
@@ -89,7 +79,7 @@ void PersistentMemoryState::fence() {
 bool PersistentMemoryState::isPersisted(uint64_t base, uint64_t size) const {
   auto range = make_addr_range(base, size);
 
-  const PersistInterval &pi = persistIntervals.find(range)->second;
+  PersistInterval pi = getPersistIntervalOfRange(range);
   bool result = pi.persist_epoch < currEpoch;
 
   llvm::errs() << "isPersist(): " << range << " --> " << result << '\n';
@@ -103,8 +93,8 @@ bool PersistentMemoryState::isOrderedBefore(uint64_t baseA,
   auto rangeA = make_addr_range(baseA, sizeA);
   auto rangeB = make_addr_range(baseB, sizeB);
 
-  const PersistInterval &piA = persistIntervals.find(rangeA)->second;
-  const PersistInterval &piB = persistIntervals.find(rangeB)->second;
+  const PersistInterval &piA = getPersistIntervalOfRange(rangeA);
+  const PersistInterval &piB = getPersistIntervalOfRange(rangeB);
   bool result = piA.mod_epoch < piB.mod_epoch && !piA.overlaps(piB);
 
   llvm::errs() << "isOrdered(): ";
@@ -122,27 +112,22 @@ addr_range PersistentMemoryState::alignToCache(const addr_range &range) const {
   return make_addr_range(begin, end-begin);
 }
 
-bool PersistentMemoryState::isFullyFlushed(const addr_range &range) const {
-  // All cache lines spanned by this range must exist in
-  // lastFlushedEpoch (i.e., must have been flushed at least once)
-  // and must have been flushed in an epoch >= the range's modified epoch.
-  const PersistInterval &persistInterval = persistIntervals.find(range)->second;
+PersistInterval PersistentMemoryState::getPersistIntervalOfRange(
+    const addr_range &range) const {
+  PersistInterval combined(EPOCH_INF, 0);
 
-  // Iterate through all cache lines spanned by this range.
-  auto cacheAligned = alignToCache(range);
-  llvm::errs() << "cacheAligned = " << cacheAligned << '\n';
-  for (uint64_t cl = cacheAligned.lower(); cl < range.upper();
-       cl += this->cacheAlign) {
-    addr_range cacheLine = make_addr_range(cl, this->cacheAlign);
-    auto clIt = lastFlushedEpoch.find(cacheLine);
-    if (clIt == lastFlushedEpoch.end())
-      return false;
-    unsigned flushedEpoch = clIt->second;
-    if (flushedEpoch < persistInterval.mod_epoch)
-      return false;
+  auto itersInRange = persistIntervals.equal_range(range);
+  for (auto it = itersInRange.first; it != itersInRange.second; ++it) {
+    const PersistInterval &foundInterval = it->second;
+    if (foundInterval.mod_epoch < combined.mod_epoch) {
+      combined.mod_epoch = foundInterval.mod_epoch;
+    }
+    if (foundInterval.persist_epoch > combined.persist_epoch) {
+      combined.persist_epoch = foundInterval.persist_epoch;
+    }
   }
 
-  return true;
+  return combined;
 }
 
 template<typename SetT>
@@ -168,14 +153,6 @@ void PersistentMemoryState::print(llvm::raw_ostream &os) const {
   if (!persistIntervals.empty()) {
     os << "----- Persist Intervals: -----" << '\n';
     printMap(persistIntervals, os);
-  }
-  if (!lastFlushedEpoch.empty()) {
-    os << "----- Last Flushed Epochs: -----" << '\n';
-    printMap(lastFlushedEpoch, os);
-  }
-  if (!dirtyRanges.empty()) {
-    os << "----- Dirty Ranges: -----" << '\n';
-    printMap(dirtyRanges, os);
   }
   if (!flushedThisEpoch.empty()) {
     os << "----- Flushed this epoch: -----" << '\n';

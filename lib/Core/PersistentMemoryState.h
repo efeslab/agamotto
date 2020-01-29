@@ -90,22 +90,25 @@ public:
 
     bool overlaps(const PersistInterval &other) const;
     bool operator==(const PersistInterval &other) const;
+
+    // boost::icl::interval_map's add() and set() members work differently.
+    // If you set() a value for a range, it overwrites any existing mappings
+    // in that range. If you add() a value for a range, it combines existing
+    // mappings with the new value using operator++().
+    // We use add() when epochs end to update _only_ the persist_epoch of
+    // existing PersistIntervals in the map.
+    PersistInterval &operator+=(const PersistInterval &other) {
+      if (persist_epoch == EPOCH_INF) {
+        persist_epoch = other.persist_epoch;
+      }
+      return *this;
+    }
   };
 
 private:
   /// For each persistent memory range [start_addr, end_addr), store
   /// a pair of ints representing that range's persistence interval.
   boost::icl::interval_map<uint64_t, PersistInterval> persistIntervals;
-
-  /// For each cache line, keep track of when it was last flushed.
-  /// Flushes are not committed into this map until the epoch ends.
-  boost::icl::interval_map<uint64_t, unsigned> lastFlushedEpoch;
-
-  /// Holds all memory ranges that have unresolved persist intervals
-  /// (i.e., persist_epoch = EPOCH_INF).
-  /// When an epoch ends, we try to remove ranges from this set
-  /// if we can prove that they have been fully persisted.
-  boost::icl::interval_map<uint64_t, unsigned> dirtyRanges;
 
   /// The set of cache lines flushed during the current epoch.
   /// Gets reset at the end of the epoch.
@@ -116,7 +119,9 @@ private:
   /// Round the given addr_range to begin and end at cache boundaries.
   addr_range alignToCache(const addr_range &range) const;
 
-  bool isFullyFlushed(const addr_range &range) const;
+  /// Aggregate potentially multiple PersistIntervals into one
+  /// (i.e., takes the min mod_epoch and the max mod_epoch).
+  PersistInterval getPersistIntervalOfRange(const addr_range &range) const;
 };
 
 llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
