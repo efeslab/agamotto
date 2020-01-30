@@ -22,7 +22,7 @@ bool PersistInterval::operator==(const PersistInterval &other) const {
 }
 
 PersistentMemoryState::PersistentMemoryState(uint64_t cacheLineSize)
-  : currEpoch(1),
+  : currEpoch(0),
     cacheAlign(cacheLineSize) {
   llvm::errs() << "init()" << '\n';
   print(llvm::errs());
@@ -40,23 +40,21 @@ void PersistentMemoryState::store(uint64_t base, uint64_t size) {
   // running set of flushed cache lines.
   addr_range cacheLines = alignToCache(range);
   flushedThisEpoch.erase(cacheLines);
-
-  llvm::errs() << "modify(): " << range << '\n';
-  print(llvm::errs());
 }
 
 void PersistentMemoryState::flush(uint64_t addr) {
   auto range = make_addr_range(addr, 1);
+  llvm::errs() << "flush(): " << range << '\n';
 
   addr_range cacheLines = alignToCache(range);
-  llvm::errs() << "cacheLines = " << cacheLines << '\n';
   flushedThisEpoch.insert(cacheLines);
 
-  llvm::errs() << "flush(): " << range << '\n';
   print(llvm::errs());
 }
 
 void PersistentMemoryState::fence() {
+  llvm::errs() << "fence()" << '\n';
+
   // Commit all flushes performed during this epoch, updating the persist_epoch
   // of any covered address ranges with unresolved persist intervals.
   // Use add() instead of set() so we invoke PersistInterval's custom
@@ -72,34 +70,32 @@ void PersistentMemoryState::fence() {
   flushedThisEpoch.clear();
   ++currEpoch;
 
-  llvm::errs() << "fence()" << '\n';
   print(llvm::errs());
 }
 
 bool PersistentMemoryState::isPersisted(uint64_t base, uint64_t size) const {
+  if (size == 0)
+    return false;
+
   auto range = make_addr_range(base, size);
 
   PersistInterval pi = getPersistIntervalOfRange(range);
-  bool result = pi.persist_epoch < currEpoch;
-
-  llvm::errs() << "isPersist(): " << range << " --> " << result << '\n';
-  return result;
+  return pi.persist_epoch < currEpoch;
 }
 
 bool PersistentMemoryState::isOrderedBefore(uint64_t baseA,
                                             uint64_t sizeA,
                                             uint64_t baseB,
                                             uint64_t sizeB) const {
+  if (sizeA == 0 || sizeB == 0)
+    return false;
+
   auto rangeA = make_addr_range(baseA, sizeA);
   auto rangeB = make_addr_range(baseB, sizeB);
 
   const PersistInterval &piA = getPersistIntervalOfRange(rangeA);
   const PersistInterval &piB = getPersistIntervalOfRange(rangeB);
-  bool result = piA.mod_epoch < piB.mod_epoch && !piA.overlaps(piB);
-
-  llvm::errs() << "isOrdered(): ";
-  llvm::errs() << rangeA << ", " << rangeB << " --> " << result << '\n';
-  return result;
+  return piA.mod_epoch < piB.mod_epoch && !piA.overlaps(piB);
 }
 
 uint64_t PersistentMemoryState::alignToCache(uint64_t addr) const {
