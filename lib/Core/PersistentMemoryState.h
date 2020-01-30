@@ -7,6 +7,7 @@
 #include <boost/icl/split_interval_set.hpp>
 
 #include <limits>
+#include <vector>
 
 namespace klee {
 
@@ -34,47 +35,12 @@ namespace klee {
 /// modifications to the other.
 class PersistentMemoryState {
 public:
-  static const uint64_t DEFAULT_CACHE_ALIGN = 64;
-
-  PersistentMemoryState(uint64_t cacheLineSize=DEFAULT_CACHE_ALIGN);
-
-  /// Mark the persistent range between [base, base+size) as modified.
-  void store(uint64_t base, uint64_t size);
-
-  /// Notify the state of a flush instruction to the cache line containing addr.
-  void flush(uint64_t addr);
-
-  /// Notify the state of an sfence instruction.
-  void fence();
-
-  /// Return true if the most recent store(s) to the persistent range
-  /// [base, base+size) is/are guaranteed to be persisted at this time.
-  bool isPersisted(uint64_t base, uint64_t size) const;
-
-  /// Return true if the most recent store(s) to range [baseA, baseA+sizeA)
-  /// is/are guaranteed to be persisted before any of the most recent stores to
-  /// range [baseB, baseB+sizeB).
-  bool isOrderedBefore(uint64_t baseA, uint64_t sizeA,
-                       uint64_t baseB, uint64_t sizeB) const;
-
-  /// Truncate addr to be aligned to cache lines.
-  uint64_t alignToCache(uint64_t addr) const;
-
-  void print(llvm::raw_ostream &os) const;
-
-private:
-  /// Current persistence epoch.
-  /// Epochs are delimited by memory fence instructions.
-  unsigned currEpoch;
-
-  /// The configured cache line size.
-  const uint64_t cacheAlign;
-
-public:
   typedef boost::icl::interval<uint64_t>::type addr_range;
 
   /// A persistence epoch "infinitely" in the future (just INT_MAX).
   static const unsigned EPOCH_INF = std::numeric_limits<unsigned>::max();
+
+  static const uint64_t DEFAULT_CACHE_ALIGN = 64;
 
   struct PersistInterval {
     /// The persistence epoch during which the data was 
@@ -104,6 +70,57 @@ public:
       return *this;
     }
   };
+
+  PersistentMemoryState(uint64_t cacheLineSize=DEFAULT_CACHE_ALIGN);
+
+  /// Mark the persistent range between [base, base+size) as modified.
+  void store(uint64_t base, uint64_t size);
+
+  /// Notify the state of a flush instruction to the cache line containing addr.
+  void flush(uint64_t addr);
+
+  /// Notify the state of an sfence instruction.
+  void fence();
+
+  /// Return true if the most recent store(s) to the persistent range
+  /// [base, base+size) is/are guaranteed to be persisted at this time.
+  bool isPersisted(uint64_t base, uint64_t size) const;
+
+  /// Return true if the most recent store(s) to range [baseA, baseA+sizeA)
+  /// is/are guaranteed to be persisted before any of the most recent stores to
+  /// range [baseB, baseB+sizeB).
+  bool isOrderedBefore(uint64_t baseA, uint64_t sizeA,
+                       uint64_t baseB, uint64_t sizeB) const;
+
+  /// Truncate addr to be aligned to cache lines.
+  uint64_t alignToCache(uint64_t addr) const;
+
+  unsigned getEpoch() const;
+  uint64_t getCacheLineSize() const;
+
+  /// Return the possible persist interval for the address or range.
+  /// Returns default PersistInterval (INF, INF) if no known persist interval.
+  PersistInterval getPersistInterval(uint64_t addr) const;
+  PersistInterval getPersistInterval(uint64_t base, uint64_t size) const;
+
+  /// Return all persist intervals contained within the range.
+  /// Outputs a sorted list of ((uint64_t, uint64_t), PersistInterval) pairs.
+  typedef std::vector< std::pair<std::pair<uint64_t, uint64_t>,
+                                 PersistInterval> > PersistIntervalsResult;
+  void getPersistIntervals(uint64_t base,
+                           uint64_t size,
+                           PersistIntervalsResult &results) const;
+
+  void print(llvm::raw_ostream &os) const;
+
+private:
+  /// Current persistence epoch.
+  /// Epochs are delimited by memory fence instructions.
+  unsigned currEpoch;
+
+  /// The configured cache line size.
+  const uint64_t cacheAlign;
+
 
 private:
   /// For each persistent memory range [start_addr, end_addr), store

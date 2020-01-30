@@ -108,6 +108,46 @@ addr_range PersistentMemoryState::alignToCache(const addr_range &range) const {
   return make_addr_range(begin, end-begin);
 }
 
+unsigned PersistentMemoryState::getEpoch() const { return currEpoch; }
+
+uint64_t PersistentMemoryState::getCacheLineSize() const { return cacheAlign; }
+
+PersistInterval PersistentMemoryState::getPersistInterval(uint64_t addr) const {
+  PersistInterval result;
+  auto it = persistIntervals.find(addr);
+  if (it != persistIntervals.end())
+    result = it->second;
+  return result;
+}
+
+PersistInterval PersistentMemoryState::getPersistInterval(uint64_t base,
+                                                          uint64_t size) const {
+  if (size == 0)
+    return PersistInterval();
+  return getPersistIntervalOfRange(make_addr_range(base, size));
+}
+
+void PersistentMemoryState::getPersistIntervals(
+    uint64_t base,
+    uint64_t size,
+    PersistIntervalsResult &results) const {
+
+  results.clear();
+  if (size == 0)
+    return;
+
+  auto range = make_addr_range(base, base+size);
+
+  auto itersInRange = persistIntervals.equal_range(range);
+  for (auto it = itersInRange.first; it != itersInRange.second; ++it) {
+    addr_range subRange = it->first;
+    PersistInterval pi = it->second;
+
+    auto rangePair = std::make_pair(subRange.lower(), subRange.upper());
+    results.push_back(std::make_pair(rangePair, pi));
+  }
+}
+
 PersistInterval PersistentMemoryState::getPersistIntervalOfRange(
     const addr_range &range) const {
   PersistInterval combined(EPOCH_INF, 0);
@@ -122,6 +162,10 @@ PersistInterval PersistentMemoryState::getPersistIntervalOfRange(
       combined.persist_epoch = foundInterval.persist_epoch;
     }
   }
+
+  // If none found, return (INF, INF)
+  if (combined.mod_epoch == EPOCH_INF)
+    return PersistInterval();
 
   return combined;
 }
