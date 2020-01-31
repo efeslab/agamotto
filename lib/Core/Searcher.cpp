@@ -30,6 +30,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Analysis/PostDominators.h"
 
 #include <cassert>
 #include <climits>

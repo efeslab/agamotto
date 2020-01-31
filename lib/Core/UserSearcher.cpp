@@ -9,9 +9,9 @@
 
 #include "UserSearcher.h"
 
-#include "Searcher.h"
 #include "Executor.h"
 
+#include "klee/OptionCategories.h"
 #include "klee/Internal/Support/ErrorHandling.h"
 #include "klee/MergeHandler.h"
 #include "klee/Solver/SolverCmdLine.h"
@@ -21,7 +21,7 @@
 using namespace llvm;
 using namespace klee;
 
-namespace {
+namespace klee {
 llvm::cl::OptionCategory
     SearchCat("Search options", "These options control the search heuristic.");
 

@@ -25,6 +25,8 @@
 #include "klee/Solver/SolverCmdLine.h"
 #include "klee/Statistics.h"
 
+#include "../../lib/Core/UserSearcher.h"
+
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstrTypes.h"
@@ -213,14 +215,39 @@ namespace {
                  cl::init(true),
                  cl::cat(ChecksCat));
 
+  enum class NvmCheckType { None, CoverageOnly, DebugOnly, DebugWithHeuristic };
 
+  cl::opt<NvmCheckType>
+  NvmCheck("nvm-check-type",
+       cl::desc("Choose how to check persistent memory (PM) (full by default)."),
+       cl::values(
+                  clEnumValN(NvmCheckType::None,
+                             "none",
+                             "Don't do any persistent memory checks (run KLEE normally)"),
+                  clEnumValN(NvmCheckType::CoverageOnly,
+                             "coverage-only",
+                             "Don't attempt to catch any bugs, but track coverage statistics about basic blocks that are relevant to PM"),
+                  clEnumValN(NvmCheckType::DebugOnly, "basic",
+                             "Check for PM bugs, but use the default search strategy provided by KLEE"),
+                  clEnumValN(NvmCheckType::DebugWithHeuristic, "full",
+                             "Check for PM bugs using the PM-intelligent heuristic for path exploration")
+                  KLEE_LLVM_CL_VAL_END),
+       cl::init(NvmCheckType::DebugWithHeuristic),
+       cl::cat(ChecksCat));
+
+  cl::alias PmCheck("pm-check-type",
+                    cl::desc("Alias for nvm-check-type"),
+                    cl::NotHidden,
+                    cl::aliasopt(NvmCheck),
+                    cl::cat(ChecksCat));
+  
+  cl::Nvm
 
   cl::opt<bool>
   OptExitOnError("exit-on-error",
                  cl::desc("Exit KLEE if an error in the tested application has been found (default=false)"),
                  cl::init(false),
                  cl::cat(TerminationCat));
-
 
   /*** Replaying options ***/
 

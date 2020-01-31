@@ -10,9 +10,14 @@
 #ifndef KLEE_USERSEARCHER_H
 #define KLEE_USERSEARCHER_H
 
+#include "Searcher.h"
+
 namespace klee {
   class Executor;
-  class Searcher;
+
+  // (iangneal): Exposing this so that klee's main can do a command line arg
+  // callback to set this depending on what kind of NVM checks the user wants.
+  extern llvm::cl::list<Searcher::CoreSearchType> CoreSearch;
 
   // XXX gross, should be on demand?
   bool userSearcherRequiresMD2U();
