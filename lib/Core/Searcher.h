@@ -346,7 +346,7 @@ namespace klee {
     unsigned lastStartInstructions;
 
   public:
-    BatchingSearcher(Searcher *baseSearcher, 
+    BatchingSearcher(Searcher *baseSearcher,
                      time::Span _timeBudget,
                      unsigned _instructionBudget);
     ~BatchingSearcher();

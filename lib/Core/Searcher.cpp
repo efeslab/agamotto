@@ -158,7 +158,7 @@ RandomSearcher::update(ExecutionState *current,
         break;
       }
     }
-    
+
     assert(ok && "invalid state removed");
   }
 }
@@ -253,8 +253,8 @@ void WeightedRandomSearcher::update(
   }
 }
 
-bool WeightedRandomSearcher::empty() { 
-  return states->empty(); 
+bool WeightedRandomSearcher::empty() {
+  return states->empty();
 }
 
 ///
@@ -462,12 +462,12 @@ ExecutionState& MergingSearcher::selectState() {
 
 BatchingSearcher::BatchingSearcher(Searcher *_baseSearcher,
                                    time::Span _timeBudget,
-                                   unsigned _instructionBudget) 
+                                   unsigned _instructionBudget)
   : baseSearcher(_baseSearcher),
     timeBudget(_timeBudget),
     instructionBudget(_instructionBudget),
     lastState(0) {
-  
+
 }
 
 BatchingSearcher::~BatchingSearcher() {
@@ -543,7 +543,7 @@ void IterativeDeepeningTimeSearcher::update(
         pausedStates.erase(it2);
         alt.erase(std::remove(alt.begin(), alt.end(), es), alt.end());
       }
-    }    
+    }
     baseSearcher->update(current, addedStates, alt);
   } else {
     baseSearcher->update(current, addedStates, removedStates);
