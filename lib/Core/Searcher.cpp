@@ -616,3 +616,4 @@ void InterleavedSearcher::update(
          ie = searchers.end(); it != ie; ++it)
     (*it)->update(current, addedStates, removedStates);
 }
+/* vim: set tabstop=2 softtabstop=2 shiftwidth=2: */

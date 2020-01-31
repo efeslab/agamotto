@@ -595,3 +595,4 @@ KFunction::~KFunction() {
     delete instructions[i];
   delete[] instructions;
 }
+/* vim: set tabstop=2 softtabstop=2 shiftwidth=2: */

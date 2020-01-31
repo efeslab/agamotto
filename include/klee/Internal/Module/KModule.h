@@ -163,3 +163,7 @@ namespace klee {
 } // End klee namespace
 
 #endif /* KLEE_KMODULE_H */
+/*
+ * vim: set tabstop=2 softtabstop=2 shiftwidth=2:
+ * vim: set filetype=cpp:
+ */
