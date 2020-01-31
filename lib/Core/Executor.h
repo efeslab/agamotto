@@ -537,7 +537,11 @@ public:
 
   const ModuleOptions &getModuleOptions() const { return modOpts; };
 };
-  
+
 } // End klee namespace
 
 #endif /* KLEE_EXECUTOR_H */
+/*
+ * vim: set tabstop=2 softtabstop=2 shiftwidth=2:
+ * vim: set filetype=cpp:
+ */

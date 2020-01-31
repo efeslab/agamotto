@@ -4380,3 +4380,4 @@ Interpreter *Interpreter::create(LLVMContext &ctx, const InterpreterOptions &opt
                                  InterpreterHandler *ih) {
   return new Executor(ctx, opts, ih);
 }
+/* vim: set tabstop=2 softtabstop=2 shiftwidth=2: */

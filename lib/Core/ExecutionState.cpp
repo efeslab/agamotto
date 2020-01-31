@@ -390,3 +390,4 @@ void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
     target = sf.caller;
   }
 }
+/* vim: set tabstop=2 softtabstop=2 shiftwidth=2: */

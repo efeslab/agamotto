@@ -183,3 +183,7 @@ public:
 } // End klee namespace
 
 #endif /* KLEE_INTERPRETER_H */
+/*
+ * vim: set tabstop=2 softtabstop=2 shiftwidth=2:
+ * vim: set filetype=cpp:
+ */
