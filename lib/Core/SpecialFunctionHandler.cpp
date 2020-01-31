@@ -137,6 +137,10 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("__ubsan_handle_mul_overflow", handleMulOverflow, false),
   add("__ubsan_handle_divrem_overflow", handleDivRemOverflow, false),
 
+  add("klee_pmem_mark_persistent", handleMarkPersistent, false),
+  add("klee_pmem_check_persisted", handleIsPersisted, false),
+  add("klee_pmem_check_ordered_before", handleIsOrderedBefore, false),
+
 #undef addDNR
 #undef add
 };
@@ -868,4 +872,113 @@ void SpecialFunctionHandler::handleDivRemOverflow(ExecutionState &state,
                                                std::vector<ref<Expr> > &arguments) {
   executor.terminateStateOnError(state, "overflow on division or remainder",
                                  Executor::Overflow);
+}
+
+void SpecialFunctionHandler::handleMarkPersistent(ExecutionState &state,
+                                                  KInstruction *target,
+                                                  std::vector<ref<Expr> > &arguments) {
+  std::string name;
+
+  if (arguments.size() != 3) {
+    executor.terminateStateOnError(
+        state,
+        "Incorrect number of arguments to "
+          "klee_pmem_mark_persistent(void*, size_t, char*)",
+        Executor::User);
+    return;
+  }
+
+  name = arguments[2]->isZero() ? "" : readStringAtAddress(state, arguments[2]);
+
+  if (name.length() == 0) {
+    name = "unnamed";
+    klee_warning("klee_pmem_mark_persistent: renamed empty name to \"unnamed\"");
+  }
+
+  Executor::ExactResolutionList rl;
+  executor.resolveExact(state, arguments[0], rl, "mark_persistent");
+  
+  for (Executor::ExactResolutionList::iterator it = rl.begin(), 
+         ie = rl.end(); it != ie; ++it) {
+    const MemoryObject *mo = it->first.first;
+    mo->setName(name);
+    
+    ExecutionState *s = it->second;
+
+    // FIXME: Type coercion should be done consistently somewhere.
+    bool res;
+    bool success __attribute__ ((unused)) =
+      executor.solver->mustBeTrue(*s, 
+                                  EqExpr::create(ZExtExpr::create(arguments[1],
+                                                                  Context::get().getPointerWidth()),
+                                                 mo->getSizeExpr()),
+                                  res);
+    assert(success && "FIXME: Unhandled solver failure");
+    
+    if (res) {
+      executor.executeMarkPersistent(*s, mo);
+    } else {      
+      executor.terminateStateOnError(*s, 
+                                     "wrong size given to klee_pmem_mark_persistent[_name]", 
+                                     Executor::User);
+    }
+  }
+}
+
+void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,
+                                               KInstruction *target,
+                                               std::vector<ref<Expr> > &arguments) {
+  assert(arguments.size()==2 &&
+      "invalid number of arguments to klee_pmem_check_persisted");
+  assert(isa<ConstantExpr>(arguments[0]) &&
+         "expect constant address argument to klee_pmem_check_persisted");
+  assert(isa<ConstantExpr>(arguments[1]) &&
+         "expect constant size argument to klee_pmem_check_persisted");
+
+  ref<Expr> addr = arguments[0];
+  ref<Expr> size = arguments[1];
+  uint64_t raw_addr = cast<ConstantExpr>(addr)->getZExtValue();
+  uint64_t raw_size = cast<ConstantExpr>(size)->getZExtValue();
+  bool isPersisted = state.pmemState.isPersisted(raw_addr, raw_size);
+
+  if (!isPersisted) {
+    executor.terminateStateOnError(state,
+                                   "check_persisted: persistent memory error",
+                                   Executor::PMem, NULL,
+                                   executor.getAddressInfo(state, addr));
+  }
+}
+
+void SpecialFunctionHandler::handleIsOrderedBefore(ExecutionState &state,
+                                                   KInstruction *target,
+                                                   std::vector<ref<Expr> > &arguments) {
+  assert(arguments.size()==4 &&
+      "invalid number of arguments to klee_pmem_check_ordered_before");
+  assert(isa<ConstantExpr>(arguments[0]) &&
+         "expect constant address argument to klee_pmem_check_ordered_before");
+  assert(isa<ConstantExpr>(arguments[1]) &&
+         "expect constant size argument to klee_pmem_check_ordered_before");
+  assert(isa<ConstantExpr>(arguments[2]) &&
+         "expect constant address argument to klee_pmem_check_ordered_before");
+  assert(isa<ConstantExpr>(arguments[3]) &&
+         "expect constant size argument to klee_pmem_check_ordered_before");
+
+  ref<Expr> addrA = arguments[0];
+  ref<Expr> sizeA = arguments[1];
+  ref<Expr> addrB = arguments[2];
+  ref<Expr> sizeB = arguments[3];
+  uint64_t raw_addrA = cast<ConstantExpr>(addrA)->getZExtValue();
+  uint64_t raw_sizeA = cast<ConstantExpr>(sizeA)->getZExtValue();
+  uint64_t raw_addrB = cast<ConstantExpr>(addrB)->getZExtValue();
+  uint64_t raw_sizeB = cast<ConstantExpr>(sizeB)->getZExtValue();
+  bool isOrderedBefore = state.pmemState.isOrderedBefore(raw_addrA, raw_sizeA,
+                                                         raw_addrB, raw_sizeB);
+
+  if (!isOrderedBefore) {
+    executor.terminateStateOnError(state,
+                                   "check_ordered_before: persistent memory error",
+                                   Executor::PMem, NULL,
+                                   executor.getAddressInfo(state, addrA) + '\n' +
+                                   executor.getAddressInfo(state, addrB));
+  }
 }

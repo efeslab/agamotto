@@ -152,6 +152,29 @@ extern "C" {
 
   /* Get errno value of the current state */
   int klee_get_errno(void);
+
+  /* klee_pmem_mark_persistent - Mark the given memory range as residing in
+   * non-volatile/persistent memory.
+   *
+   * \arg addr - The start of the memory range.
+   * \arg size - The number of bytes in the memory range.
+   * \arg name - A name used for identifying the object in messages, output
+   * files, etc. If NULL, object is called "unnamed".
+   */
+  void klee_pmem_mark_persistent(void *addr, size_t size, const char *name);
+
+  /* Assert that the entire memory range [addr, addr+size) is guaranteed
+   * to be persisted to main memory at the time of calling.
+   */
+  void klee_pmem_check_persisted(void *addr, size_t size);
+
+  /* Assert that any recent modifications to the memory within range
+   * [addrA, addrA+sizeA) are guaranteed to be persisted before any
+   * recent modifications to the memory within range [addrB, sizeB).
+   */
+  void klee_pmem_check_ordered_before(void *addrA, size_t sizeA,
+                                      void *addrB, size_t sizeB);
+
 #ifdef __cplusplus
 }
 #endif

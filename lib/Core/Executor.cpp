@@ -273,6 +273,7 @@ cl::list<Executor::TerminateReason> ExitOnErrorType(
         clEnumValN(Executor::Free, "Free", "Freeing invalid memory"),
         clEnumValN(Executor::Model, "Model", "Memory model limit hit"),
         clEnumValN(Executor::Overflow, "Overflow", "An overflow occurred"),
+        clEnumValN(Executor::PMem, "PMem", "Persistent memory error"),
         clEnumValN(Executor::Ptr, "Ptr", "Pointer error"),
         clEnumValN(Executor::ReadOnly, "ReadOnly", "Write to read-only memory"),
         clEnumValN(Executor::ReportError, "ReportError",
@@ -426,6 +427,7 @@ const char *Executor::TerminateReasonNames[] = {
   [ Free ] = "free",
   [ Model ] = "model",
   [ Overflow ] = "overflow",
+  [ PMem ] = "pmem",
   [ Ptr ] = "ptr",
   [ ReadOnly ] = "readonly",
   [ ReportError ] = "reporterror",
@@ -1472,7 +1474,7 @@ void Executor::executeCall(ExecutionState &state,
         KInstruction *bitcastKInst = kmodule->getKInstruction(bitcastInst);
         // Get the address of the variable being annotated.
         ref<Expr> address = eval(bitcastKInst, 0, state).value;
-        executePersistentMemoryAnnotation(state, cast<ConstantExpr>(address));
+        executeMarkPersistent(state, cast<ConstantExpr>(address));
       } else {
         klee_warning("Unsupported annotation: %s", annotationStr.str().c_str());
       }
@@ -3737,14 +3739,19 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   }
 }
 
-void Executor::executePersistentMemoryAnnotation(ExecutionState &state,
-                                                  ref<ConstantExpr> address) {
+void Executor::executeMarkPersistent(ExecutionState &state,
+                                     ref<ConstantExpr> address) {
   ObjectPair op;
   if (!state.addressSpace.resolveOne(address, op)) {
-    klee_error("could not resolve address of 'nvmvar' annotation.");
+    klee_error("could not resolve address of persistent variable.");
   }
 
   const MemoryObject *mo = op.first;
+  executeMarkPersistent(state, mo);
+}
+
+void Executor::executeMarkPersistent(ExecutionState &state,
+                                     const MemoryObject *mo) {
   mo->isPersistent = true;
   std::string name;
   mo->getAllocInfo(name);

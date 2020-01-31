@@ -105,6 +105,7 @@ public:
     Free,
     Model,
     Overflow,
+    PMem,
     Ptr,
     ReadOnly,
     ReportError,
@@ -311,9 +312,6 @@ private:
                               ref<Expr> value /* undef if read */,
                               KInstruction *target /* undef if write */);
 
-  void executePersistentMemoryAnnotation(ExecutionState &state,
-                                          ref<ConstantExpr> address);
-
   void executePersistentMemoryFlush(ExecutionState &state,
                                     ref<ConstantExpr> address);
 
@@ -321,6 +319,9 @@ private:
 
   void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
                            const std::string &name);
+
+  void executeMarkPersistent(ExecutionState &state, ref<ConstantExpr> address);
+  void executeMarkPersistent(ExecutionState &state, const MemoryObject *mo);
 
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included
