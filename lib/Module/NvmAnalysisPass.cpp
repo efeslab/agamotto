@@ -30,6 +30,7 @@ namespace klee {
   NvmAnalysisPass::NvmAnalysisPass(NvmFunctionInfo *nfip) :
     llvm::ModulePass(ID), nfip_(nfip) {}
 
+  // XXX: May need to change after we change the environment model.
   bool NvmAnalysisPass::runOnModule(Module &M) {
     // Create the function call description for the entry.
     const Function *main = M.getFunction("main");
@@ -37,7 +38,7 @@ namespace klee {
     NvmFunctionCallDesc desc(main, empty_args);
 
     // Initialize all functions called from main.
-    (void)nfip_->get(desc);
+    nfip_->setRoot(desc);
     return false;
   }
 }

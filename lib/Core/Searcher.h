@@ -22,6 +22,7 @@
 #include <vector>
 #include <functional>
 #include <utility>
+#include <tuple>
 
 namespace llvm {
   class BasicBlock;
@@ -201,32 +202,60 @@ namespace klee {
     Executor &exec_;
     NvmFunctionInfo &nvm_info_;
 
-    typedef std::pair<ExecutionState*, size_t> priority_pair;
+    size_t currGen = 0;
 
-    struct priority_less : public std::less<priority_pair> {
-      bool operator()(const priority_pair &rhs, const priority_pair &lhs) {
-        return rhs.second < lhs.second;
+    /**
+     * The three fields are:
+     * 1. The execution state. Naturally.
+     * 2. The generation of the execution state.
+     * 3. The priority of the execution state.
+     *
+     * The "generation" is a way to prioritize coverage. If we fork some state,
+     * and it has a common post-dominator with the same successors, it is likely
+     * redundant to run, so it will be suspended until the current generation
+     * is over.
+     */
+    typedef std::tuple<ExecutionState*, size_t, size_t> priority_tuple;
+
+    /**
+     * If the generation of rhs is higher, it has lower priority. If it has
+     * the same generation, the priority is lower by standard rules.
+     */
+    struct priority_less : public std::less<priority_tuple> {
+      bool operator()(const priority_tuple &rhs, const priority_tuple &lhs) {
+        return std::get<1>(rhs) > std::get<1>(lhs) ||
+               (std::get<1>(rhs) == std::get<1>(lhs) && std::get<2>(rhs) < std::get<2>(lhs));
       }
     };
 
     // C++ doesn't let us override only part of the template defaults, or if
     // we do, must be right to left. Oh well.
     // https://stackoverflow.com/questions/31840974/c-templates-override-some-but-not-all-default-arguments
-    std::priority_queue<priority_pair,
-                        std::vector<priority_pair>,
+    std::priority_queue<priority_tuple,
+                        std::vector<priority_tuple>,
                         priority_less> states;
 
     std::unordered_set<ExecutionState*> removed;
     ExecutionState *lastState;
 
     std::unordered_map<ExecutionState*, bool> generateTest;
+    std::unordered_set<const llvm::BasicBlock*> covered;
 
     /**
      * Given the recently-run or newly created state, either run it or kill
      * it depending on whether or not it has any remaining interesting states.
+     *
      */
-    void addOrKillState(ExecutionState *);
+    bool addOrKillState(ExecutionState *, ExecutionState *);
     ExecutionState* filterState(ExecutionState *);
+
+    /**
+     * Given the current state, see if a newly added state should go in a second
+     * generation.
+     */
+    size_t calculateGeneration(ExecutionState *current, ExecutionState *added);
+
+    void outputCoverage();
 
   public:
     NvmPathSearcher(Executor &exec);

@@ -47,6 +47,7 @@ public:
   virtual void incPathsCutEndTrace() = 0;
   virtual void incPathsCutUninteresting() = 0;
   virtual void setNvm() = 0;
+  virtual void setNvmCoverage(double) = 0;
 
   virtual void processTestCase(const ExecutionState &state,
                                const char *err,

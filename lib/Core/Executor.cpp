@@ -1475,12 +1475,14 @@ void Executor::executeCall(ExecutionState &state,
         // Get the address of the variable being annotated.
         ref<Expr> address = eval(bitcastKInst, 0, state).value;
         executeMarkPersistent(state, cast<ConstantExpr>(address));
+      } else if (annotationStr == "nvmptr") {
+        klee_warning_once(0, "Skipping over 'nvmptr' annotation");
       } else {
         klee_warning("Unsupported annotation: %s", annotationStr.str().c_str());
       }
       break;
     }
-        
+
     case Intrinsic::vacopy:
       // va_copy should have been lowered.
       //

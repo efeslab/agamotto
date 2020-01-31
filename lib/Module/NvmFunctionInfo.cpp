@@ -138,6 +138,8 @@ void NvmFunctionCallInfo::computeFactors() {
   }
 
   // Nested Factor.
+  // -- To track nested basic blocks.
+  std::unordered_set<const NvmFunctionCallInfo*> nested_call_info;
   // -- Initial value is that of the importance factor.
   imp_nested_.insert(imp_factor_.begin(), imp_factor_.end());
   // -- Add up the nested calls.
@@ -153,12 +155,22 @@ void NvmFunctionCallInfo::computeFactors() {
 
     NvmFunctionCallDesc nested_desc(cfn, args);
     const NvmFunctionCallInfo *nci = parent_->get(nested_desc, blacklist_);
+    nested_call_info.insert(nci);
     if (nci) {
       // If we were able to resolve the nested call, increment the block that
       // contains this instruction.
       const BasicBlock *bb = ci->getParent();
       imp_nested_[bb] += nci->getMagnitude();
     }
+  }
+
+  for (const auto &p : imp_nested_) {
+    if (p.second) {
+      imp_bbs_.insert(p.first);
+    }
+  }
+  for (const NvmFunctionCallInfo *n : nested_call_info) {
+    imp_bbs_.insert(n->imp_bbs_.begin(), n->imp_bbs_.end());
   }
 
   // Successor factor.
@@ -178,8 +190,8 @@ void NvmFunctionCallInfo::dumpInfo() const {
     errs() << i << ", ";
   }
   errs() << "> as NVM pointers and " << nvm_ptrs_.size()
-    << " overall NVM pointer" << (nvm_ptrs_.size() > 1 ? "s" : "") <<
-    "has a magnitude of " << magnitude_ << "\n";
+    << " NVM pointer" << (nvm_ptrs_.size() == 1 ? "" : "s") <<
+    " has a magnitude of " << magnitude_ << "\n";
 
   for (const auto &p : imp_factor_) {
     errs() << "\t (IMP FACTOR) BB " << p.first << " => " << p.second << "\n";
@@ -227,6 +239,22 @@ const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d) {
   return get(d, bl);
 }
 
+void NvmFunctionInfo::setRoot(const NvmFunctionCallDesc &desc) {
+  root_ = desc;
+  (void)get(root_);
+}
+
+double NvmFunctionInfo::computeCoverageRatio(const unordered_set<const BasicBlock*> &covered) {
+  // Sanity check
+  unordered_set<const BasicBlock*> res(covered);
+  const auto &all = get(root_)->getAllInterestingBB();
+  res.insert(all.begin(), all.end());
+  // Checks that nothing in covered is not in all.
+  assert(res == all);
+
+  return ((double)covered.size()) / ((double)all.size());
+}
+
 const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d,
     const unordered_set<const Function*> &bl) {
 
@@ -240,9 +268,11 @@ const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d,
 }
 
 void NvmFunctionInfo::dumpAllInfo() const {
+  errs() << "----- dumpAllInfo -----\n";
   for (const auto &t : fn_info_) {
     t.second->dumpInfo();
   }
+  errs() << "----- +++++++++++ -----\n";
 }
 
 unordered_set<unsigned> NvmFunctionInfo::getNvmArgs(const NvmFunctionCallDesc& caller,

@@ -318,24 +318,46 @@ ExecutionState* NvmPathSearcher::filterState(ExecutionState *execState) {
 
 ExecutionState &NvmPathSearcher::selectState() {
   do {
-    const priority_pair &pp = states.top();
-    lastState = filterState(pp.first);
+    //errs() << states.size() << "\n";
+    const priority_tuple &pt = states.top();
+    lastState = filterState(std::get<0>(pt));
     states.pop();
   } while (!lastState);
 
   return *lastState;
 }
 
-void NvmPathSearcher::addOrKillState(ExecutionState *execState) {
+size_t NvmPathSearcher::calculateGeneration(ExecutionState *current, ExecutionState *added) {
+  if (!current) return currGen;
+
+  /*
+   * TODO: get the post dominance frontier and check for commonality.
+   */
+  return currGen;
+}
+
+bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *execState) {
   // We need the current basic block and the function description to determine
   // the heuristic value.
   const NvmFunctionCallDesc &desc = execState->stack.back().nvmDesc;
   const BasicBlock *bb = execState->pc->inst->getParent();
 
+  size_t gen = calculateGeneration(current, execState);
+
   // Check if this is interesting intrinsicly.
-  size_t importance = nvm_info_.findInfo(desc)->getSuccessorFactor(bb);
+  //desc.dumpInfo();
+  //if (!desc.Fn()) {
+  //  errs() << *execState->pc->inst << "\n";
+  //}
+  //nvm_info_.findInfo(desc)->dumpInfo();
+  const NvmFunctionCallInfo *callInfo = nvm_info_.findInfo(desc);
+  size_t importance = callInfo->getImportanceFactor(bb);
   if (importance) {
     generateTest[execState] = true;
+    //errs() << format("Previous coverage: %d\n", (int)(nvm_info_.computeCoverageRatio(covered) * 100.0));
+    covered.insert(bb);
+    //errs() << format("\tnow: %d\n", (int)(nvm_info_.computeCoverageRatio(covered) * 100.0));
+    exec_.interpreterHandler->setNvmCoverage(nvm_info_.computeCoverageRatio(covered));
   }
 
   size_t priority = nvm_info_.findInfo(desc)->getSuccessorFactor(bb);
@@ -349,8 +371,11 @@ void NvmPathSearcher::addOrKillState(ExecutionState *execState) {
     exec_.terminateState(*execState);
   } else {
     //errs() << "\tAdding state!\n";
-    states.emplace(execState, priority);
+    states.emplace(execState, gen, priority);
+    return true;
   }
+
+  return false;
 }
 
 void
@@ -359,11 +384,16 @@ NvmPathSearcher::update(ExecutionState *current,
                         const std::vector<ExecutionState *> &removedStates)
 {
   //errs() << "Update start: " << states.size() << "\n";
+  bool addedCurrent = false;
   // Re-insert the current state with a new priority.
-  if (current) addOrKillState(current);
+  if (current) {
+    addedCurrent = addOrKillState(nullptr, current);
+  }
 
+  ExecutionState *curr = addedCurrent ? current : nullptr;
   for (ExecutionState *execState : addedStates) {
-    addOrKillState(execState);
+    bool newCurr = addOrKillState(curr, execState);
+    if (!curr && newCurr) curr = execState;
   }
 
   // We will filter when we re-select.
@@ -373,6 +403,21 @@ NvmPathSearcher::update(ExecutionState *current,
 
 bool NvmPathSearcher::empty() {
   return states.empty();
+}
+
+void NvmPathSearcher::outputCoverage() {
+  bool useColors = errs().is_displayed();
+  if (useColors)
+    errs().changeColor(raw_ostream::MAGENTA, /*bold=*/true, /*bg=*/false);
+
+  char tmp[101];
+  snprintf(tmp, 100, "\tKLEE-NVM: important basic block coverage = %3d%%\n",
+      (int)(nvm_info_.computeCoverageRatio(covered) * 100.0));
+
+  errs() << tmp;
+
+  if (useColors)
+    errs().resetColor();
 }
 
 ///

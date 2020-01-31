@@ -46,15 +46,17 @@ cl::opt<bool> DebugLogStateMerge(
 /***/
 
 StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
-  : caller(_caller), kf(_kf), callPathNode(0), 
+  : caller(_caller), kf(_kf), callPathNode(0),
     minDistToUncoveredOnReturn(0), varargs(0) {
   locals = new Cell[kf->numRegisters];
 }
 
-StackFrame::StackFrame(const StackFrame &s) 
+StackFrame::StackFrame(const StackFrame &s)
   : caller(s.caller),
     kf(s.kf),
     callPathNode(s.callPathNode),
+    nvmArgs(s.nvmArgs),
+    nvmDesc(s.nvmDesc),
     allocas(s.allocas),
     minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn),
     varargs(s.varargs) {
@@ -154,15 +156,9 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf,
   if (!stack.empty() && ci) {
     new_frame.nvmArgs = nvmInfo.getNvmArgs(stack.back().nvmDesc, ci);
   }
-  //errs() << "--- " << this << " - pushFrame ";
-  //errs() << kf << "->" << kf->function << "->" << kf->function->getName() << "\n";
   new_frame.nvmDesc = NvmFunctionCallDesc(kf->function, new_frame.nvmArgs);
-  //errs() << "\t---\n";
-  //new_frame.nvmDesc.dumpInfo();
 
   stack.push_back(new_frame);
-  //stack.back().nvmDesc.dumpInfo();
-  //errs() << "\t---\n";
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {
