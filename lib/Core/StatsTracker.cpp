@@ -339,7 +339,7 @@ void StatsTracker::markNvmBasicBlockVisited(const llvm::BasicBlock *visited) {
     for (const auto *bb : info->getAllInterestingBB()) {
       nvmBlockCoverage[bb] = 0;
     }
-  }
+  } 
 
   ++nvmBlockCoverage[visited];
 }

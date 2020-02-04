@@ -379,7 +379,7 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *ex
     covered.insert(bb);
     //errs() << format("\tnow: %d\n", (int)(nvm_info_.computeCoverageRatio(covered) * 100.0));
     // exec_.interpreterHandler->setNvmCoverage(nvm_info_.computeCoverageRatio(covered));
-    executor.statsTracker->markNvmBasicBlockVisited(bb);
+    // executor.statsTracker->markNvmBasicBlockVisited(bb);
   }
 
   size_t priority = nvmInfo->findInfo(desc)->getSuccessorFactor(bb);
