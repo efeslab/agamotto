@@ -45,7 +45,27 @@ namespace klee {
   extern RNG theRNG;
 }
 
-Searcher::~Searcher() {
+Searcher::Searcher(Executor &_executor) 
+  : executor(_executor),
+    nvmInfo(_executor.kmodule->getNvmFunctionInfo()) {}
+
+Searcher::~Searcher() {}
+
+ExecutionState &Searcher::selectStateAndUpdateInfo() {
+  ExecutionState &ref = selectState();
+  if (nvmInfo) {
+    const NvmFunctionCallDesc &desc = ref.stack.back().nvmDesc;
+    const BasicBlock *bb = ref.pc->inst->getParent();
+    const NvmFunctionCallInfo *callInfo = nvmInfo->findInfo(desc);
+    size_t importance = callInfo->getImportanceFactor(bb);
+
+    if (importance) {
+      errs() << *bb << "\n";
+      executor.statsTracker->markNvmBasicBlockVisited(bb);
+    }
+  }
+
+  return ref;
 }
 
 ///
@@ -166,8 +186,9 @@ RandomSearcher::update(ExecutionState *current,
 
 ///
 
-WeightedRandomSearcher::WeightedRandomSearcher(WeightType _type)
-  : states(new DiscretePDF<ExecutionState*>()),
+WeightedRandomSearcher::WeightedRandomSearcher(Executor &executor, WeightType _type)
+  : Searcher(executor),
+    states(new DiscretePDF<ExecutionState*>()),
     type(_type) {
   switch(type) {
   case Depth:
@@ -260,11 +281,9 @@ bool WeightedRandomSearcher::empty() {
 
 ///
 RandomPathSearcher::RandomPathSearcher(Executor &_executor)
-  : executor(_executor) {
-}
+  : Searcher(_executor) {}
 
-RandomPathSearcher::~RandomPathSearcher() {
-}
+RandomPathSearcher::~RandomPathSearcher() {}
 
 ExecutionState &RandomPathSearcher::selectState() {
   unsigned flips=0, bits=0;
@@ -299,10 +318,10 @@ bool RandomPathSearcher::empty() {
 
 ///
 
-NvmPathSearcher::NvmPathSearcher(Executor &exec) :
-  exec_(exec), nvm_info_(exec_.kmodule->nvmInfo)
+NvmPathSearcher::NvmPathSearcher(Executor &_executor) 
+  : Searcher(_executor)
 {
-  exec_.interpreterHandler->setNvm();
+  executor.interpreterHandler->setNvm();
 }
 
 NvmPathSearcher::~NvmPathSearcher() {}
@@ -333,6 +352,7 @@ size_t NvmPathSearcher::calculateGeneration(ExecutionState *current, ExecutionSt
 
   /*
    * TODO: get the post dominance frontier and check for commonality.
+   * Increment states deferred if newGen != currGen.
    */
   return currGen;
 }
@@ -351,25 +371,26 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *ex
   //  errs() << *execState->pc->inst << "\n";
   //}
   //nvm_info_.findInfo(desc)->dumpInfo();
-  const NvmFunctionCallInfo *callInfo = nvm_info_.findInfo(desc);
+  const NvmFunctionCallInfo *callInfo = nvmInfo->findInfo(desc);
   size_t importance = callInfo->getImportanceFactor(bb);
   if (importance) {
     generateTest[execState] = true;
     //errs() << format("Previous coverage: %d\n", (int)(nvm_info_.computeCoverageRatio(covered) * 100.0));
     covered.insert(bb);
     //errs() << format("\tnow: %d\n", (int)(nvm_info_.computeCoverageRatio(covered) * 100.0));
-    exec_.interpreterHandler->setNvmCoverage(nvm_info_.computeCoverageRatio(covered));
+    // exec_.interpreterHandler->setNvmCoverage(nvm_info_.computeCoverageRatio(covered));
+    executor.statsTracker->markNvmBasicBlockVisited(bb);
   }
 
-  size_t priority = nvm_info_.findInfo(desc)->getSuccessorFactor(bb);
+  size_t priority = nvmInfo->findInfo(desc)->getSuccessorFactor(bb);
   if (!priority && generateTest[execState]) {
     //errs() << "\tKilling state with test!!\n";
-    exec_.interpreterHandler->incPathsCutEndTrace();
-    exec_.terminateStateEarly(*execState, "State is no longer interesting");
+    stats::nvmStatesKilledEndTrace++;
+    executor.terminateStateEarly(*execState, "State is no longer interesting");
   } else if (!priority) {
     //errs() << "\tKilling state!\n";
-    exec_.interpreterHandler->incPathsCutUninteresting();
-    exec_.terminateState(*execState);
+    stats::nvmStatesKilledIrrelevant++;
+    executor.terminateState(*execState);
   } else {
     //errs() << "\tAdding state!\n";
     states.emplace(execState, gen, priority);
@@ -413,7 +434,7 @@ void NvmPathSearcher::outputCoverage() {
 
   char tmp[101];
   snprintf(tmp, 100, "\tKLEE-NVM: important basic block coverage = %3d%%\n",
-      (int)(nvm_info_.computeCoverageRatio(covered) * 100.0));
+      (int)(nvmInfo->computeCoverageRatio(covered) * 100.0));
 
   errs() << tmp;
 
@@ -424,7 +445,8 @@ void NvmPathSearcher::outputCoverage() {
 ///
 
 MergingSearcher::MergingSearcher(Searcher *_baseSearcher)
-  : baseSearcher(_baseSearcher){}
+  : Searcher(_baseSearcher->executor),
+    baseSearcher(_baseSearcher) {}
 
 MergingSearcher::~MergingSearcher() {
   delete baseSearcher;
@@ -464,12 +486,11 @@ ExecutionState& MergingSearcher::selectState() {
 BatchingSearcher::BatchingSearcher(Searcher *_baseSearcher,
                                    time::Span _timeBudget,
                                    unsigned _instructionBudget)
-  : baseSearcher(_baseSearcher),
+  : Searcher(_baseSearcher->executor),
+    baseSearcher(_baseSearcher),
     timeBudget(_timeBudget),
     instructionBudget(_instructionBudget),
-    lastState(0) {
-
-}
+    lastState(0) {}
 
 BatchingSearcher::~BatchingSearcher() {
   delete baseSearcher;
@@ -504,15 +525,17 @@ BatchingSearcher::update(ExecutionState *current,
                          const std::vector<ExecutionState *> &addedStates,
                          const std::vector<ExecutionState *> &removedStates) {
   if (std::find(removedStates.begin(), removedStates.end(), lastState) !=
-      removedStates.end())
+      removedStates.end()) {
     lastState = 0;
+  }
   baseSearcher->update(current, addedStates, removedStates);
 }
 
 /***/
 
 IterativeDeepeningTimeSearcher::IterativeDeepeningTimeSearcher(Searcher *_baseSearcher)
-  : baseSearcher(_baseSearcher),
+  : Searcher(_baseSearcher->executor),
+    baseSearcher(_baseSearcher),
     time(time::seconds(1)) {
 }
 
@@ -570,9 +593,9 @@ void IterativeDeepeningTimeSearcher::update(
 /***/
 
 InterleavedSearcher::InterleavedSearcher(const std::vector<Searcher*> &_searchers)
-  : searchers(_searchers),
-    index(1) {
-}
+  : Searcher(_searchers.front()->executor),
+    searchers(_searchers),
+    index(1) {}
 
 InterleavedSearcher::~InterleavedSearcher() {
   for (std::vector<Searcher*>::const_iterator it = searchers.begin(),

@@ -156,6 +156,9 @@ namespace klee {
     /// Run passes that check if module is valid LLVM IR and if invariants
     /// expected by KLEE's Executor hold.
     void checkModule();
+
+    /// (iangneal): Either get the NVM function info or nullptr.
+    NvmFunctionInfo *getNvmFunctionInfo();
   };
 } // End klee namespace
 

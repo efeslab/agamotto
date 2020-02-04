@@ -121,6 +121,22 @@ bool StatsTracker::useStatistics() {
 bool StatsTracker::useIStats() {
   return OutputIStats;
 }
+// (iangneal): Calculate NVM-KLEE numbers
+uint64_t StatsTracker::getNvmNumBlocksCovered() const {
+  uint64_t num = 0;
+  for (const auto &p : nvmBlockCoverage) num += (p.second / p.first->size());
+  return num;
+}
+
+uint64_t StatsTracker::getNvmNumBlocksUnique() const {
+  uint64_t num = 0;
+  for (const auto &p : nvmBlockCoverage) num += (p.second != 0 ? 1 : 0);
+  return num;
+}
+
+double StatsTracker::getNvmCoverage() const {
+  return ((double)getNvmNumBlocksUnique()) / ((double)nvmBlockCoverage.size());
+}
 
 /// Check for special cases where we statically know an instruction is
 /// uncoverable. Currently the case is an unreachable instruction
@@ -315,6 +331,19 @@ void StatsTracker::done() {
   }
 }
 
+void StatsTracker::markNvmBasicBlockVisited(const llvm::BasicBlock *visited) {
+  NvmFunctionInfo *info = executor.kmodule->getNvmFunctionInfo();
+  if (!info) return;
+  
+  if (nvmBlockCoverage.empty()) {
+    for (const auto *bb : info->getAllInterestingBB()) {
+      nvmBlockCoverage[bb] = 0;
+    }
+  }
+
+  ++nvmBlockCoverage[visited];
+}
+
 void StatsTracker::stepInstruction(ExecutionState &es) {
   if (OutputIStats) {
     if (TrackInstructionTime) {
@@ -453,7 +482,14 @@ void StatsTracker::writeStatsHeader() {
 #ifdef KLEE_ARRAY_DEBUG
 	           << "ArrayHashTime INTEGER,"
 #endif
-             << "QueryCexCacheHits INTEGER"
+             << "QueryCexCacheHits INTEGER,"
+             // (iangneal): For NVM-KLEE
+             << "NvmNumBlocksTotal INTEGER,"
+             << "NvmNumBlocksCovered INTEGER,"
+             << "NvmNumBlocksUnique INTEGER,"
+             << "NvmCoverage REAL,"
+             << "NvmHeuristicStatesKilled INTEGER,"
+             << "NvmHeuristicStatesDeferred INTEGER"   
              << ")";
   char *zErrMsg = nullptr;
   if(sqlite3_exec(statsFile, create.str().c_str(), nullptr, nullptr, &zErrMsg)) {
@@ -489,8 +525,21 @@ void StatsTracker::writeStatsHeader() {
 #ifdef KLEE_ARRAY_DEBUG
              << "ArrayHashTime,"
 #endif
-             << "QueryCexCacheHits "
+             << "QueryCexCacheHits ," 
+             // (iangneal): For NVM-KLEE
+             << "NvmNumBlocksTotal ,"
+             << "NvmNumBlocksCovered ,"
+             << "NvmNumBlocksUnique ,"
+             << "NvmCoverage ,"
+             << "NvmHeuristicStatesKilled ,"
+             << "NvmHeuristicStatesDeferred "      
              << ") VALUES ( "
+             << "?, "
+             << "?, "
+             << "?, "
+             << "?, "
+             << "?, "
+             << "?, "
              << "?, "
              << "?, "
              << "?, "
@@ -546,8 +595,15 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, 18, stats::resolveTime);
   sqlite3_bind_int64(insertStmt, 19, stats::queryCexCacheMisses);
   sqlite3_bind_int64(insertStmt, 20, stats::queryCexCacheHits);
+  // (iangneal): For NVM-KLEE
+  sqlite3_bind_int64(insertStmt, 21, nvmBlockCoverage.size());
+  sqlite3_bind_int64(insertStmt, 22, getNvmNumBlocksCovered());
+  sqlite3_bind_int64(insertStmt, 23, getNvmNumBlocksUnique());
+  sqlite3_bind_int64(insertStmt, 24, getNvmCoverage());
+  sqlite3_bind_int64(insertStmt, 25, stats::nvmStatesKilledEndTrace + stats::nvmStatesKilledIrrelevant);
+  sqlite3_bind_int64(insertStmt, 26, stats::nvmStatesDeferred);
 #ifdef KLEE_ARRAY_DEBUG
-  sqlite3_bind_int64(insertStmt, 21, stats::arrayHashTime);
+  sqlite3_bind_int64(insertStmt, 27, stats::arrayHashTime);
 #endif
   int errCode = sqlite3_step(insertStmt);
   if(errCode != SQLITE_DONE) klee_error("Error writing stats data: %s", sqlite3_errmsg(statsFile));

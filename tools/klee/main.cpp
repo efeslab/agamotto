@@ -215,7 +215,8 @@ namespace {
                  cl::init(true),
                  cl::cat(ChecksCat));
 
-  enum class NvmCheckType { None, CoverageOnly, DebugOnly, DebugWithHeuristic };
+  // -- NVM options begin
+  enum class NvmCheckType { None, CoverageOnly, Debug };
 
   cl::opt<NvmCheckType>
   NvmCheck("nvm-check-type",
@@ -227,12 +228,10 @@ namespace {
                   clEnumValN(NvmCheckType::CoverageOnly,
                              "coverage-only",
                              "Don't attempt to catch any bugs, but track coverage statistics about basic blocks that are relevant to PM"),
-                  clEnumValN(NvmCheckType::DebugOnly, "basic",
-                             "Check for PM bugs, but use the default search strategy provided by KLEE"),
-                  clEnumValN(NvmCheckType::DebugWithHeuristic, "full",
-                             "Check for PM bugs using the PM-intelligent heuristic for path exploration")
+                  clEnumValN(NvmCheckType::Debug, "full",
+                             "Check for PM bugs and track coverage statistics. Search strategy is selected in a separate option.")
                   KLEE_LLVM_CL_VAL_END),
-       cl::init(NvmCheckType::DebugWithHeuristic),
+       cl::init(NvmCheckType::Debug),
        cl::cat(ChecksCat));
 
   cl::alias PmCheck("pm-check-type",
@@ -240,8 +239,15 @@ namespace {
                     cl::NotHidden,
                     cl::aliasopt(NvmCheck),
                     cl::cat(ChecksCat));
-  
-  cl::Nvm
+
+  bool clOptEnableNvmInfo() {
+    return NvmCheck != NvmCheckType::None;
+  }
+
+  bool clOptCheckNvm() {
+    return NvmCheck == NvmCheckType::Debug;
+  }
+  // -- NVM options end
 
   cl::opt<bool>
   OptExitOnError("exit-on-error",
@@ -1289,7 +1295,9 @@ int main(int argc, char **argv, char **envp) {
   Interpreter::ModuleOptions Opts(LibraryDir.c_str(), EntryPoint,
                                   /*Optimize=*/OptimizeModule,
                                   /*CheckDivZero=*/CheckDivZero,
-                                  /*CheckOvershift=*/CheckOvershift);
+                                  /*CheckOvershift=*/CheckOvershift,
+                                  /*EnableNvmInfo=*/clOptEnableNvmInfo(),
+                                  /*CheckNvm=*/clOptCheckNvm());
 
   if (WithPOSIXRuntime) {
     SmallString<128> Path(Opts.LibraryDir);
@@ -1594,9 +1602,9 @@ int main(int argc, char **argv, char **envp) {
         << handler->getNumPathsExplored() << "\n";
   if (handler->outputNvm()) {
     stats << "\tKLEE-NVM: done: paths terminated (uninteresting, no tests) = "
-          << handler->getNumPathsCutUninteresting() << "\n";
+          << *theStatisticManager->getStatisticByName("NvmHeuristicStatesKilledIrrelevant") << "\n";
     stats << "\tKLEE-NVM: done: paths terminated (after last relevant block, gen tests) = "
-          << handler->getNumPathsCutEndTrace() << "\n";
+          << *theStatisticManager->getStatisticByName("NvmHeuristicStatesKilledEndTrace") << "\n";
   }
   if (handler->getNvmCoverage() >= 0.0) {
     char tmp[101];

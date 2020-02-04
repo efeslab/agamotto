@@ -37,10 +37,25 @@ namespace klee {
   class Executor;
 
   class Searcher {
-  public:
-    virtual ~Searcher();
+    friend class BatchingSearcher;
+    friend class MergingSearcher;
+    friend class InterleavedSearcher;
+    friend class IterativeDeepeningTimeSearcher;
+
+  protected:
+    Executor &executor;
+    NvmFunctionInfo *nvmInfo;
 
     virtual ExecutionState &selectState() = 0;
+
+  public:
+    Searcher(Executor &_executor);
+
+    virtual ~Searcher();
+
+    // (iangneal): Gives us a common method for updating the NVM coverage 
+    // information.
+    virtual ExecutionState &selectStateAndUpdateInfo();
 
     virtual void update(ExecutionState *current,
                         const std::vector<ExecutionState *> &addedStates,
@@ -74,6 +89,8 @@ namespace klee {
       update(current, std::vector<ExecutionState *>(), tmp);
     }
 
+    const NvmFunctionInfo &getNvmInfo() const { return *nvmInfo; }
+
     enum CoreSearchType {
       DFS,
       BFS,
@@ -93,9 +110,10 @@ namespace klee {
 
   class DFSSearcher : public Searcher {
     std::vector<ExecutionState*> states;
-
-  public:
+  protected:
     ExecutionState &selectState();
+  public:
+    DFSSearcher(Executor &executor) : Searcher(executor) {}
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates);
@@ -107,9 +125,10 @@ namespace klee {
 
   class BFSSearcher : public Searcher {
     std::deque<ExecutionState*> states;
-
-  public:
+  protected:
     ExecutionState &selectState();
+  public:
+    BFSSearcher(Executor &executor) : Searcher(executor) {}
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates);
@@ -121,9 +140,10 @@ namespace klee {
 
   class RandomSearcher : public Searcher {
     std::vector<ExecutionState*> states;
-
-  public:
+  protected:
     ExecutionState &selectState();
+  public:
+    RandomSearcher(Executor &executor) : Searcher(executor) {}
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates);
@@ -152,11 +172,13 @@ namespace klee {
 
     double getWeight(ExecutionState*);
 
+  protected:
+    ExecutionState &selectState();
+
   public:
-    WeightedRandomSearcher(WeightType type);
+    WeightedRandomSearcher(Executor &executor, WeightType type);
     ~WeightedRandomSearcher();
 
-    ExecutionState &selectState();
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates);
@@ -177,13 +199,13 @@ namespace klee {
   };
 
   class RandomPathSearcher : public Searcher {
-    Executor &executor;
+  protected:
+    ExecutionState &selectState();
 
   public:
     RandomPathSearcher(Executor &_executor);
     ~RandomPathSearcher();
 
-    ExecutionState &selectState();
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates);
@@ -199,9 +221,6 @@ namespace klee {
    * Essentially, we want the most NVM successors.
    */
   class NvmPathSearcher : public Searcher {
-    Executor &exec_;
-    NvmFunctionInfo &nvm_info_;
-
     size_t currGen = 0;
 
     /**
@@ -256,12 +275,13 @@ namespace klee {
     size_t calculateGeneration(ExecutionState *current, ExecutionState *added);
 
     void outputCoverage();
+  protected:
+    ExecutionState &selectState();
 
   public:
-    NvmPathSearcher(Executor &exec);
+    NvmPathSearcher(Executor &_executor);
     ~NvmPathSearcher();
 
-    ExecutionState &selectState();
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates);
@@ -270,7 +290,6 @@ namespace klee {
       os << "NvmPathSearcher\n";
     }
 
-    NvmFunctionInfo &nvmInfo() { return nvm_info_; }
   };
 
   extern llvm::cl::opt<bool> UseIncompleteMerge;
@@ -284,6 +303,9 @@ namespace klee {
 
     /// States that have been paused by the 'pauseState' function
     std::vector<ExecutionState*> pausedStates;
+
+    protected:
+    ExecutionState &selectState();
 
     public:
     MergingSearcher(Searcher *baseSearcher);
@@ -317,8 +339,6 @@ namespace klee {
       baseSearcher->addState(&state);
     }
 
-    ExecutionState &selectState();
-
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates) {
@@ -344,6 +364,8 @@ namespace klee {
     ExecutionState *lastState;
     time::Point lastStartTime;
     unsigned lastStartInstructions;
+  protected:
+    ExecutionState &selectState();
 
   public:
     BatchingSearcher(Searcher *baseSearcher,
@@ -351,7 +373,6 @@ namespace klee {
                      unsigned _instructionBudget);
     ~BatchingSearcher();
 
-    ExecutionState &selectState();
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates);
@@ -371,11 +392,13 @@ namespace klee {
     time::Span time;
     std::set<ExecutionState*> pausedStates;
 
+  protected:
+    ExecutionState &selectState();
+
   public:
     IterativeDeepeningTimeSearcher(Searcher *baseSearcher);
     ~IterativeDeepeningTimeSearcher();
 
-    ExecutionState &selectState();
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates);
@@ -390,12 +413,14 @@ namespace klee {
 
     searchers_ty searchers;
     unsigned index;
+  
+  protected:
+    ExecutionState &selectState();
 
   public:
     explicit InterleavedSearcher(const searchers_ty &_searchers);
     ~InterleavedSearcher();
 
-    ExecutionState &selectState();
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates);

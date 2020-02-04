@@ -23,8 +23,6 @@
 #include "klee/Interpreter.h"
 #include "klee/OptionCategories.h"
 
-#include "../Core/UserSearcher.h"
-
 #if LLVM_VERSION_CODE >= LLVM_VERSION(4, 0)
 #include "llvm/Bitcode/BitcodeWriter.h"
 #else
@@ -240,8 +238,9 @@ void KModule::instrument(const Interpreter::ModuleOptions &opts) {
   // XXX: (iangneal) We can eventually change the pass so it accepts KLEE's
   // raised ASM for uniformity, but since it was built on raw LLVM IR, it's best
   // to do everything beforehand.
-  if (userSearcherRequiresNvmAnalysis()) {
+  if (opts.EnableNvmInfo) {
     // (iangneal) The "add" function will destroy the pass for us.
+    klee_message("Running NvmAnalysisPass.");
     pm.add(new NvmAnalysisPass(&nvmInfo));
   }
 
@@ -411,6 +410,11 @@ unsigned KModule::getConstantID(Constant *c, KInstruction* ki) {
   constantMap.insert(std::make_pair(c, std::move(kc)));
   constants.push_back(c);
   return id;
+}
+
+NvmFunctionInfo *KModule::getNvmFunctionInfo() {
+  if (nvmInfo) return &nvmInfo;
+  return nullptr;
 }
 
 /***/

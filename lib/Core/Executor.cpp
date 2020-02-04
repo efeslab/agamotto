@@ -504,6 +504,9 @@ Executor::setModule(std::vector<std::unique_ptr<llvm::Module>> &modules,
   assert(!kmodule && !modules.empty() &&
          "can only register one module"); // XXX gross
 
+  modOpts = opts;
+  klee_warning("Module options for NVM: %d => %d", opts.EnableNvmInfo, modOpts.EnableNvmInfo);
+
   kmodule = std::unique_ptr<KModule>(new KModule());
 
   // Preparing the final module happens in multiple stages
@@ -1510,9 +1513,9 @@ void Executor::executeCall(ExecutionState &state,
     KFunction *kf = kmodule->functionMap[f];
 
     // (iangneal): We need to propagate NVM info
-    NvmPathSearcher *nvmSearcher = dynamic_cast<NvmPathSearcher*>(searcher);
-    if (userSearcherRequiresNvmAnalysis()) {
-      state.pushFrame(state.prevPC, kf, nvmSearcher->nvmInfo());
+    klee_warning("Module options for NVM (push): %d", modOpts.EnableNvmInfo);
+    if (modOpts.EnableNvmInfo) {
+      state.pushFrame(state.prevPC, kf, searcher->getNvmInfo());
     } else {
       state.pushFrame(state.prevPC, kf);
     }
@@ -3030,7 +3033,7 @@ void Executor::run(ExecutionState &initialState) {
   // 0 states to check. So, I'm adding the searcher empty check.
   while (!states.empty() && !haltExecution) {
     if (!searcher->empty()) {
-      ExecutionState &state = searcher->selectState();
+      ExecutionState &state = searcher->selectStateAndUpdateInfo();
       KInstruction *ki = state.pc;
       stepInstruction(state);
 
@@ -3967,7 +3970,7 @@ void Executor::runFunctionAsMain(Function *f,
 
   ExecutionState *state = new ExecutionState(kmodule->functionMap[f]);
   // (iangneal): I want to start my stack frame with the main function
-  if (userSearcherRequiresNvmAnalysis()) {
+  if (modOpts.EnableNvmInfo) {
     state->stack.back().nvmDesc = NvmFunctionCallDesc(
         kmodule->functionMap[f]->function);
   }

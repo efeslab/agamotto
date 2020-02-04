@@ -76,6 +76,10 @@ namespace klee {
       }
 
       void dumpInfo() const;
+
+      bool isValid() const { return nullptr != fn_; }
+
+      operator bool() const { return isValid(); }
   };
 
   /**
@@ -107,7 +111,8 @@ namespace klee {
 
       // Numbers for our factors.
       // -- "Importance factor": The number of modifiers in a single basic block.
-      std::unordered_map<const llvm::BasicBlock*, size_t> imp_factor_;
+      // -- Made mutable so we can return default 0 if asked for something with 0 importance.
+      mutable std::unordered_map<const llvm::BasicBlock*, size_t> imp_factor_;
       // -- "Nested factor": An intermediate calculation which adds in the
       // nested call's magnitude.
       std::unordered_map<const llvm::BasicBlock*, size_t> imp_nested_;
@@ -174,7 +179,7 @@ namespace klee {
       /**
        * Gives a reference to the basic blocks which are interesting.
        */
-      const std::unordered_set<const llvm::BasicBlock*> getAllInterestingBB() const {
+      const std::unordered_set<const llvm::BasicBlock*> &getAllInterestingBB() const {
         return imp_bbs_;
       }
 
@@ -189,6 +194,8 @@ namespace klee {
 
       NvmFunctionCallDesc root_;
 
+      std::unordered_set<const llvm::BasicBlock*> allBBs;
+
     public:
       NvmFunctionInfo() = default;
 
@@ -200,6 +207,10 @@ namespace klee {
           const std::unordered_set<const llvm::Function*>&);
 
       const NvmFunctionCallInfo* findInfo(const NvmFunctionCallDesc&);
+
+      const std::unordered_set<const llvm::BasicBlock*> &getAllInterestingBB() const {
+        return allBBs;
+      }
 
       // Compute the ratio of coverage of interesting basic blocks and perform
       // a basic sanity check
@@ -215,6 +226,11 @@ namespace klee {
 
       void dumpAllInfo() const;
 
+      /**
+       * Check if we've been constructed yet.
+       */
+      bool isValid() const { return root_.isValid(); }
+      operator bool() const { return isValid(); }
   };
 }
 #endif //__NVM_FUNCTION_INFO_H__
