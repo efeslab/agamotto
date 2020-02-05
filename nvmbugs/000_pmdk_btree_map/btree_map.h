@@ -43,8 +43,32 @@
 #define BTREE_MAP_TYPE_OFFSET 1012
 #endif
 
-struct btree_map;
 TOID_DECLARE(struct btree_map, BTREE_MAP_TYPE_OFFSET + 0);
+TOID_DECLARE(struct tree_map_node, BTREE_MAP_TYPE_OFFSET + 1);
+
+#ifndef BTREE_MAP_VAL_OFFSET
+#define BTREE_MAP_VAL_OFFSET (BTREE_MAP_TYPE_OFFSET + 2)
+#endif
+
+#ifndef BTREE_ORDER
+#define BTREE_ORDER 8 /* can't be odd */
+#define BTREE_MIN ((BTREE_ORDER / 2) - 1) /* min number of keys per node */
+#endif
+
+struct tree_map_node_item {
+	uint64_t key;
+	PMEMoid value;
+};
+
+struct tree_map_node {
+	int n; /* number of occupied slots */
+	struct tree_map_node_item items[BTREE_ORDER - 1];
+	TOID(struct tree_map_node) slots[BTREE_ORDER];
+};
+
+struct btree_map {
+	TOID(struct tree_map_node) root;
+};
 
 int btree_map_check(PMEMobjpool *pop, TOID(struct btree_map) map);
 int btree_map_create(PMEMobjpool *pop, TOID(struct btree_map) *map, void *arg);

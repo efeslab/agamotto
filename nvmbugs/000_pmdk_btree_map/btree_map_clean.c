@@ -39,27 +39,6 @@
 #include <stdio.h>
 #include "btree_map.h"
 
-TOID_DECLARE(struct tree_map_node, BTREE_MAP_TYPE_OFFSET + 1);
-
-#define BTREE_ORDER 8 /* can't be odd */
-#define BTREE_MIN ((BTREE_ORDER / 2) - 1) /* min number of keys per node */
-
-struct tree_map_node_item {
-	uint64_t key;
-	PMEMoid value;
-};
-
-
-struct tree_map_node {
-	int n; /* number of occupied slots */
-	struct tree_map_node_item items[BTREE_ORDER - 1];
-	TOID(struct tree_map_node) slots[BTREE_ORDER];
-};
-
-struct btree_map {
-	TOID(struct tree_map_node) root;
-};
-
 /*
  * set_empty_item -- (internal) sets null to the item
  */
@@ -94,6 +73,9 @@ btree_map_create(PMEMobjpool *pop, TOID(struct btree_map) *map, void *arg)
 static void
 btree_map_clear_node(TOID(struct tree_map_node) node)
 {
+	// (iangneal): Also had to add this...
+	if (TOID_IS_NULL(node)) return;
+
 	for (int i = 0; i < D_RO(node)->n; ++i) {
 		btree_map_clear_node(D_RO(node)->slots[i]);
 	}
@@ -110,7 +92,8 @@ btree_map_clear(PMEMobjpool *pop, TOID(struct btree_map) map)
 {
 	int ret = 0;
 	TX_BEGIN(pop) {
-		btree_map_clear_node(D_RO(map)->root);
+		if (!TOID_IS_NULL(D_RO(map)->root))
+			btree_map_clear_node(D_RO(map)->root);
 
 		TX_ADD_FIELD(map, root);
 
