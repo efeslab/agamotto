@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
+#include <errno.h>
 
 #include "btree_map.h"
 
@@ -17,13 +18,15 @@ POBJ_LAYOUT_END(000_driver);
 TOID_DECLARE(uint64_t, BTREE_MAP_VAL_OFFSET + 0);
 
 int main(int argc, const char *argv[]) {
+    printf("%s\n", getenv("PMEMOBJ_LOG_LEVEL"));
     PMEMobjpool *pop = pmemobj_create(argv[1], POBJ_LAYOUT_NAME(000_driver), PMEMOBJ_MIN_POOL, 0666);
     if (pop == NULL) {
+        printf("Create failed, trying open. (%s)\n", strerror(errno));
 	    pop = pmemobj_open(argv[1], POBJ_LAYOUT_NAME(000_driver));
     }
 
 	if (pop == NULL) {
-		perror(argv[1]);
+        printf("Object pool is null! (%s)\n", strerror(errno));
 		exit(1);
 	}
 

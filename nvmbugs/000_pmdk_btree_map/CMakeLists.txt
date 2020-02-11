@@ -46,3 +46,8 @@ set(ONCE_SRC
 
 add_executable(000_Once ${ONCE_SRC})
 target_link_libraries(000_Once pthread)
+
+set(ENV_TEST_SRC
+    env_test.c
+)
+add_executable(000_Env ${ENV_TEST_SRC})

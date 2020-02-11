@@ -590,21 +590,33 @@ ssize_t readahead(int fd, off64_t *offset, size_t count) {
 
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) __attribute__((weak));
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) {
-  klee_warning("ignoring (EPERM)");
-  errno = EPERM;
-  return (void*) -1;
+  // klee_warning("ignoring (EPERM)");
+  // errno = EPERM;
+  // return (void*) -1;
+  klee_warning("iangneal: implementing mmap as malloc");
+  return (void*)malloc(length);
 }
 
 void *mmap64(void *start, size_t length, int prot, int flags, int fd, off64_t offset) __attribute__((weak));
 void *mmap64(void *start, size_t length, int prot, int flags, int fd, off64_t offset) {
-  klee_warning("ignoring (EPERM)");
-  errno = EPERM;
-  return (void*) -1;
+  // klee_warning("ignoring (EPERM)");
+  // errno = EPERM;
+  // return (void*) -1;
+  klee_warning("iangneal: implementing mmap64 as malloc");
+  return (void*)malloc(length);
 }
 
-int munmap(void*start, size_t length) __attribute__((weak));
-int munmap(void*start, size_t length) {
-  klee_warning("ignoring (EPERM)");
-  errno = EPERM;
-  return -1;
+int munmap(void *start, size_t length) __attribute__((weak));
+int munmap(void *start, size_t length) {
+  // klee_warning("ignoring (EPERM)");
+  // errno = EPERM;
+  // return -1;
+  klee_warning("iangneal: implementing munmap as free");
+  free(start);
+  return 0;
+}
+
+char *secure_getenv(const char *name) {
+  klee_warning_once("iangneal: secure_getenv returns bad strings, emulating with regular getenv.");
+  return getenv(name);
 }

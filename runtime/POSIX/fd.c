@@ -1161,11 +1161,16 @@ int unlink(const char *pathname) {
       errno = EPERM;
       return -1;
     }
+  } else {
+    // (iangneal): call OS unlink
+    const char *concrete = __concretize_string(pathname);
+    klee_warning("calling concrete unlink");
+    klee_warning(concrete);
+    return syscall(__NR_unlink, concrete);
   }
-
-  klee_warning("ignoring (EPERM)");
-  errno = EPERM;
-  return -1;
+  // klee_warning("ignoring (EPERM)");
+  // errno = EPERM;
+  // return -1;
 }
 
 int unlinkat(int dirfd, const char *pathname, int flags) {
