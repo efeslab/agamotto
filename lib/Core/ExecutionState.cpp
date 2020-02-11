@@ -152,6 +152,7 @@ ExecutionState *ExecutionState::branch() {
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf,
     const NvmFunctionInfo &nvmInfo) {
+  // klee_warning("NVM push frame!");
   StackFrame new_frame(caller, kf);
   const CallInst *ci = dyn_cast<CallInst>(caller->inst);
   if (!stack.empty() && ci) {
@@ -163,6 +164,7 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf,
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {
+  // klee_warning("Regular push frame!");
   stack.emplace_back(caller, kf);
 }
 

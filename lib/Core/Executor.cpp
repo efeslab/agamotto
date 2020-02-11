@@ -505,7 +505,7 @@ Executor::setModule(std::vector<std::unique_ptr<llvm::Module>> &modules,
          "can only register one module"); // XXX gross
 
   modOpts = opts;
-  klee_warning("Module options for NVM: %d => %d", opts.EnableNvmInfo, modOpts.EnableNvmInfo);
+  // klee_warning("Module options for NVM: %d => %d", opts.EnableNvmInfo, modOpts.EnableNvmInfo);
 
   kmodule = std::unique_ptr<KModule>(new KModule());
 
@@ -1513,7 +1513,7 @@ void Executor::executeCall(ExecutionState &state,
     KFunction *kf = kmodule->functionMap[f];
 
     // (iangneal): We need to propagate NVM info
-    klee_warning("Module options for NVM (push): %d", modOpts.EnableNvmInfo);
+    // klee_warning("Module options for NVM (push): %d", modOpts.EnableNvmInfo);
     if (modOpts.EnableNvmInfo) {
       state.pushFrame(state.prevPC, kf, searcher->getNvmInfo());
     } else {
