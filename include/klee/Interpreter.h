@@ -61,6 +61,7 @@ public:
   struct ModuleOptions {
     std::string LibraryDir;
     std::string EntryPoint;
+    std::string LibcMainFunction;
     bool Optimize;
     bool CheckDivZero;
     bool CheckOvershift;
@@ -71,10 +72,13 @@ public:
     ModuleOptions() = default;
 
     ModuleOptions(const std::string &_LibraryDir,
-                  const std::string &_EntryPoint, bool _Optimize,
+                  const std::string &_EntryPoint, 
+                  const std::string &_LibcMainFunction,
+                  bool _Optimize,
                   bool _CheckDivZero, bool _CheckOvershift,
                   bool _EnableNvmInfo, bool _CheckNvm)
-        : LibraryDir(_LibraryDir), EntryPoint(_EntryPoint), Optimize(_Optimize),
+        : LibraryDir(_LibraryDir), EntryPoint(_EntryPoint), 
+          LibcMainFunction(_LibcMainFunction), Optimize(_Optimize),
           CheckDivZero(_CheckDivZero), CheckOvershift(_CheckOvershift),
           EnableNvmInfo(_EnableNvmInfo || _CheckNvm), CheckNvm(_CheckNvm) {}
   };
