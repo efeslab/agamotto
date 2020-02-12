@@ -51,3 +51,8 @@ set(ENV_TEST_SRC
     env_test.c
 )
 add_executable(000_Env ${ENV_TEST_SRC})
+
+set(CTOR_SRC
+    constructor_test.c
+)
+add_executable(000_Ctor ${CTOR_SRC})

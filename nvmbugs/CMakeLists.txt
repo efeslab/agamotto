@@ -49,6 +49,7 @@ execute_process(COMMAND make
                         CXX=wllvm++
                         EXTRA_CFLAGS=${KLEE_FLAGS}
                         EXTRA_CXXFLAGS=${KLEE_FLAGS}
+                        NDCTL_ENABLE=n
                         -C ${PMDK_ROOT_DIR} -j${N})
 execute_process(COMMAND make 
                         DEBUG=1
@@ -56,6 +57,7 @@ execute_process(COMMAND make
                         CXX=wllvm++
                         EXTRA_CFLAGS=${KLEE_FLAGS}
                         EXTRA_CXXFLAGS=${KLEE_FLAGS}
+                        NDCTL_ENABLE=n
                         -C ${PMDK_ROOT_DIR} -j${N} install prefix=${PMDK_INSTALL_DIR})
 
 # Now we need to do the extraction

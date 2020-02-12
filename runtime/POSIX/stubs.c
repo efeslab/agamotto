@@ -611,8 +611,8 @@ int munmap(void *start, size_t length) {
   // klee_warning("ignoring (EPERM)");
   // errno = EPERM;
   // return -1;
-  klee_warning("iangneal: implementing munmap as free");
-  free(start);
+  klee_warning("iangneal: implementing munmap as a no-op.");
+  // free(start);
   return 0;
 }
 
