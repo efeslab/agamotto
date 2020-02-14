@@ -66,6 +66,7 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b, Module &M) {
 
         // Leave non-volatile memory intrinsics untouched.
         // The interpreter will detect and act upon these.
+      case Intrinsic::x86_sse2_clflush:
       case Intrinsic::x86_clflushopt:
       case Intrinsic::x86_clwb:
       case Intrinsic::x86_sse_sfence:
@@ -347,7 +348,14 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b, Module &M) {
         dirty = true;
         break;
       }
-#endif
+#endif 
+      // (iangneal): For AVX intrinsics, we will ignore them for now and deal 
+      // with them at runtime. For most of these, we will just crash at runtime
+      // --- however, the goal will be to trick the runtime into using non-AVX
+      // implementations.
+      case Intrinsic::x86_avx_vzeroupper:
+        break;
+
       default:
         IL->LowerIntrinsicCall(ii);
         dirty = true;

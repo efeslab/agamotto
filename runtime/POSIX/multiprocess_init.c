@@ -46,30 +46,30 @@
 proc_data_t __pdata[MAX_PROCESSES];
 sem_set_t __sems[MAX_SEMAPHORES];
 
-static void klee_init_semaphores(void) {
-  STATIC_LIST_INIT(__sems);
-  klee_make_shared(__sems, sizeof(__sems));
-}
+// static void klee_init_semaphores(void) {
+//   // STATIC_LIST_INIT(__sems);
+//   // klee_make_shared(__sems, sizeof(__sems));
+// }
 
 void klee_init_processes(void) {
-  STATIC_LIST_INIT(__pdata);
-  klee_make_shared(__pdata, sizeof(__pdata));
+//   STATIC_LIST_INIT(__pdata);
+//   klee_make_shared(__pdata, sizeof(__pdata));
 
-  proc_data_t *pdata = &__pdata[PID_TO_INDEX(DEFAULT_PROCESS)];
-  pdata->allocated = 1;
-  pdata->terminated = 0;
-  pdata->parent = DEFAULT_PARENT;
-  pdata->umask = DEFAULT_UMASK;
-  pdata->wlist = klee_get_wlist();
-  pdata->children_wlist = klee_get_wlist();
+//   proc_data_t *pdata = &__pdata[PID_TO_INDEX(DEFAULT_PROCESS)];
+//   pdata->allocated = 1;
+//   pdata->terminated = 0;
+//   pdata->parent = DEFAULT_PARENT;
+//   pdata->umask = DEFAULT_UMASK;
+//   pdata->wlist = klee_get_wlist();
+//   pdata->children_wlist = klee_get_wlist();
 
-  klee_init_semaphores();
+//   klee_init_semaphores();
 
-  klee_init_threads();
+//   klee_init_threads();
 
-#ifdef HAVE_POSIX_SIGNALS
-  klee_init_signals();
-#endif
+// #ifdef HAVE_POSIX_SIGNALS
+//   klee_init_signals();
+// #endif
 
 }
 
@@ -88,5 +88,5 @@ void klee_init_threads(void) {
   def_data->terminated = 0;
   def_data->ret_value = 0;
   def_data->joinable = 1; // Why not?
-  def_data->wlist = klee_get_wlist();
+  // def_data->wlist = klee_get_wlist();
 }

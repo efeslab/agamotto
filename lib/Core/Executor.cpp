@@ -82,6 +82,7 @@
 #include <string>
 #include <sys/mman.h>
 #include <vector>
+#include <cpuid.h>
 
 using namespace llvm;
 using namespace klee;
@@ -1446,6 +1447,11 @@ void Executor::executeCall(ExecutionState &state,
       // with va_end, however (like call it twice).
       break;
 
+    /* We're just gonna crash for all of these. */
+    case Intrinsic::x86_avx_vzeroupper:
+      klee_error("%s", "Unsupported intrinsic!");
+      break;
+
       // Non-volatile memory intrinsics
     case Intrinsic::x86_clflushopt:
       klee_warning_once(
@@ -1991,8 +1997,49 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     unsigned numArgs = cs.arg_size();
     Value *fp = cs.getCalledValue();
     Function *f = getTargetFunction(fp, state);
+    InlineAsm *ia = nullptr;
 
-    if (isa<InlineAsm>(fp)) {
+    if ((ia = dyn_cast<InlineAsm>(fp))) {
+      // (iangneal): there's some inline assembly we want to run!
+      // CPUID is treated as a call that returns an array which is then
+      // extracted from.
+      if (ia->getAsmString().find("cpuid") != std::string::npos) {
+        errs() << *ia << " " << numArgs << "\n";
+        errs() << *(i->getParent()->getParent());
+
+        // Set up the output of the call.
+        Type *t = i->getType();
+        Expr::Width outWidth = getWidthForLLVMType(t);      
+        // The concrete output of CPUID
+        unsigned regs[4];
+        uint64_t regConst[4];
+
+        if (numArgs == 1) {
+          klee_error("implement cpuid for one arg!");
+        } else if (numArgs == 2) {
+          ref<Expr> leafExpr = eval(ki, 1, state).value;
+          ref<Expr> subleafExpr = eval(ki, 2, state).value;
+          // Need to concretize.
+          unsigned leaf = cast<ConstantExpr>(leafExpr)->getZExtValue();
+          unsigned subleaf = cast<ConstantExpr>(subleafExpr)->getZExtValue();
+          __get_cpuid_count(leaf, subleaf, &regs[0], &regs[1], &regs[2], &regs[3]);
+          klee_warning("cpuid(leaf=%u, subleaf=%u) returned {%u, %u, %u, %u}",
+            leaf, subleaf, regs[0], regs[1], regs[2], regs[3]);
+          
+          for (int i = 0; i < 4; ++i) regConst[i] = (uint64_t)regs[i];
+
+        } else {
+          terminateStateOnExecError(state, "unsupported number of arguments for cpuid");
+        }
+
+        // Now we remove the features we don't like, hehe.
+
+        llvm::APInt output = llvm::APInt(outWidth, 4, regConst); // 4 words
+        ref<Expr> result = ConstantExpr::alloc(output);
+        bindLocal(ki, state, result);
+        break;
+      }
+      
       terminateStateOnExecError(state, "inline assembly is unsupported");
       break;
     }

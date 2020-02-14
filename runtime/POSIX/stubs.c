@@ -29,11 +29,24 @@
 #include <sys/times.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/syscall.h>
 
 #include "klee/Config/config.h"
+#include "fd.h"
 
 void klee_warning(const char*);
 void klee_warning_once(const char*);
+void klee_error(const char*);
+
+static exe_file_t *__get_file(int fd) {
+  if (fd>=0 && fd<MAX_FDS) {
+    exe_file_t *f = &__exe_env.fds[fd];
+    if (f->flags & eOpen)
+      return f;
+  }
+
+  return 0;
+}
 
 /* Silent ignore */
 
@@ -588,13 +601,44 @@ ssize_t readahead(int fd, off64_t *offset, size_t count) {
   return -1;
 }
 
+// int flock(int fd, int operation) __attribute__((weak));
+// int flock(int fd, int operation) {
+//   klee_warning("ignoring (SUCCESS)");
+//   errno = 0;
+//   return 0;
+// }
+
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) __attribute__((weak));
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) {
   // klee_warning("ignoring (EPERM)");
   // errno = EPERM;
   // return (void*) -1;
-  klee_warning("iangneal: implementing mmap as malloc");
-  return (void*)malloc(length);
+  char msg[4096];
+  memset(msg, 0, 4096);
+
+  int actual_fd = fd;
+
+  if (!(flags & MAP_ANONYMOUS)) {
+    exe_file_t *f = __get_file(fd);
+    if (!f) {
+      errno = EBADF;
+      return (void*)-1;
+    }
+
+    if (f->dfile) {
+      klee_error("iangneal: mmap not supported for symbolic files!");
+      errno = ENOTSUP;
+      return (void*)-1;
+    }
+
+    actual_fd = f->fd;
+  }
+  
+  void* ret = (void*)syscall(__NR_mmap, start, length, prot, flags, actual_fd, offset);
+  snprintf(msg, 4096, "(start=%p, length=%lu, prot=%d, flags=%d, fd=%d, offset=%ld) => %p (%lu)",
+           start, length, prot, flags, fd, offset, ret, (unsigned long)ret);
+  klee_warning(msg);
+  return ret;
 }
 
 void *mmap64(void *start, size_t length, int prot, int flags, int fd, off64_t offset) __attribute__((weak));
@@ -602,8 +646,8 @@ void *mmap64(void *start, size_t length, int prot, int flags, int fd, off64_t of
   // klee_warning("ignoring (EPERM)");
   // errno = EPERM;
   // return (void*) -1;
-  klee_warning("iangneal: implementing mmap64 as malloc");
-  return (void*)malloc(length);
+  klee_warning_once("iangneal: implementing mmap64 as mmap");
+  return mmap(start, length, prot, flags, fd, offset);
 }
 
 int munmap(void *start, size_t length) __attribute__((weak));
@@ -611,9 +655,8 @@ int munmap(void *start, size_t length) {
   // klee_warning("ignoring (EPERM)");
   // errno = EPERM;
   // return -1;
-  klee_warning("iangneal: implementing munmap as a no-op.");
-  // free(start);
-  return 0;
+  klee_warning_once("iangneal: only calling munmap syscall");
+  return syscall(__NR_munmap, start, length);
 }
 
 char *secure_getenv(const char *name) {

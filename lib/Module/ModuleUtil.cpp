@@ -52,6 +52,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <vector>
 
 using namespace llvm;
 using namespace klee;
@@ -142,12 +143,97 @@ GetAllUndefinedSymbols(Module *M, std::set<std::string> &UndefinedSymbols) {
                        dbgs() << "*** Finished computing undefined symbols ***\n");
 }
 
+/// Based on GetAllUndefinedSymbols()
+///
+/// GetAllEefinedSymbols - calculates the set of defined symbols that
+/// exist in an LLVM module. Needed for resolving dynamic conflicts.
+///
+/// Inputs:
+///  M - The module in which to find undefined symbols.
+///
+/// Outputs:
+///  DefinedSymbols - A set of C++ strings containing the name of all
+///                     defined symbols.
+///
+static void
+GetAllDefinedSymbols(Module *M, std::vector<std::string> &DefinedSymbols) {
+  static const std::string llvmIntrinsicPrefix="llvm.";
+  DefinedSymbols.clear();
+
+  for (auto const &Function : *M) {
+    if (Function.hasName() && !Function.isDeclaration() 
+        && !Function.getName().startswith(llvmIntrinsicPrefix)
+        && !Function.hasLocalLinkage()) {
+      assert(!Function.hasDLLImportStorageClass() &&
+              "Found dllimported non-external symbol!");
+      DefinedSymbols.push_back(Function.getName());
+    }
+  }
+
+  for (Module::const_global_iterator I = M->global_begin(), E = M->global_end();
+       I != E; ++I) {
+    if (I->hasName() && !I->hasLocalLinkage()) {
+      assert(!I->hasDLLImportStorageClass() && "Found dllimported non-external symbol!");
+      DefinedSymbols.push_back(I->getName());
+    }
+  }
+
+  for (Module::const_alias_iterator I = M->alias_begin(), E = M->alias_end();
+       I != E; ++I) {
+    if (I->hasName()) DefinedSymbols.push_back(I->getName());
+  }
+}
+
+static std::unique_ptr<llvm::Module> 
+removeMultipleSymbols(llvm::Module *Dest, std::unique_ptr<llvm::Module> Src) {
+
+  std::vector<std::string> destSymbols, srcSymbols, multSymbols;
+  GetAllDefinedSymbols(Dest, destSymbols);
+  GetAllDefinedSymbols(Src.get(), srcSymbols);
+
+  std::sort(destSymbols.begin(), destSymbols.end());
+  std::sort(srcSymbols.begin(), srcSymbols.end());
+
+  multSymbols.resize(std::min(destSymbols.size(), srcSymbols.size()));
+
+  auto end = std::set_intersection(destSymbols.begin(), destSymbols.end(),
+                    srcSymbols.begin(), srcSymbols.end(), multSymbols.begin());
+  
+  multSymbols.resize(end - multSymbols.begin());
+
+  // Start deleting symbols
+  for (const std::string &symb : multSymbols) {
+    if (symb == "fstat") {
+      klee_warning_once(&symb, "found %s", symb.c_str());
+      errs() << *(Function*)Src->getNamedValue(symb);
+      errs() << *(Function*)Dest->getNamedValue(symb);
+    }
+    llvm::GlobalValue *gv = Dest->getNamedValue(symb);
+    if (isa<ArrayType>(gv->getValueType())) {
+      // These guys have special linkage.
+      klee_warning("Symbol '%s' needs appending linkage (%d => %d).", 
+                   symb.c_str(), gv->getLinkage(),
+                   llvm::GlobalValue::LinkageTypes::AppendingLinkage);
+      gv->setLinkage(llvm::GlobalValue::LinkageTypes::AppendingLinkage);
+    } else if (gv->getLinkage() < llvm::GlobalValue::LinkageTypes::LinkOnceODRLinkage) {
+      klee_warning("Symbol '%s' is multiply defined (modules %s and %s)."
+                 " Deleting one copy from module %s (%d).", symb.c_str(),
+                 Dest->getName().str().c_str(), Src->getName().str().c_str(),
+                 Dest->getName().str().c_str(), gv->getLinkage());
+      gv->setLinkage(llvm::GlobalValue::LinkageTypes::LinkOnceODRLinkage);
+    }
+    // gv->eraseFromParent();
+  }
+
+  return Src;
+}
+
 static bool linkTwoModules(llvm::Module *Dest,
                            std::unique_ptr<llvm::Module> Src,
                            std::string &errorMsg) {
   // Get the potential error message (Src is moved and won't be available later)
   errorMsg = "Linking module " + Src->getModuleIdentifier() + " failed";
-  auto linkResult = Linker::linkModules(*Dest, std::move(Src));
+  auto linkResult = Linker::linkModules(*Dest, removeMultipleSymbols(Dest, std::move(Src)));
 
   return !linkResult;
 }
