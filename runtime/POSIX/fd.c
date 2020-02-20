@@ -1402,3 +1402,29 @@ int chroot(const char *path) {
   errno = ENOENT;
   return -1;
 }
+
+// (iangneal): needed by PMDK
+// Essentially, if it uses a file descriptor, we need to intercept it in this
+// layer, so we can translate it.
+void klee_error(const char*);
+
+int fallocate(int fd, int mode, off_t offset, off_t len) {
+  exe_file_t *f = __get_file(fd);
+  if (!f) {
+    errno = EBADF;
+    return -1;
+  }
+
+  if (f->dfile) {
+    klee_error("iangneal: mmap not supported for symbolic files!");
+    errno = ENOTSUP;
+    return -1;
+  }
+
+  return syscall(__NR_fallocate, f->fd, mode, offset, len);
+}
+
+
+int posix_fallocate(int fd, off_t offset, off_t len) {
+  return fallocate(fd, 0, offset, len);
+}

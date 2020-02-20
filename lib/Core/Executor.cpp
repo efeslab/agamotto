@@ -1453,6 +1453,10 @@ void Executor::executeCall(ExecutionState &state,
       break;
 
       // Non-volatile memory intrinsics
+    case Intrinsic::x86_sse2_clflush:
+      klee_warning_once(
+        0, "program contains not-yet-supported clflush intrinsic");
+      break;
     case Intrinsic::x86_clflushopt:
       klee_warning_once(
         0, "program contains not-yet-supported clflushopt intrinsic");
