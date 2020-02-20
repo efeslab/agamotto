@@ -15,6 +15,7 @@
 
 #include "klee/Expr/ArrayCache.h"
 #include "klee/Expr/Expr.h"
+#include "klee/Expr/ExprPPrinter.h"
 #include "klee/Internal/Support/ErrorHandling.h"
 #include "klee/OptionCategories.h"
 #include "klee/Solver/Solver.h"
@@ -615,4 +616,111 @@ void ObjectState::print() const {
   for (const UpdateNode *un=updates.head; un; un=un->next) {
     llvm::errs() << "\t\t[" << un->index << "] = " << un->value << "\n";
   }
+}
+
+/***/
+
+PersistentState::PersistentState(const ObjectState *os, const Array *cacheLines)
+  : ObjectState(*os),
+    cacheLineUpdates(0, 0),
+    pendingCacheLineUpdates(0, 0) {
+  cacheLineUpdates = UpdateList(cacheLines, 0);
+  pendingCacheLineUpdates = UpdateList(cacheLineUpdates);
+}
+
+void PersistentState::write8(unsigned offset, uint8_t value) {
+  ObjectState::write8(offset, value);
+  dirtyCacheLineAtOffset(offset);
+}
+
+void PersistentState::write8(unsigned offset, ref<Expr> value) {
+  ObjectState::write8(offset, value);
+  dirtyCacheLineAtOffset(offset);
+}
+
+void PersistentState::write8(ref<Expr> offset, ref<Expr> value) {
+  ObjectState::write8(offset, value);
+  dirtyCacheLineAtOffset(offset);
+}
+
+void PersistentState::dirtyCacheLineAtOffset(unsigned offset) {
+  dirtyCacheLineAtOffset(ConstantExpr::create(offset, Expr::Int32));
+}
+
+void PersistentState::dirtyCacheLineAtOffset(ref<Expr> offset) {
+  /* llvm::errs() << getObject()->name << ":\n"; */
+  /* ExprPPrinter::printOne(llvm::errs(), "dirtyCacheLineAtOffset", offset); */
+
+  // Apply the dirty to the authoritative update list as well as the pending one
+  // (so that we can properly identify unpersisted lines in the middle of an epoch).
+  ref<Expr> cacheLine = getCacheLine(offset);
+  ref<Expr> falseExpr = getDirtyExpr();
+  cacheLineUpdates.extend(cacheLine, falseExpr);
+  pendingCacheLineUpdates.extend(cacheLine, falseExpr);
+}
+
+void PersistentState::persistCacheLineAtOffset(unsigned offset) {
+  persistCacheLineAtOffset(ConstantExpr::create(offset, Expr::Int32));
+}
+
+void PersistentState::persistCacheLineAtOffset(ref<Expr> offset) {
+  /* llvm::errs() << getObject()->name << ":\n"; */
+  /* ExprPPrinter::printOne(llvm::errs(), "persistCacheLineAtOffset", offset); */
+  pendingCacheLineUpdates.extend(getCacheLine(offset),
+                                 getPersistedExpr());
+}
+
+void PersistentState::commitPendingPersists() {
+  /* llvm::errs() << getObject()->name << ": "; */
+  /* llvm::errs() << "commitPendingPersists\n"; */
+
+  // Apply the writes and flushes accumulated during this epoch.
+  // The UpdateList will clean up orphaned UpdateNodes from cacheLineUpdates.
+  cacheLineUpdates = pendingCacheLineUpdates;
+}
+
+ref<Expr> PersistentState::isPersisted() const {
+  // AND together all cache lines.
+  ref<Expr> result = isCacheLinePersisted(0);
+  for (unsigned i = 1; i < numCacheLines(); ++i) {
+    result = AndExpr::create(isCacheLinePersisted(i), result);
+  }
+  return EqExpr::create(getPersistedExpr(), result);
+}
+
+ref<Expr> PersistentState::isCacheLinePersisted(unsigned cacheLine) const {
+  return isCacheLinePersisted(ConstantExpr::create(cacheLine, Expr::Int32));
+}
+
+ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine) const {
+  ref<Expr> result = ReadExpr::create(cacheLineUpdates,
+                                      ZExtExpr::create(cacheLine, Expr::Int32));
+  /* llvm::errs() << getObject()->name << ":\n"; */
+  /* ExprPPrinter::printOne(llvm::errs(), "isCacheLinePersisted", result); */
+  return result;
+}
+
+ref<Expr> PersistentState::getCacheLine(ref<Expr> offset) const {
+  return ZExtExpr::create(UDivExpr::create(offset,
+                                           ConstantExpr::create(cacheLineSize(),
+                                                                offset->getWidth())),
+                          Expr::Int32);
+}
+
+unsigned PersistentState::numCacheLines() const {
+  return getObject()->parent->getSizeInCacheLines(size);
+}
+
+unsigned PersistentState::cacheLineSize() const {
+  return getObject()->parent->getCacheAlignment();
+}
+
+ref<ConstantExpr> PersistentState::getPersistedExpr() {
+  static ref<ConstantExpr> persisted = ConstantExpr::create(1, Expr::Int8);
+  return persisted;
+}
+
+ref<ConstantExpr> PersistentState::getDirtyExpr() {
+  static ref<ConstantExpr> dirty = ConstantExpr::create(0, Expr::Int8);
+  return dirty;
 }

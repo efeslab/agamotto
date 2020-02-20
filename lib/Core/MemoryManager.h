@@ -32,8 +32,13 @@ private:
   char *nextFreeSlot;
   size_t spaceSize;
 
+  // Assumed size of processor cache lines, in bytes.
+  static const size_t DEFAULT_CACHE_ALIGNMENT = 64;
+  size_t cacheAlignment;
+
 public:
-  MemoryManager(ArrayCache *arrayCache);
+  MemoryManager(ArrayCache *arrayCache,
+                size_t cacheAlignment = DEFAULT_CACHE_ALIGNMENT);
   ~MemoryManager();
 
   /**
@@ -52,6 +57,10 @@ public:
    * Returns the size used by deterministic allocation in bytes
    */
   size_t getUsedDeterministicSize();
+
+  size_t getCacheAlignment() const { return cacheAlignment; }
+  uint64_t alignToCache(uint64_t addr) const;
+  size_t getSizeInCacheLines(size_t sizeInBytes) const;
 };
 
 } // End klee namespace
