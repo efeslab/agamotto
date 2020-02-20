@@ -54,9 +54,6 @@ public:
 
   bool isUserSpecified;
 
-  /// true if this memory object resides in non-volatile / persistent memory.
-  mutable bool isPersistent;
-
   MemoryManager *parent;
 
   /// "Location" for which this memory object was allocated. This
@@ -100,7 +97,6 @@ public:
       isGlobal(_isGlobal),
       isFixed(_isFixed),
       isUserSpecified(false),
-      isPersistent(false),
       parent(_parent), 
       allocSite(_allocSite) {
   }

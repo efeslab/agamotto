@@ -930,55 +930,18 @@ void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,
                                                std::vector<ref<Expr> > &arguments) {
   assert(arguments.size()==2 &&
       "invalid number of arguments to klee_pmem_check_persisted");
-  assert(isa<ConstantExpr>(arguments[0]) &&
-         "expect constant address argument to klee_pmem_check_persisted");
-  assert(isa<ConstantExpr>(arguments[1]) &&
-         "expect constant size argument to klee_pmem_check_persisted");
 
   ref<Expr> addr = arguments[0];
   ref<Expr> size = arguments[1];
-  uint64_t raw_addr = cast<ConstantExpr>(addr)->getZExtValue();
-  uint64_t raw_size = cast<ConstantExpr>(size)->getZExtValue();
-  bool isPersisted = state.pmemState.isPersisted(raw_addr, raw_size);
-
-  if (!isPersisted) {
-    executor.terminateStateOnError(state,
-                                   "check_persisted: persistent memory error",
-                                   Executor::PMem, NULL,
-                                   executor.getAddressInfo(state, addr));
+  for (const MemoryObject *mo : state.persistentObjects) {
+    executor.executeCheckPersistence(state, mo);
   }
 }
 
 void SpecialFunctionHandler::handleIsOrderedBefore(ExecutionState &state,
                                                    KInstruction *target,
                                                    std::vector<ref<Expr> > &arguments) {
-  assert(arguments.size()==4 &&
-      "invalid number of arguments to klee_pmem_check_ordered_before");
-  assert(isa<ConstantExpr>(arguments[0]) &&
-         "expect constant address argument to klee_pmem_check_ordered_before");
-  assert(isa<ConstantExpr>(arguments[1]) &&
-         "expect constant size argument to klee_pmem_check_ordered_before");
-  assert(isa<ConstantExpr>(arguments[2]) &&
-         "expect constant address argument to klee_pmem_check_ordered_before");
-  assert(isa<ConstantExpr>(arguments[3]) &&
-         "expect constant size argument to klee_pmem_check_ordered_before");
-
-  ref<Expr> addrA = arguments[0];
-  ref<Expr> sizeA = arguments[1];
-  ref<Expr> addrB = arguments[2];
-  ref<Expr> sizeB = arguments[3];
-  uint64_t raw_addrA = cast<ConstantExpr>(addrA)->getZExtValue();
-  uint64_t raw_sizeA = cast<ConstantExpr>(sizeA)->getZExtValue();
-  uint64_t raw_addrB = cast<ConstantExpr>(addrB)->getZExtValue();
-  uint64_t raw_sizeB = cast<ConstantExpr>(sizeB)->getZExtValue();
-  bool isOrderedBefore = state.pmemState.isOrderedBefore(raw_addrA, raw_sizeA,
-                                                         raw_addrB, raw_sizeB);
-
-  if (!isOrderedBefore) {
-    executor.terminateStateOnError(state,
-                                   "check_ordered_before: persistent memory error",
-                                   Executor::PMem, NULL,
-                                   executor.getAddressInfo(state, addrA) + '\n' +
-                                   executor.getAddressInfo(state, addrB));
-  }
+  /* assert(arguments.size()==4 && */
+  /*     "invalid number of arguments to klee_pmem_check_ordered_before"); */
+  klee_warning_once(0, "klee_pmem_check_ordered_before not supported");
 }

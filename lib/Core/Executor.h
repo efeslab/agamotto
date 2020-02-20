@@ -313,7 +313,7 @@ private:
                               KInstruction *target /* undef if write */);
 
   void executePersistentMemoryFlush(ExecutionState &state,
-                                    ref<ConstantExpr> address);
+                                    ref<Expr> address);
 
   void executePersistentMemoryFence(ExecutionState &state);
 
@@ -322,6 +322,11 @@ private:
 
   void executeMarkPersistent(ExecutionState &state, ref<ConstantExpr> address);
   void executeMarkPersistent(ExecutionState &state, const MemoryObject *mo);
+  bool isPersistent(ExecutionState &state, const MemoryObject *mo);
+
+  /// Asserts the persistence of a given MemoryObject, forking if necessary.
+  /// A state in which mo is definitely not persisted will terminate with error.
+  void executeCheckPersistence(ExecutionState &state, const MemoryObject *mo);
 
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included

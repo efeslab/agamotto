@@ -1453,7 +1453,7 @@ void Executor::executeCall(ExecutionState &state,
       v = v->stripPointerCasts();
       KInstruction *kv = kmodule->getKInstruction(dyn_cast<Instruction>(v));
       ref<Expr> address = getDestCell(state, kv).value;
-      executePersistentMemoryFlush(state, cast<ConstantExpr>(address));
+      executePersistentMemoryFlush(state, address);
       break;
     }
     case Intrinsic::x86_sse_sfence:
@@ -3660,10 +3660,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           terminateStateOnError(state, "memory error: object read only",
                                 ReadOnly);
         } else {
-          if (mo->isPersistent) {
+          if (isPersistent(state, mo)) {
             klee_message("Modifying non-volatile MemoryObject");
-            state.pmemState.store(cast<ConstantExpr>(address)->getZExtValue(),
-                                  bytes);
           }
           ObjectState *wos = state.addressSpace.getWriteable(mo, os);
           wos->write(offset, value);
@@ -3709,10 +3707,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           terminateStateOnError(*bound, "memory error: object read only",
                                 ReadOnly);
         } else {
-          if (mo->isPersistent) {
+          if (isPersistent(state, mo)) {
             klee_message("Modifying non-volatile MemoryObject");
-            state.pmemState.store(cast<ConstantExpr>(address)->getZExtValue(),
-                                  bytes);
           }
           ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
           wos->write(mo->getOffsetExpr(address), value);
@@ -3752,20 +3748,94 @@ void Executor::executeMarkPersistent(ExecutionState &state,
 
 void Executor::executeMarkPersistent(ExecutionState &state,
                                      const MemoryObject *mo) {
-  mo->isPersistent = true;
-  std::string name;
-  mo->getAllocInfo(name);
+  state.persistentObjects.insert(mo);
+
+  const ObjectState *os = state.addressSpace.findObject(mo);
+  assert(os && "Cannot mark unbound MemoryObject persistent");
+
+  // Create a symbolic bit array to track the state of each cache line.
+  // Initialize all cache lines to persisted (1).
+  unsigned nCacheLines = memory->getSizeInCacheLines(mo->size);
+  ref<ConstantExpr> Persisted = PersistentState::getPersistedExpr();
+  std::vector< ref<ConstantExpr> > InitialValues(nCacheLines, Persisted);
+  const std::string &baseName = mo->name;
+  const Array *cacheLines = arrayCache.CreateArray(
+      baseName + "_cacheLines", nCacheLines,
+      &InitialValues[0], &InitialValues[0] + InitialValues.size(),
+      Expr::Int32 /* domain */, Expr::Int8 /* range */);
+
+  // Construct a persistent ObjectState and bind it to the memory object.
+  state.addressSpace.bindObject(mo, new PersistentState(os, cacheLines));
+
+  /* std::string name; */
+  /* mo->getAllocInfo(name); */
   /* klee_message("Found non-volatile memory pointer: %s", name.c_str()); */
 }
 
+bool Executor::isPersistent(ExecutionState &state, const MemoryObject *mo) {
+  if (state.persistentObjects.count(mo)) {
+    const ObjectState *os = state.addressSpace.findObject(mo);
+    assert(dyn_cast<PersistentState>(os) != nullptr &&
+           "MemoryObject marked persistent but not bound to any PersistentState");
+    return true;
+  }
+  return false;
+}
+
 void Executor::executePersistentMemoryFlush(ExecutionState &state,
-                                            ref<ConstantExpr> address) {
-  uint64_t raw_addr = address->getZExtValue();
-  state.pmemState.flush(raw_addr);
+                                            ref<Expr> address) {
+  address = optimizer.optimizeExpr(address, true);
+
+  ObjectPair op;
+  bool success;
+  solver->setTimeout(coreSolverTimeout);
+  if (!state.addressSpace.resolveOne(state, solver, address, op, success)) {
+    address = toConstant(state, address, "resolveOne failure");
+    success = state.addressSpace.resolveOne(cast<ConstantExpr>(address), op);
+  }
+  solver->setTimeout(time::Span());
+
+  if (success) {
+    const MemoryObject *mo = op.first;
+    const ObjectState *os = op.second;
+    if (isPersistent(state, mo)) {
+      ObjectState *wos = state.addressSpace.getWriteable(mo, os);
+      PersistentState *ps = dyn_cast<PersistentState>(wos);
+      ref<Expr> offset = mo->getOffsetExpr(address);
+      ps->persistCacheLineAtOffset(offset);
+    }
+  } else {
+    terminateStateEarly(state, "Cannot singly resolve address to memory object");
+  }
 }
 
 void Executor::executePersistentMemoryFence(ExecutionState &state) {
-  state.pmemState.fence();
+  for (const MemoryObject *mo : state.persistentObjects) {
+    const ObjectState *os = state.addressSpace.findObject(mo);
+    assert(os);
+    ObjectState *wos = state.addressSpace.getWriteable(mo, os);
+    PersistentState *ps = dyn_cast<PersistentState>(wos);
+    ps->commitPendingPersists();
+  }
+}
+
+void Executor::executeCheckPersistence(ExecutionState &state,
+                                       const MemoryObject *mo) {
+  const ObjectState *os = state.addressSpace.findObject(mo);
+  assert(os);
+  ObjectState *wos = state.addressSpace.getWriteable(mo, os);
+  PersistentState *ps = dyn_cast<PersistentState>(wos);
+
+  StatePair isPersisted = fork(state, ps->isPersisted(), true);
+
+  // If there's a state where it's not definitely persisted, terminate it.
+  ExecutionState *notPersisted = isPersisted.second;
+  if (notPersisted) {
+    std::string addrInfo;
+    mo->getAllocInfo(addrInfo);
+    terminateStateOnError(state, "memory object not persisted",
+                          Executor::PMem, NULL, addrInfo);
+  }
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state, 
