@@ -18,10 +18,17 @@ POBJ_LAYOUT_END(000_driver);
 TOID_DECLARE(uint64_t, BTREE_MAP_VAL_OFFSET + 0);
 
 int main(int argc, const char *argv[]) {
-    printf("%s\n", getenv("PMEMOBJ_LOG_LEVEL"));
+
+    if (argc <= 2) {
+        fprintf(stderr, "%s: path n_entries\n", argv[0]);
+        return -1;
+    }
+
+    uint64_t n_entries = (uint64_t)atoi(argv[2]);
+
     PMEMobjpool *pop = pmemobj_create(argv[1], POBJ_LAYOUT_NAME(000_driver), PMEMOBJ_MIN_POOL, 0666);
     if (pop == NULL) {
-        printf("Create failed, trying open. (%s)\n", strerror(errno));
+        printf("Create failed, trying open layout %s. (%s)\n", POBJ_LAYOUT_NAME(000_driver), strerror(errno));
 	    pop = pmemobj_open(argv[1], POBJ_LAYOUT_NAME(000_driver));
     }
 
@@ -34,6 +41,8 @@ int main(int argc, const char *argv[]) {
 
     TOID(driver_root_t) root = POBJ_ROOT(pop, driver_root_t);
     
+    assert(!TOID_IS_NULL(root) && "Root is null!");
+
     printf("Checking persistent state...\n");
 
     TX_BEGIN(pop) {
@@ -54,7 +63,7 @@ int main(int argc, const char *argv[]) {
 
     printf("btree_map is now clean.\n");
 
-    for (uint64_t i = 0; i < 100; ++i) {
+    for (uint64_t i = 0; i < n_entries; ++i) {
         TX_BEGIN(pop) {
             TOID(uint64_t) val = TX_NEW(uint64_t);
             TX_ADD(val);
@@ -65,7 +74,7 @@ int main(int argc, const char *argv[]) {
         printf("Size is now %lu!\n", D_RO(root)->num_nodes);
     }
 
-    for (uint64_t i = 0; i < 100; ++i) {
+    for (uint64_t i = 0; i < n_entries; ++i) {
         PMEMoid val = btree_map_get(pop, D_RO(root)->tree, i);
         uint64_t *ptr = pmemobj_direct(val);
         assert(OID_INSTANCEOF(val, uint64_t) && ptr && *ptr == i);

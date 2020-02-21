@@ -671,11 +671,16 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
     // Do this in page sizes to make unmap easier
     size_t pgsz = (size_t)getpagesize();
     for (void *addr = ret; addr < ret + length; addr += pgsz) {
-      if (addr == start) {
-        snprintf(msg, 4096, "\tdef(addr=%p, length=%lu)", addr, pgsz);
-        klee_warning(msg);
+      klee_define_fixed_object_from_existing(addr, pgsz);
+      // if (actual_fd >= 0 && !memcmp(addr, zeros, pgsz)) klee_warning("mmap-ed page is 0!");
+      if (actual_fd >= 0) {
+        snprintf(msg, 4096, "pmem-%d_page-%lu", fd, ((size_t)(addr - ret)) / pgsz);
+        klee_pmem_mark_persistent(addr, pgsz, msg);
+
+        // for (size_t cl = 0; cl < pgsz; cl += 64) {
+        //   _mm_clflush(addr + cl);
+        // }
       }
-      klee_define_fixed_object(addr, pgsz);
     }
     
     // klee_make_symbolic(ret, length, msg);
@@ -708,6 +713,8 @@ int munmap(void *start, size_t length) {
       snprintf(msg, 4096, "\tundef(addr=%p, length=%lu)", addr, pgsz);
       klee_warning(msg);
     }
+
+    klee_pmem_check_persisted(addr, pgsz);
     klee_undefine_fixed_object(addr);
   }
 

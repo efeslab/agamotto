@@ -1453,14 +1453,20 @@ void Executor::executeCall(ExecutionState &state,
       break;
 
       // Non-volatile memory intrinsics
-    case Intrinsic::x86_sse2_clflush:
+    case Intrinsic::x86_sse2_clflush: {
       klee_warning_once(
-        0, "program contains not-yet-supported clflush intrinsic");
+        0, "program contains not-yet-supported clflush intrinsic. Treating as clwb+sfence.");
+      llvm::Value *v = ki->inst->getOperand(0);
+      v = v->stripPointerCasts();
+      KInstruction *kv = kmodule->getKInstruction(dyn_cast<Instruction>(v));
+      ref<Expr> address = getDestCell(state, kv).value;
+      executePersistentMemoryFlush(state, cast<ConstantExpr>(address));
+      executePersistentMemoryFence(state);
       break;
+    }
     case Intrinsic::x86_clflushopt:
       klee_warning_once(
-        0, "program contains not-yet-supported clflushopt intrinsic");
-      break;
+        0, "program contains not-yet-supported clflushopt intrinsic. Treating as clwb.");
     case Intrinsic::x86_clwb: {
       llvm::Value *v = ki->inst->getOperand(0);
       v = v->stripPointerCasts();

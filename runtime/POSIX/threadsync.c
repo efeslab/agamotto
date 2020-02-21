@@ -40,6 +40,37 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#define PTHREAD_MAX_KEYS 4096
+typedef void (*destructor_t)(void*);
+static destructor_t pthread_dtors[PTHREAD_MAX_KEYS];
+static void *pthread_keys[PTHREAD_MAX_KEYS];
+static pthread_key_t next_key = 0;
+
+int pthread_key_create(pthread_key_t *key, destructor_t dtor) {
+  assert(next_key < PTHREAD_MAX_KEYS && "not enough space!");
+  *key = next_key;
+  next_key++;
+  pthread_dtors[*key] = dtor;
+  return 0;
+}
+
+int pthread_key_delete(pthread_key_t key) {
+  assert(key < PTHREAD_MAX_KEYS && "too large!");
+  pthread_dtors[key](pthread_keys[key]);
+  return 0;
+}
+
+void *pthread_getspecific(pthread_key_t key) {
+  assert(key < PTHREAD_MAX_KEYS && "too large!");
+  return pthread_keys[key];
+}
+
+int pthread_setspecific(pthread_key_t key, const void *value) {
+  assert(key < PTHREAD_MAX_KEYS && "too large!");
+  pthread_keys[key] = (void*)value;
+  return 0;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // POSIX Mutexes
 ////////////////////////////////////////////////////////////////////////////////
@@ -201,6 +232,23 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex) {
   return res;
 }
 #endif
+
+int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr) {
+  return 0;
+}
+
+int pthread_mutex_destroy(pthread_mutex_t *mutex) {
+  return 0;
+}
+
+int pthread_mutex_lock(pthread_mutex_t *mutex) {
+  return 0;
+}
+
+int pthread_mutex_unlock(pthread_mutex_t *mutex) {
+  return 0;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // POSIX Condition Variables
 ////////////////////////////////////////////////////////////////////////////////

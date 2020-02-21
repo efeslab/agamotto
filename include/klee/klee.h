@@ -25,6 +25,11 @@ extern "C" {
    */
   void klee_define_fixed_object(void *addr, size_t nbytes);
 
+  /**
+   * Given that addr->addr+nbytes is a valid memory region, 
+   */
+  void klee_define_fixed_object_from_existing(void *addr, size_t nbytes);
+
   /* Remove an accesible memory object at a user specified location. This is
    * required for when external memory leaves scope. (mmap syscall)
    */
