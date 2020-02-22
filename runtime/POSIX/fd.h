@@ -64,6 +64,8 @@ typedef struct {
   exe_disk_file_t *sym_stdin, *sym_stdout;
   unsigned stdout_writes; /* how many chars were written to stdout */
   exe_disk_file_t *sym_files;
+
+  exe_disk_file_t *sym_pmem;
   /* --- */
   /* the maximum number of failures on one path; gets decremented after each failure */
   unsigned max_failures; 
@@ -108,4 +110,7 @@ int __fd_ftruncate(int fd, off64_t length);
 int __fd_statfs(const char *path, struct statfs *buf);
 int __fd_getdents(unsigned int fd, struct dirent64 *dirp, unsigned int count);
 
+// non-static wrapper
+void create_new_dfile(exe_disk_file_t *dfile, unsigned size, 
+                               const char *name, struct stat64 *defaults);
 #endif /* KLEE_FD_H */

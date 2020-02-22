@@ -94,6 +94,10 @@ static void __create_new_dfile(exe_disk_file_t *dfile, unsigned size,
   dfile->stat = s;
 }
 
+void create_new_dfile(exe_disk_file_t *dfile, unsigned size, 
+                               const char *name, struct stat64 *defaults) {
+	__create_new_dfile(dfile, size, name, defaults);
+}
 static unsigned __sym_uint32(const char *name) {
   unsigned x;
   klee_make_symbolic(&x, sizeof x, name);

@@ -31,9 +31,13 @@
 #include <sys/wait.h>
 
 #include "klee/Config/config.h"
+#include "fd.h"
 
 void klee_warning(const char*);
 void klee_warning_once(const char*);
+
+// FIXME: better way of importing
+extern exe_file_t *__get_file(int fd);
 
 /* Silent ignore */
 
@@ -590,7 +594,12 @@ ssize_t readahead(int fd, off64_t *offset, size_t count) {
 
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) __attribute__((weak));
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) {
-  klee_warning("ignoring (EPERM)");
+  exe_file_t* f = __get_file(fd);
+  if (f) {
+	  klee_warning("mmap invoked with proper fd");
+  } else {
+	  klee_warning("ignoring (EPERM)");
+  }
   errno = EPERM;
   return (void*) -1;
 }

@@ -38,6 +38,17 @@ static exe_disk_file_t *__get_sym_file(const char *pathname) {
   if (!pathname)
     return NULL;
 
+  /* Handle potential persistent memory files first */
+  // FIXME: switch to using command line argument for file
+  int isPmemFile = !strcmp(pathname, "data");
+  if (isPmemFile) {
+	  exe_disk_file_t *df = __exe_fs.sym_pmem;
+	  if (!df || df->stat->st_ino == 0) {
+			  return NULL;
+	  }
+	  return df;
+  }
+
   char c = pathname[0];
   unsigned i;
 
@@ -61,7 +72,8 @@ static size_t __concretize_size(size_t s);
 static const char *__concretize_string(const char *s);
 
 /* Returns pointer to the file entry for a valid fd */
-static exe_file_t *__get_file(int fd) {
+// FIXME: making this not static
+exe_file_t *__get_file(int fd) {
   if (fd>=0 && fd<MAX_FDS) {
     exe_file_t *f = &__exe_env.fds[fd];
     if (f->flags & eOpen)
@@ -127,6 +139,21 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
   exe_file_t *f;
   int fd;
 
+    /* Special case Persistent-Memory handling */
+  // FIXME: utilize command line arguments in klee_init_env to determine actual
+  // file to be used for persistent memory-mapping
+  int isPmemFile = !strcmp(pathname, "data");
+  if (isPmemFile) {
+	  printf("Open called for pmem file; creating sym-file\n");
+	  // stealing this code from fd_init.c:klee_init_fds
+	  struct stat64 s;
+	  stat64(".", &s);
+	  // also, potentially do the malloc in klee_init_fds? again, not sure
+	  __exe_fs.sym_pmem = malloc(sizeof(*__exe_fs.sym_pmem) * 1);
+	  // FIXME: use command line for initial file size? not sure
+	  create_new_dfile(__exe_fs.sym_pmem, 4096, pathname, &s);
+  }
+
   for (fd = 0; fd < MAX_FDS; ++fd)
     if (!(__exe_env.fds[fd].flags & eOpen))
       break;
@@ -141,6 +168,11 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
   memset(f, 0, sizeof *f);
 
   df = __get_sym_file(pathname); 
+  // Should be the case, since we're trying to create a new sym file for
+  // persistent mapping...
+  if (isPmemFile) {
+	  assert(df);
+  }
   if (df) {    
     /* XXX Should check access against mode / stat / possible
        deletion. */
@@ -445,6 +477,13 @@ ssize_t write(int fd, const void *buf, size_t count) {
 	  actual_count = f->dfile->size - f->off;	
       }
     }
+
+	// FIXME: only in debug mode please
+	if (f->dfile == __exe_fs.sym_pmem) {
+		printf("Writing to the symbolic pmem file:\n");
+		printf("\tOffset: %lld\n", f->off);
+		printf("\tActual count: %zu\n", actual_count);
+	}
     
     if (actual_count)
       memcpy(f->dfile->contents + f->off, buf, actual_count);
