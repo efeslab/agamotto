@@ -174,6 +174,10 @@ ObjectState::~ObjectState() {
   }
 }
 
+ObjectState *ObjectState::clone() const {
+  return new ObjectState(*this);
+}
+
 ArrayCache *ObjectState::getArrayCache() const {
   assert(object && "object was NULL");
   return object->parent->getArrayCache();
@@ -626,6 +630,16 @@ PersistentState::PersistentState(const ObjectState *os, const Array *cacheLines)
     pendingCacheLineUpdates(0, 0) {
   cacheLineUpdates = UpdateList(cacheLines, 0);
   pendingCacheLineUpdates = UpdateList(cacheLineUpdates);
+}
+
+PersistentState::PersistentState(const PersistentState &ps)
+  : ObjectState(ps),
+    cacheLineUpdates(ps.cacheLineUpdates),
+    pendingCacheLineUpdates(ps.pendingCacheLineUpdates) {
+}
+
+ObjectState *PersistentState::clone() const {
+  return new PersistentState(*this);
 }
 
 void PersistentState::write8(unsigned offset, uint8_t value) {
