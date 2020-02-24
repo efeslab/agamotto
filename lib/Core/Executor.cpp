@@ -3767,10 +3767,10 @@ void Executor::executeMarkPersistent(ExecutionState &state,
   // Construct a persistent ObjectState and bind it to the memory object.
   state.addressSpace.bindObject(mo, new PersistentState(os, cacheLines));
 
-  std::string name;
-  mo->getAllocInfo(name);
-  klee_message("Found non-volatile memory pointer: %s", name.c_str());
-  klee_message("NVM pointer is at: %p", mo->address);
+  /* std::string name; */
+  /* mo->getAllocInfo(name); */
+  /* klee_message("Found non-volatile memory pointer: %s", name.c_str()); */
+  /* klee_message("NVM pointer is at: %p", mo->address); */
 }
 
 bool Executor::isPersistentMemory(ExecutionState &state, const MemoryObject *mo) {

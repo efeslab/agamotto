@@ -39,7 +39,6 @@ static exe_disk_file_t *__get_sym_file(const char *pathname) {
     return NULL;
 
   /* Handle potential persistent memory files first */
-  // FIXME: switch to using command line argument for file
   int isPmemFile = !strcmp(pathname, __exe_fs.sym_pmem_filename);
   if (isPmemFile) {
 	  exe_disk_file_t *df = __exe_fs.sym_pmem;
@@ -72,7 +71,7 @@ static size_t __concretize_size(size_t s);
 static const char *__concretize_string(const char *s);
 
 /* Returns pointer to the file entry for a valid fd */
-// FIXME: making this not static
+// FIXME: making this back to static probably should be done
 exe_file_t *__get_file(int fd) {
   if (fd>=0 && fd<MAX_FDS) {
     exe_file_t *f = &__exe_env.fds[fd];
@@ -149,16 +148,16 @@ static void __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
 
   dfile->size = size;
   // FIXME: page aligned vs. cache aligned
-  dfile->contents = malloc(dfile->size);
+  dfile->contents = memalign(4096, dfile->size);
   // FIXME: proper name, not just "data"
   klee_pmem_mark_persistent(dfile->contents, dfile->size, "data");
   
+  // FIXME: what should stat64 actually be?
   klee_make_symbolic(s, sizeof(*s), sname);
 
   /* For broken tests */
-  if (!klee_is_symbolic(s->st_ino) && 
-      (s->st_ino & 0x7FFFFFFF) == 0)
-    s->st_ino = defaults->st_ino;
+  if (!klee_is_symbolic(s->st_ino) && (s->st_ino & 0x7FFFFFFF) == 0)
+	s->st_ino = defaults->st_ino;
   
   /* Important since we copy this out through getdents, and readdir
      will otherwise skip this entry. For same reason need to make sure
@@ -184,6 +183,17 @@ static void __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
   klee_prefer_cex(s, s->st_mtime == defaults->st_mtime);
   klee_prefer_cex(s, s->st_ctime == defaults->st_ctime);
 
+  /* s->st_dev == defaults->st_dev; */
+  /* s->st_rdev = defaults->st_rdev; */
+  /* s->st_mode = defaults->st_mode; */
+  /* s->st_nlink = 1; */
+  /* s->st_uid = defaults->st_uid; */
+  /* s->st_gid = defaults->st_gid; */
+  /* s->st_blksize=4096; */
+  /* s->st_atime = defaults->st_atime; */
+  /* s->st_mtime = defaults->st_mtime; */
+  /* s->st_ctime = defaults->st_ctime; */
+
   s->st_size = dfile->size;
   s->st_blocks = 8;
   dfile->stat = s;
@@ -195,17 +205,16 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
   int fd;
 
     /* Special case Persistent-Memory handling */
-  // FIXME: utilize command line arguments in klee_init_env to determine actual
   // file to be used for persistent memory-mapping
   int isPmemFile = !strcmp(pathname, __exe_fs.sym_pmem_filename);
   if (isPmemFile) {
+#if 0
 	  printf("Open called for pmem file; creating sym-file\n");
+#endif
 	  // stealing this code from fd_init.c:klee_init_fds
 	  struct stat64 s;
 	  stat64(".", &s);
-	  // also, potentially do the malloc in klee_init_fds? again, not sure
 	  __exe_fs.sym_pmem = malloc(sizeof(*__exe_fs.sym_pmem) * 1);
-	  // FIXME: use command line for initial file size? not sure
 	  __create_pmem_dfile(__exe_fs.sym_pmem, __exe_fs.sym_pmem_size, pathname, &s);
   }
 
@@ -533,13 +542,15 @@ ssize_t write(int fd, const void *buf, size_t count) {
       }
     }
 
+#if 0
 	// FIXME: only in debug mode please
 	if (f->dfile == __exe_fs.sym_pmem) {
 		printf("Writing to the symbolic pmem file:\n");
 		printf("\tOffset: %lld\n", f->off);
 		printf("\tActual count: %zu\n", actual_count);
 	}
-    
+#endif
+
     if (actual_count)
       memcpy(f->dfile->contents + f->off, buf, actual_count);
     

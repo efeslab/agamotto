@@ -609,9 +609,11 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
 		  if (offset + actual_length > df->size) {
 			  klee_warning("trying to map beyond the file size!");
 		  } else {
+#if 0
 			  printf("mmapping the pmem file at offset %lld, with length %lld (rounded from %lld).\n", 
 					  offset, actual_length, length);
 			  printf("mmap at address %p\n", (void*) (df->contents + offset));
+#endif
 			  return (void*)  (df->contents + offset);
 		  }
 	  }
@@ -631,13 +633,7 @@ void *mmap64(void *start, size_t length, int prot, int flags, int fd, off64_t of
 
 int munmap(void*start, size_t length) __attribute__((weak));
 int munmap(void*start, size_t length) {
-	exe_disk_file_t* df = __exe_fs.sym_pmem;
-	if (df && df->contents == start && df->size == length) {
-		printf("freeing the pmem file.\n");
-		free(df->contents);
-		df->size = 0;
-		return 0;
-	}
+	// FIXME: what should I actually do here?
 	klee_warning("ignoring (EPERM)");
 	errno = EPERM;
 	return -1;

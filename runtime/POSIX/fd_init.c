@@ -129,7 +129,9 @@ void klee_init_fds(unsigned n_files, unsigned file_length,
   }
   
   if (strlen(sym_pmem_filename)) {
+#if 0
 	  printf("PMEM File provided: \'%s\', with size: %lld\n", sym_pmem_filename, sym_pmem_size);
+#endif
 	  strncpy(__exe_fs.sym_pmem_filename, sym_pmem_filename, sizeof __exe_fs.sym_pmem_filename);
 	  __exe_fs.sym_pmem_size = sym_pmem_size;
   }

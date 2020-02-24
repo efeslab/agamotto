@@ -67,6 +67,7 @@ typedef struct {
 
   exe_disk_file_t *sym_pmem;
   unsigned sym_pmem_size; // in bytes
+  //FIXME: handle sizes better
   char sym_pmem_filename[128];
   /* --- */
   /* the maximum number of failures on one path; gets decremented after each failure */
