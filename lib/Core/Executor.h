@@ -322,7 +322,7 @@ private:
 
   void executeMarkPersistent(ExecutionState &state, ref<ConstantExpr> address);
   void executeMarkPersistent(ExecutionState &state, const MemoryObject *mo);
-  bool isPersistent(ExecutionState &state, const MemoryObject *mo);
+  bool isPersistentMemory(ExecutionState &state, const MemoryObject *mo);
 
   /// Asserts the persistence of a given MemoryObject, forking if necessary.
   /// A state in which mo is definitely not persisted will terminate with error.

@@ -3660,7 +3660,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           terminateStateOnError(state, "memory error: object read only",
                                 ReadOnly);
         } else {
-          if (isPersistent(state, mo)) {
+          if (isPersistentMemory(state, mo)) {
             klee_message("Modifying non-volatile MemoryObject");
           }
           ObjectState *wos = state.addressSpace.getWriteable(mo, os);
@@ -3707,7 +3707,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           terminateStateOnError(*bound, "memory error: object read only",
                                 ReadOnly);
         } else {
-          if (isPersistent(state, mo)) {
+          if (isPersistentMemory(state, mo)) {
             klee_message("Modifying non-volatile MemoryObject");
           }
           ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
@@ -3773,7 +3773,7 @@ void Executor::executeMarkPersistent(ExecutionState &state,
   klee_message("NVM pointer is at: %p", mo->address);
 }
 
-bool Executor::isPersistent(ExecutionState &state, const MemoryObject *mo) {
+bool Executor::isPersistentMemory(ExecutionState &state, const MemoryObject *mo) {
   if (state.persistentObjects.count(mo)) {
     const ObjectState *os = state.addressSpace.findObject(mo);
     assert(dyn_cast<PersistentState>(os) != nullptr &&
@@ -3799,7 +3799,7 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
   if (success) {
     const MemoryObject *mo = op.first;
     const ObjectState *os = op.second;
-    if (isPersistent(state, mo)) {
+    if (isPersistentMemory(state, mo)) {
       ObjectState *wos = state.addressSpace.getWriteable(mo, os);
       PersistentState *ps = dyn_cast<PersistentState>(wos);
       ref<Expr> offset = mo->getOffsetExpr(address);

@@ -174,6 +174,10 @@ private:
   // mutable because we may need flush during read of const
   mutable UpdateList updates;
 
+protected:
+  /// DO NOT USE. Use clone() instead.
+  ObjectState(const ObjectState &os);
+
 public:
   unsigned size;
 
@@ -189,8 +193,9 @@ public:
   /// contents.
   ObjectState(const MemoryObject *mo, const Array *array);
 
-  ObjectState(const ObjectState &os);
   virtual ~ObjectState();
+
+  virtual ObjectState *clone() const;
 
   virtual Kind getKind() const { return Volatile; }
   static bool classof(const ObjectState *os) {
@@ -312,12 +317,15 @@ class PersistentState : public ObjectState {
     UpdateList cacheLineUpdates;
     UpdateList pendingCacheLineUpdates;
 
+    /// DO NOT USE. Use clone() instead.
+    PersistentState(const PersistentState &ps);
+
   public:
     /// Create a new persistent object state from the given non-persistent
     /// object state and symbolic bool array of cache lines.
     PersistentState(const ObjectState *os, const Array *cacheLines);
 
-    PersistentState(const PersistentState &ps);
+    ObjectState *clone() const override;
 
     virtual Kind getKind() const { return Persistent; }
     static bool classof(const ObjectState *os) {

@@ -42,7 +42,7 @@ ObjectState *AddressSpace::getWriteable(const MemoryObject *mo,
   if (cowKey==os->copyOnWriteOwner) {
     return const_cast<ObjectState*>(os);
   } else {
-    ObjectState *n = new ObjectState(*os);
+    ObjectState *n = os->clone();
     n->copyOnWriteOwner = cowKey;
     objects = objects.replace(std::make_pair(mo, n));
     return n;    
