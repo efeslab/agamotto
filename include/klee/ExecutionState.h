@@ -18,7 +18,6 @@
 
 // FIXME: We do not want to be exposing these? :(
 #include "../../lib/Core/AddressSpace.h"
-#include "../../lib/Core/PersistentMemoryState.h"
 #include "klee/Internal/Module/KInstIterator.h"
 #include "../../lib/Module/NvmFunctionInfo.h"
 
@@ -101,9 +100,6 @@ public:
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;
 
-  /// @brief Tracks the state of persistent memory regions.
-  PersistentMemoryState pmemState;
-
   /// @brief Constraints collected so far
   ConstraintManager constraints;
 
@@ -143,6 +139,9 @@ public:
   //
   // FIXME: Move to a shared list structure (not critical).
   std::vector<std::pair<const MemoryObject *, const Array *> > symbolics;
+
+  /// @brief Known persistent / non-volatile MemoryObjects.
+  std::set<const MemoryObject *> persistentObjects;
 
   /// @brief Set of used array names for this state.  Used to avoid collisions.
   std::set<std::string> arrayNames;
