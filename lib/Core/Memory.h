@@ -54,9 +54,6 @@ public:
 
   bool isUserSpecified;
 
-  /// true if this memory object resides in non-volatile / persistent memory.
-  mutable bool isPersistent;
-
   MemoryManager *parent;
 
   /// "Location" for which this memory object was allocated. This
@@ -100,7 +97,6 @@ public:
       isGlobal(_isGlobal),
       isFixed(_isFixed),
       isUserSpecified(false),
-      isPersistent(false),
       parent(_parent), 
       allocSite(_allocSite) {
   }
@@ -150,6 +146,12 @@ public:
 };
 
 class ObjectState {
+public:
+  enum Kind {
+    Volatile,
+    Persistent
+  };
+
 private:
   friend class AddressSpace;
   unsigned copyOnWriteOwner; // exclusively for AddressSpace
@@ -188,7 +190,12 @@ public:
   ObjectState(const MemoryObject *mo, const Array *array);
 
   ObjectState(const ObjectState &os);
-  ~ObjectState();
+  virtual ~ObjectState();
+
+  virtual Kind getKind() const { return Volatile; }
+  static bool classof(const ObjectState *os) {
+    return os->getKind() == Volatile;
+  }
 
   const MemoryObject *getObject() const { return object; }
 
@@ -199,19 +206,19 @@ public:
   // make contents all concrete and random
   void initializeToRandom();
 
-  ref<Expr> read(ref<Expr> offset, Expr::Width width) const;
-  ref<Expr> read(unsigned offset, Expr::Width width) const;
-  ref<Expr> read8(unsigned offset) const;
+  virtual ref<Expr> read(ref<Expr> offset, Expr::Width width) const;
+  virtual ref<Expr> read(unsigned offset, Expr::Width width) const;
+  virtual ref<Expr> read8(unsigned offset) const;
 
   // return bytes written.
-  void write(unsigned offset, ref<Expr> value);
-  void write(ref<Expr> offset, ref<Expr> value);
+  virtual void write(unsigned offset, ref<Expr> value);
+  virtual void write(ref<Expr> offset, ref<Expr> value);
 
-  void write8(unsigned offset, uint8_t value);
-  void write16(unsigned offset, uint16_t value);
-  void write32(unsigned offset, uint32_t value);
-  void write64(unsigned offset, uint64_t value);
-  void print() const;
+  virtual void write8(unsigned offset, uint8_t value);
+  virtual void write16(unsigned offset, uint16_t value);
+  virtual void write32(unsigned offset, uint32_t value);
+  virtual void write64(unsigned offset, uint64_t value);
+  virtual void print() const;
 
   /*
     Looks at all the symbolic bytes of this object, gets a value for them
@@ -220,16 +227,16 @@ public:
   void flushToConcreteStore(TimingSolver *solver,
                             const ExecutionState &state) const;
 
-private:
+protected:
   const UpdateList &getUpdates() const;
 
   void makeConcrete();
 
   void makeSymbolic();
 
-  ref<Expr> read8(ref<Expr> offset) const;
-  void write8(unsigned offset, ref<Expr> value);
-  void write8(ref<Expr> offset, ref<Expr> value);
+  virtual ref<Expr> read8(ref<Expr> offset) const;
+  virtual void write8(unsigned offset, ref<Expr> value);
+  virtual void write8(ref<Expr> offset, ref<Expr> value);
 
   void fastRangeCheckOffset(ref<Expr> offset, unsigned *base_r, 
                             unsigned *size_r) const;
@@ -247,6 +254,103 @@ private:
   void setKnownSymbolic(unsigned offset, Expr *value);
 
   ArrayCache *getArrayCache() const;
+};
+
+/// \brief A subclass of ObjectState used for tracking the state of a
+/// persistent MemoryObject.
+///
+/// Tracks updates to a symbolic Array of bools that represents the
+/// dirtiness/persistedness of each cache line that the MemoryObject spans.
+class PersistentState : public ObjectState {
+  private:
+    /// Both of these UpdateLists share one underlying symbolic bool Array.
+    /// The Array has one entry per cache line: 1 if persisted, 0 if not.
+    /// Each write and each cache line flush are tracked as updates to this array.
+    ///
+    /// These two update lists diverge during a persistence epoch (epochs are
+    /// delimited by memory fences).
+    /// Until the next sfence, cacheLineUpdates contains only the writes made
+    /// during the current epoch, while pendingCacheLineUpdates contains both
+    /// the writes and flushes.
+    ///
+    /// Queries about the persistence of cache lines are formed using
+    /// cacheLineUpdates rather than pendingCacheLineUpdates.
+    /// Thus, any persistence queries made during the middle of an epoch will
+    /// not falsely report that writes have been persisted.
+    ///
+    /// When the epoch ends, the pending flushes are added to cacheLineUpdates,
+    /// preserving their original ordering WRT the writes.
+    ///
+    /// Example program:
+    ///   WRITE cache line 0
+    ///   FLUSH cache line 0
+    ///   SFENCE              // end of epoch 0
+    ///   WRITE cache line 2
+    ///   FLUSH cache line 2
+    ///   WRITE cache line 2
+    ///   SFENCE              // end of epoch 1
+    ///
+    /// Contents of update lists:
+    ///
+    ///   At start of epoch 1:
+    ///     v pendingCacheLineUpdates
+    ///     [0]=1 -> [0]=0 -> nullptr
+    ///     ^ cacheLineUpdates
+    ///
+    ///   Before the second SFENCE:
+    ///     v pendingCacheLineUpdates
+    ///     [2]=0 -> [2]=1 -> [2]=0 ->
+    ///                                [0]=1 -> [0]=0 -> nullptr
+    ///              [2]=0 -> [2]=0 ->
+    ///              ^ cacheLineUpdates
+    ///
+    ///   After the second SFENCE:
+    ///     v pendingCacheLineUpdates
+    ///     [2]=0 -> [2]=1 -> [2]=0 -> [0]=1 -> [0]=0 -> nullptr
+    ///     ^ cacheLineUpdates
+    ///
+    UpdateList cacheLineUpdates;
+    UpdateList pendingCacheLineUpdates;
+
+  public:
+    /// Create a new persistent object state from the given non-persistent
+    /// object state and symbolic bool array of cache lines.
+    PersistentState(const ObjectState *os, const Array *cacheLines);
+
+    PersistentState(const PersistentState &ps);
+
+    virtual Kind getKind() const { return Persistent; }
+    static bool classof(const ObjectState *os) {
+      return os->getKind() == Persistent;
+    }
+
+    void write8(unsigned offset, uint8_t value) override;
+    void write8(unsigned offset, ref<Expr> value) override;
+    void write8(ref<Expr> offset, ref<Expr> value) override;
+
+    void dirtyCacheLineAtOffset(unsigned offset);
+    void dirtyCacheLineAtOffset(ref<Expr> offset);
+
+    // Make a *pending* persist of the cache line containing offset.
+    void persistCacheLineAtOffset(unsigned offset);
+    void persistCacheLineAtOffset(ref<Expr> offset);
+
+    void commitPendingPersists();
+
+    // Returns true if all modified cache lines
+    // are guaranteed to be persisted.
+    ref<Expr> isPersisted() const;
+
+    static ref<ConstantExpr> getPersistedExpr();
+    static ref<ConstantExpr> getDirtyExpr();
+
+  private:
+    ref<Expr> isCacheLinePersisted(unsigned offset) const;
+    ref<Expr> isCacheLinePersisted(ref<Expr> offset) const;
+
+    ref<Expr> getCacheLine(ref<Expr> offset) const;
+    unsigned numCacheLines() const;
+    unsigned cacheLineSize() const;
 };
   
 } // End klee namespace

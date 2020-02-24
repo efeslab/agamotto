@@ -59,9 +59,11 @@ llvm::cl::opt<unsigned long long> DeterministicStartAddress(
 } // namespace
 
 /***/
-MemoryManager::MemoryManager(ArrayCache *_arrayCache)
+MemoryManager::MemoryManager(ArrayCache *_arrayCache,
+                             size_t cacheAlignment)
     : arrayCache(_arrayCache), deterministicSpace(0), nextFreeSlot(0),
-      spaceSize(DeterministicAllocationSize.getValue() * 1024 * 1024) {
+      spaceSize(DeterministicAllocationSize.getValue() * 1024 * 1024),
+      cacheAlignment(cacheAlignment) {
   if (DeterministicAllocation) {
     // Page boundary
     void *expectedAddress = (void *)DeterministicStartAddress.getValue();
@@ -187,4 +189,14 @@ void MemoryManager::markFreed(MemoryObject *mo) {
 
 size_t MemoryManager::getUsedDeterministicSize() {
   return nextFreeSlot - deterministicSpace;
+}
+
+uint64_t MemoryManager::alignToCache(uint64_t addr) const {
+  return addr - (addr % cacheAlignment);
+}
+
+size_t MemoryManager::getSizeInCacheLines(size_t sizeInBytes) const {
+  if (sizeInBytes % cacheAlignment == 0)
+    return sizeInBytes / cacheAlignment;
+  return (sizeInBytes / cacheAlignment) + 1;
 }
