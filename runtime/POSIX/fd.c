@@ -134,6 +134,63 @@ static int has_permission(int flags, struct stat64 *s) {
 }
 
 
+// largely copied from fd_init.c:__create_new_dfile
+// biggest difference is not allocating the contents until the mmap later
+static void __create_pmem_dfile(exe_disk_file_t *dfile,
+                               const char *name, struct stat64 *defaults) {
+  struct stat64 *s = malloc(sizeof(*s));
+  const char *sp;
+  char sname[64];
+  for (sp=name; *sp; ++sp)
+    sname[sp-name] = *sp;
+  memcpy(&sname[sp-name], "-stat", 6);
+
+  //assert(size);
+
+  // again, here's the big change; defer all of this until the mmap
+  dfile->size = 0;
+  //dfile->size = size;
+  dfile->contents = NULL;
+  //dfile->contents = malloc(dfile->size);
+  //klee_make_symbolic(dfile->contents, dfile->size, name);
+  
+  klee_make_symbolic(s, sizeof(*s), sname);
+
+  /* For broken tests */
+  if (!klee_is_symbolic(s->st_ino) && 
+      (s->st_ino & 0x7FFFFFFF) == 0)
+    s->st_ino = defaults->st_ino;
+  
+  /* Important since we copy this out through getdents, and readdir
+     will otherwise skip this entry. For same reason need to make sure
+     it fits in low bits. */
+  klee_assume((s->st_ino & 0x7FFFFFFF) != 0);
+
+  /* uclibc opendir uses this as its buffer size, try to keep
+     reasonable. */
+  klee_assume((s->st_blksize & ~0xFFFF) == 0);
+
+  klee_prefer_cex(s, !(s->st_mode & ~(S_IFMT | 0777)));
+  klee_prefer_cex(s, s->st_dev == defaults->st_dev);
+  klee_prefer_cex(s, s->st_rdev == defaults->st_rdev);
+  klee_prefer_cex(s, (s->st_mode&0700) == 0600);
+  klee_prefer_cex(s, (s->st_mode&0070) == 0040);
+  klee_prefer_cex(s, (s->st_mode&0007) == 0004);
+  klee_prefer_cex(s, (s->st_mode&S_IFMT) == S_IFREG);
+  klee_prefer_cex(s, s->st_nlink == 1);
+  klee_prefer_cex(s, s->st_uid == defaults->st_uid);
+  klee_prefer_cex(s, s->st_gid == defaults->st_gid);
+  klee_prefer_cex(s, s->st_blksize == 4096);
+  klee_prefer_cex(s, s->st_atime == defaults->st_atime);
+  klee_prefer_cex(s, s->st_mtime == defaults->st_mtime);
+  klee_prefer_cex(s, s->st_ctime == defaults->st_ctime);
+
+  // potential issues here?
+  s->st_size = dfile->size;
+  s->st_blocks = 8;
+  dfile->stat = s;
+}
+
 int __fd_open(const char *pathname, int flags, mode_t mode) {
   exe_disk_file_t *df;
   exe_file_t *f;
@@ -151,7 +208,7 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
 	  // also, potentially do the malloc in klee_init_fds? again, not sure
 	  __exe_fs.sym_pmem = malloc(sizeof(*__exe_fs.sym_pmem) * 1);
 	  // FIXME: use command line for initial file size? not sure
-	  create_new_dfile(__exe_fs.sym_pmem, 4096, pathname, &s);
+	  __create_pmem_dfile(__exe_fs.sym_pmem, pathname, &s);
   }
 
   for (fd = 0; fd < MAX_FDS; ++fd)

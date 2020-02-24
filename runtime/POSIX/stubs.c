@@ -29,8 +29,10 @@
 #include <sys/times.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <malloc.h>
 
 #include "klee/Config/config.h"
+#include "klee/klee.h"
 #include "fd.h"
 
 void klee_warning(const char*);
@@ -595,10 +597,21 @@ ssize_t readahead(int fd, off64_t *offset, size_t count) {
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) __attribute__((weak));
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) {
   exe_file_t* f = __get_file(fd);
-  if (f) {
-	  klee_warning("mmap invoked with proper fd");
+  if (f && f->dfile == __exe_fs.sym_pmem) {
+	  exe_disk_file_t* df = f->dfile;
+
+	  if (df->contents || df->size) {
+		  klee_warning("pmem file already mapped");
+	  } else {
+		  // allocate with 64 byte alignment, for cache aligning and all that
+		  printf("mmapping the pmem file.\n");
+		  df->contents = memalign(64, length);
+		  df->size = length;
+		  klee_pmem_mark_persistent(df->contents, length, "data");
+		  return (void*)  (df->contents);
+	  }
   } else {
-	  klee_warning("ignoring (EPERM)");
+	  klee_warning("ignoring (EPERM), since non file-backed or not a pmem file");
   }
   errno = EPERM;
   return (void*) -1;
@@ -613,7 +626,14 @@ void *mmap64(void *start, size_t length, int prot, int flags, int fd, off64_t of
 
 int munmap(void*start, size_t length) __attribute__((weak));
 int munmap(void*start, size_t length) {
-  klee_warning("ignoring (EPERM)");
-  errno = EPERM;
-  return -1;
+	exe_disk_file_t* df = __exe_fs.sym_pmem;
+	if (df && df->contents == start && df->size == length) {
+		printf("freeing the pmem file.\n");
+		free(df->contents);
+		df->size = 0;
+		return 0;
+	}
+	klee_warning("ignoring (EPERM)");
+	errno = EPERM;
+	return -1;
 }
