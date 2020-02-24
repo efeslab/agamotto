@@ -599,17 +599,21 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
   exe_file_t* f = __get_file(fd);
   if (f && __exe_fs.sym_pmem && f->dfile == __exe_fs.sym_pmem) {
 	  exe_disk_file_t* df = f->dfile;
-	  if (!df) {
-		  klee_warning("pmem file not opened?");
-	  }else if (df->contents || df->size) {
-		  klee_warning("pmem file already mapped");
+	  if (!df || !df->contents || !df->size) {
+		  klee_warning("pmem file not opened prior to mapping");
+	  } else if (offset % 4096 != 0) {
+		  klee_warning("mmap invoked without a page-aligned offset");
 	  } else {
-		  // allocate with 64 byte alignment, for cache aligning and all that
-		  printf("mmapping the pmem file.\n");
-		  df->contents = memalign(64, length);
-		  df->size = length;
-		  klee_pmem_mark_persistent(df->contents, length, "data");
-		  return (void*)  (df->contents);
+		  // round up length to page multiple
+		  size_t actual_length = (length % 4096 == 0 ? length : length + 4096 - length % 4096);
+		  if (offset + actual_length > df->size) {
+			  klee_warning("trying to map beyond the file size!");
+		  } else {
+			  printf("mmapping the pmem file at offset %lld, with length %lld (rounded from %lld).\n", 
+					  offset, actual_length, length);
+			  printf("mmap at address %p\n", (void*) (df->contents + offset));
+			  return (void*)  (df->contents + offset);
+		  }
 	  }
   } else {
 	  klee_warning("ignoring (EPERM), since non file-backed or not a pmem file");

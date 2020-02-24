@@ -66,6 +66,7 @@ typedef struct {
   exe_disk_file_t *sym_files;
 
   exe_disk_file_t *sym_pmem;
+  unsigned sym_pmem_size; // in bytes
   char sym_pmem_filename[128];
   /* --- */
   /* the maximum number of failures on one path; gets decremented after each failure */
@@ -96,7 +97,8 @@ extern exe_sym_env_t __exe_env;
 
 void klee_init_fds(unsigned n_files, unsigned file_length,
                    unsigned stdin_length, int sym_stdout_flag,
-                   int do_all_writes_flag, unsigned max_failures, char* sym_pmem_filename);
+                   int do_all_writes_flag, unsigned max_failures,
+				   char* sym_pmem_filename, unsigned sym_pmem_size);
 void klee_init_env(int *argcPtr, char ***argvPtr);
 
 /* *** */

@@ -136,7 +136,7 @@ static int has_permission(int flags, struct stat64 *s) {
 
 // largely copied from fd_init.c:__create_new_dfile
 // biggest difference is not allocating the contents until the mmap later
-static void __create_pmem_dfile(exe_disk_file_t *dfile,
+static void __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
                                const char *name, struct stat64 *defaults) {
   struct stat64 *s = malloc(sizeof(*s));
   const char *sp;
@@ -145,14 +145,13 @@ static void __create_pmem_dfile(exe_disk_file_t *dfile,
     sname[sp-name] = *sp;
   memcpy(&sname[sp-name], "-stat", 6);
 
-  //assert(size);
+  assert(size);
 
-  // again, here's the big change; defer all of this until the mmap
-  dfile->size = 0;
-  //dfile->size = size;
-  dfile->contents = NULL;
-  //dfile->contents = malloc(dfile->size);
-  //klee_make_symbolic(dfile->contents, dfile->size, name);
+  dfile->size = size;
+  // FIXME: page aligned vs. cache aligned
+  dfile->contents = malloc(dfile->size);
+  // FIXME: proper name, not just "data"
+  klee_pmem_mark_persistent(dfile->contents, dfile->size, "data");
   
   klee_make_symbolic(s, sizeof(*s), sname);
 
@@ -185,7 +184,6 @@ static void __create_pmem_dfile(exe_disk_file_t *dfile,
   klee_prefer_cex(s, s->st_mtime == defaults->st_mtime);
   klee_prefer_cex(s, s->st_ctime == defaults->st_ctime);
 
-  // potential issues here?
   s->st_size = dfile->size;
   s->st_blocks = 8;
   dfile->stat = s;
@@ -208,7 +206,7 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
 	  // also, potentially do the malloc in klee_init_fds? again, not sure
 	  __exe_fs.sym_pmem = malloc(sizeof(*__exe_fs.sym_pmem) * 1);
 	  // FIXME: use command line for initial file size? not sure
-	  __create_pmem_dfile(__exe_fs.sym_pmem, pathname, &s);
+	  __create_pmem_dfile(__exe_fs.sym_pmem, __exe_fs.sym_pmem_size, pathname, &s);
   }
 
   for (fd = 0; fd < MAX_FDS; ++fd)
