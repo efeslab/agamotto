@@ -597,10 +597,11 @@ ssize_t readahead(int fd, off64_t *offset, size_t count) {
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) __attribute__((weak));
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) {
   exe_file_t* f = __get_file(fd);
-  if (f && f->dfile == __exe_fs.sym_pmem) {
+  if (f && __exe_fs.sym_pmem && f->dfile == __exe_fs.sym_pmem) {
 	  exe_disk_file_t* df = f->dfile;
-
-	  if (df->contents || df->size) {
+	  if (!df) {
+		  klee_warning("pmem file not opened?");
+	  }else if (df->contents || df->size) {
 		  klee_warning("pmem file already mapped");
 	  } else {
 		  // allocate with 64 byte alignment, for cache aligning and all that

@@ -15,6 +15,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <assert.h>
 #include <errno.h>
 #include <sys/syscall.h>
@@ -92,6 +93,7 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
   unsigned sym_files = 0, sym_file_len = 0;
   unsigned sym_stdin_len = 0;
   int sym_stdout_flag = 0;
+  char sym_pmem_filename[128] = {0};//max file length
   int save_all_writes_flag = 0;
   int fd_fail = 0;
   char **final_argv;
@@ -112,6 +114,7 @@ usage: (klee_init_env) [options] [program arguments]\n\
                               each with size N\n\
   -sym-stdin <N>            - Make stdin symbolic with size N.\n\
   -sym-stdout               - Make stdout symbolic.\n\
+  -sym-pmem <FILE>          - Provide a symbolic persistent memory file.\n\
   -save-all-writes          - Allow write operations to execute as expected\n\
                               even if they exceed the file size. If set to 0, all\n\
                               writes exceeding the initial file size are discarded.\n\
@@ -197,7 +200,13 @@ usage: (klee_init_env) [options] [program arguments]\n\
         __emit_error(msg);
 
       sym_stdin_len = __str_to_int(argv[k++], msg);
-    } else if (__streq(argv[k], "--sym-stdout") ||
+    } else if (__streq(argv[k], "--sym-pmem") ||
+				__streq(argv[k], "-sym-pmem")) {
+		const char *msg = "--sym-pmem expects one string argument <sym-pmem-filename>";
+		if (++k == argc)
+			__emit_error(msg);
+		strncpy(sym_pmem_filename, argv[k++], sizeof(sym_pmem_filename));
+	} else if (__streq(argv[k], "--sym-stdout") ||
                __streq(argv[k], "-sym-stdout")) {
       sym_stdout_flag = 1;
       k++;
@@ -232,7 +241,7 @@ usage: (klee_init_env) [options] [program arguments]\n\
   *argvPtr = final_argv;
 
   klee_init_fds(sym_files, sym_file_len, sym_stdin_len, sym_stdout_flag,
-                save_all_writes_flag, fd_fail);
+                save_all_writes_flag, fd_fail, sym_pmem_filename);
 }
 
 /* The following function represents the main function of the user application

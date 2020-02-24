@@ -40,7 +40,7 @@ static exe_disk_file_t *__get_sym_file(const char *pathname) {
 
   /* Handle potential persistent memory files first */
   // FIXME: switch to using command line argument for file
-  int isPmemFile = !strcmp(pathname, "data");
+  int isPmemFile = !strcmp(pathname, __exe_fs.sym_pmem_filename);
   if (isPmemFile) {
 	  exe_disk_file_t *df = __exe_fs.sym_pmem;
 	  if (!df || df->stat->st_ino == 0) {
@@ -199,7 +199,7 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
     /* Special case Persistent-Memory handling */
   // FIXME: utilize command line arguments in klee_init_env to determine actual
   // file to be used for persistent memory-mapping
-  int isPmemFile = !strcmp(pathname, "data");
+  int isPmemFile = !strcmp(pathname, __exe_fs.sym_pmem_filename);
   if (isPmemFile) {
 	  printf("Open called for pmem file; creating sym-file\n");
 	  // stealing this code from fd_init.c:klee_init_fds
