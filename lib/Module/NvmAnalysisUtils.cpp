@@ -4,16 +4,16 @@ using namespace klee;
 using namespace llvm;
 using namespace std;
 
-bool utils::checkInlineAsmEq(const Instruction &i...) {
+bool utils::checkInlineAsmEq(const Instruction *i...) {
     va_list args;
     va_start(args, i);
 
     const InlineAsm *ia = nullptr;
 
-    if (i.getOpcode() == Instruction::Call) {
-        const CallInst &ci = static_cast<const CallInst&>(i);
-        if (ci.isInlineAsm()) {
-            ia = static_cast<InlineAsm*>(ci.getCalledValue());
+    if (i->getOpcode() == Instruction::Call) {
+        const CallInst *ci = static_cast<const CallInst*>(i);
+        if (ci->isInlineAsm()) {
+            ia = static_cast<InlineAsm*>(ci->getCalledValue());
         }
     }
 
@@ -30,17 +30,17 @@ bool utils::checkInlineAsmEq(const Instruction &i...) {
     return false;
 }
 
-bool utils::checkInstrinicInst(const Instruction &i...) {
+bool utils::checkInstrinicInst(const Instruction *i...) {
     va_list args;
     va_start(args, i);
 
     const Function *fn = nullptr;
 
-    if (i.getOpcode() == Instruction::Call) {
-        const CallInst &ci = static_cast<const CallInst&>(i);
-        if (ci.getIntrinsicID() != Intrinsic::not_intrinsic) {
-            const IntrinsicInst &ii = static_cast<const IntrinsicInst&>(i);
-            fn = ii.getCalledFunction();
+    if (i->getOpcode() == Instruction::Call) {
+        const CallInst *ci = static_cast<const CallInst*>(i);
+        if (ci->getIntrinsicID() != Intrinsic::not_intrinsic) {
+            const IntrinsicInst *ii = static_cast<const IntrinsicInst*>(i);
+            fn = ii->getCalledFunction();
         }
     }
 
@@ -58,17 +58,17 @@ bool utils::checkInstrinicInst(const Instruction &i...) {
 }
 
 bool utils::isFlush(const Instruction &i) {
-    return checkInstrinicInst(i,
+    return checkInstrinicInst(&i,
                               "clflush",
                               "clwb",
                               nullptr) ||
-           utils::checkInlineAsmEq(i,
+           utils::checkInlineAsmEq(&i,
                    ".byte 0x66; clflush $0",
                    ".byte 0x66; xsaveopt $0", nullptr);
 }
 
 bool utils::isFence(const Instruction &i) {
-    return checkInstrinicInst(i, "sfence", nullptr);
+    return checkInstrinicInst(&i, "sfence", nullptr);
 }
 
 Value* utils::getPtrLoc(Value *v) {
@@ -172,7 +172,7 @@ list<const Function*> utils::getNestedFunctionCalls(const BasicBlock *bb) {
 }
 
 Value* utils::getNvmPtrLocFromAnno(const Instruction &i) {
-  if (!utils::checkInstrinicInst(i, "annotation", nullptr)) {
+  if (!utils::checkInstrinicInst(&i, "annotation", nullptr)) {
       return nullptr;
   }
 

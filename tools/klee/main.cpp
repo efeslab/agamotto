@@ -25,6 +25,8 @@
 #include "klee/Solver/SolverCmdLine.h"
 #include "klee/Statistics.h"
 
+#include "../../lib/Core/UserSearcher.h"
+
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstrTypes.h"
@@ -61,7 +63,6 @@
 #include <iomanip>
 #include <iterator>
 #include <sstream>
-
 
 using namespace llvm;
 using namespace klee;
@@ -137,7 +138,7 @@ namespace {
   RunInDir("run-in-dir",
            cl::desc("Change to the given directory before starting execution (default=location of tested file)."),
            cl::cat(StartCat));
-  
+
   cl::opt<std::string>
   OutputDir("output-dir",
             cl::desc("Directory in which to write results (default=klee-out-<N>)"),
@@ -159,7 +160,7 @@ namespace {
   WarnAllExternals("warn-all-external-symbols",
                    cl::desc("Issue a warning on startup for all external symbols (default=false)."),
                    cl::cat(StartCat));
-  
+
 
   /*** Linking options ***/
 
@@ -214,7 +215,39 @@ namespace {
                  cl::init(true),
                  cl::cat(ChecksCat));
 
+  // -- NVM options begin
+  enum class NvmCheckType { None, CoverageOnly, Debug };
 
+  cl::opt<NvmCheckType>
+  NvmCheck("nvm-check-type",
+       cl::desc("Choose how to check persistent memory (PM) (full by default)."),
+       cl::values(
+                  clEnumValN(NvmCheckType::None,
+                             "none",
+                             "Don't do any persistent memory checks (run KLEE normally)"),
+                  clEnumValN(NvmCheckType::CoverageOnly,
+                             "coverage-only",
+                             "Don't attempt to catch any bugs, but track coverage statistics about basic blocks that are relevant to PM"),
+                  clEnumValN(NvmCheckType::Debug, "full",
+                             "Check for PM bugs and track coverage statistics. Search strategy is selected in a separate option.")
+                  KLEE_LLVM_CL_VAL_END),
+       cl::init(NvmCheckType::Debug),
+       cl::cat(ChecksCat));
+
+  cl::alias PmCheck("pm-check-type",
+                    cl::desc("Alias for nvm-check-type"),
+                    cl::NotHidden,
+                    cl::aliasopt(NvmCheck),
+                    cl::cat(ChecksCat));
+
+  bool clOptEnableNvmInfo() {
+    return NvmCheck != NvmCheckType::None;
+  }
+
+  bool clOptCheckNvm() {
+    return NvmCheck == NvmCheckType::Debug;
+  }
+  // -- NVM options end
 
   cl::opt<bool>
   OptExitOnError("exit-on-error",
@@ -222,12 +255,11 @@ namespace {
                  cl::init(false),
                  cl::cat(TerminationCat));
 
-
   /*** Replaying options ***/
-  
+
   cl::OptionCategory ReplayCat("Replaying options",
                                "These options impact replaying of test cases.");
-  
+
   cl::opt<bool>
   ReplayKeepSymbolic("replay-keep-symbolic",
                      cl::desc("Replay the test cases only by asserting "
@@ -311,6 +343,7 @@ private:
   unsigned m_pathsCutEndTrace; // number of paths ended early and had interesting blocks.
   unsigned m_pathsCutUninteresting; // number of paths terminated because they added nothing.
   bool m_outputNvm;
+  double m_nvmCoverage = -1.0;
 
   // used for writing .ktest files
   int m_argc;
@@ -326,9 +359,11 @@ public:
   unsigned getNumPathsExplored() { return m_pathsExplored; }
   unsigned getNumPathsCutEndTrace() { return m_pathsCutEndTrace; }
   unsigned getNumPathsCutUninteresting() { return m_pathsCutUninteresting; }
+  double getNvmCoverage() { return m_nvmCoverage; }
 
   void setNvm() { m_outputNvm = true; }
   bool outputNvm() { return m_outputNvm; }
+  void setNvmCoverage(double ratio) { m_nvmCoverage = ratio; }
 
   void incPathsExplored() { m_pathsExplored++; }
   void incPathsCutEndTrace() { m_pathsCutEndTrace++; }
@@ -1257,10 +1292,14 @@ int main(int argc, char **argv, char **envp) {
   loadedModules.emplace_back(std::move(M));
 
   std::string LibraryDir = KleeHandler::getRunTimeLibraryPath(argv[0]);
+  std::string LibcMainFunction = Libc == LibcType::UcLibc ? "__uClibc_main" : "";
   Interpreter::ModuleOptions Opts(LibraryDir.c_str(), EntryPoint,
+                                  /*LibcMainFunction=*/LibcMainFunction,
                                   /*Optimize=*/OptimizeModule,
                                   /*CheckDivZero=*/CheckDivZero,
-                                  /*CheckOvershift=*/CheckOvershift);
+                                  /*CheckOvershift=*/CheckOvershift,
+                                  /*EnableNvmInfo=*/clOptEnableNvmInfo(),
+                                  /*CheckNvm=*/clOptCheckNvm());
 
   if (WithPOSIXRuntime) {
     SmallString<128> Path(Opts.LibraryDir);
@@ -1565,9 +1604,15 @@ int main(int argc, char **argv, char **envp) {
         << handler->getNumPathsExplored() << "\n";
   if (handler->outputNvm()) {
     stats << "\tKLEE-NVM: done: paths terminated (uninteresting, no tests) = "
-          << handler->getNumPathsCutUninteresting() << "\n";
+          << *theStatisticManager->getStatisticByName("NvmHeuristicStatesKilledIrrelevant") << "\n";
     stats << "\tKLEE-NVM: done: paths terminated (after last relevant block, gen tests) = "
-          << handler->getNumPathsCutEndTrace() << "\n";
+          << *theStatisticManager->getStatisticByName("NvmHeuristicStatesKilledEndTrace") << "\n";
+  }
+  if (handler->getNvmCoverage() >= 0.0) {
+    char tmp[101];
+    snprintf(tmp, 100, "\tKLEE-NVM: important basic block coverage = %3d%%\n",
+        (int)(handler->getNvmCoverage() * 100.0));
+    stats << tmp;
   }
   stats << "KLEE: done: generated tests = "
         << handler->getNumTestCases() << "\n";

@@ -137,7 +137,15 @@ void NvmFunctionCallInfo::computeFactors() {
     imp_factor_[i->getParent()]++;
   }
 
+  for (const auto &p : imp_factor_) {
+    if (p.second) {
+      imp_bbs_.insert(p.first);
+    }
+  }
+
   // Nested Factor.
+  // -- To track nested basic blocks.
+  std::unordered_set<const NvmFunctionCallInfo*> nested_call_info;
   // -- Initial value is that of the importance factor.
   imp_nested_.insert(imp_factor_.begin(), imp_factor_.end());
   // -- Add up the nested calls.
@@ -153,6 +161,7 @@ void NvmFunctionCallInfo::computeFactors() {
 
     NvmFunctionCallDesc nested_desc(cfn, args);
     const NvmFunctionCallInfo *nci = parent_->get(nested_desc, blacklist_);
+    nested_call_info.insert(nci);
     if (nci) {
       // If we were able to resolve the nested call, increment the block that
       // contains this instruction.
@@ -160,6 +169,15 @@ void NvmFunctionCallInfo::computeFactors() {
       imp_nested_[bb] += nci->getMagnitude();
     }
   }
+
+  // for (const auto &p : imp_nested_) {
+  //   if (p.second) {
+  //     imp_bbs_.insert(p.first);
+  //   }
+  // }
+  // for (const NvmFunctionCallInfo *n : nested_call_info) {
+  //   imp_bbs_.insert(n->imp_bbs_.begin(), n->imp_bbs_.end());
+  // }
 
   // Successor factor.
   // -- Now, we just start at the beginning and recurse our way down.
@@ -178,8 +196,8 @@ void NvmFunctionCallInfo::dumpInfo() const {
     errs() << i << ", ";
   }
   errs() << "> as NVM pointers and " << nvm_ptrs_.size()
-    << " overall NVM pointer" << (nvm_ptrs_.size() > 1 ? "s" : "") <<
-    "has a magnitude of " << magnitude_ << "\n";
+    << " NVM pointer" << (nvm_ptrs_.size() == 1 ? "" : "s") <<
+    " has a magnitude of " << magnitude_ << "\n";
 
   for (const auto &p : imp_factor_) {
     errs() << "\t (IMP FACTOR) BB " << p.first << " => " << p.second << "\n";
@@ -197,7 +215,8 @@ size_t NvmFunctionCallInfo::getSuccessorFactor(const BasicBlock *bb) const {
 }
 
 size_t NvmFunctionCallInfo::getImportanceFactor(const llvm::BasicBlock *bb) const {
-  return imp_nested_.at(bb);
+  // It's okay for this to default to 0.
+  return imp_factor_[bb];
 }
 
 unordered_set<unsigned> NvmFunctionCallInfo::queryNvmArgs(const CallInst *ci) const {
@@ -227,6 +246,27 @@ const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d) {
   return get(d, bl);
 }
 
+void NvmFunctionInfo::setRoot(const NvmFunctionCallDesc &desc) {
+  root_ = desc;
+  (void)get(root_);
+  // Now do the interesting BB calculation
+  for (const auto &t : fn_info_) {
+    const auto &s = t.second->getAllInterestingBB();
+    allBBs.insert(s.begin(), s.end());
+  }
+}
+
+double NvmFunctionInfo::computeCoverageRatio(const unordered_set<const BasicBlock*> &covered) {
+  // Sanity check
+  unordered_set<const BasicBlock*> res(covered);
+  const auto &all = get(root_)->getAllInterestingBB();
+  res.insert(all.begin(), all.end());
+  // Checks that nothing in covered is not in all.
+  assert(res == all);
+
+  return ((double)covered.size()) / ((double)all.size());
+}
+
 const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d,
     const unordered_set<const Function*> &bl) {
 
@@ -240,9 +280,11 @@ const NvmFunctionCallInfo* NvmFunctionInfo::get(const NvmFunctionCallDesc &d,
 }
 
 void NvmFunctionInfo::dumpAllInfo() const {
+  errs() << "----- dumpAllInfo -----\n";
   for (const auto &t : fn_info_) {
     t.second->dumpInfo();
   }
+  errs() << "----- +++++++++++ -----\n";
 }
 
 unordered_set<unsigned> NvmFunctionInfo::getNvmArgs(const NvmFunctionCallDesc& caller,

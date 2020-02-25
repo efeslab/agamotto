@@ -1161,11 +1161,16 @@ int unlink(const char *pathname) {
       errno = EPERM;
       return -1;
     }
+  } else {
+    // (iangneal): call OS unlink
+    const char *concrete = __concretize_string(pathname);
+    klee_warning("calling concrete unlink");
+    klee_warning(concrete);
+    return syscall(__NR_unlink, concrete);
   }
-
-  klee_warning("ignoring (EPERM)");
-  errno = EPERM;
-  return -1;
+  // klee_warning("ignoring (EPERM)");
+  // errno = EPERM;
+  // return -1;
 }
 
 int unlinkat(int dirfd, const char *pathname, int flags) {
@@ -1396,4 +1401,30 @@ int chroot(const char *path) {
   klee_warning("ignoring (ENOENT)");
   errno = ENOENT;
   return -1;
+}
+
+// (iangneal): needed by PMDK
+// Essentially, if it uses a file descriptor, we need to intercept it in this
+// layer, so we can translate it.
+void klee_error(const char*);
+
+int fallocate(int fd, int mode, off_t offset, off_t len) {
+  exe_file_t *f = __get_file(fd);
+  if (!f) {
+    errno = EBADF;
+    return -1;
+  }
+
+  if (f->dfile) {
+    klee_error("iangneal: mmap not supported for symbolic files!");
+    errno = ENOTSUP;
+    return -1;
+  }
+
+  return syscall(__NR_fallocate, f->fd, mode, offset, len);
+}
+
+
+int posix_fallocate(int fd, off_t offset, off_t len) {
+  return fallocate(fd, 0, offset, len);
 }

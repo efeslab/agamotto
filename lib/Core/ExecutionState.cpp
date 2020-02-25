@@ -16,6 +16,7 @@
 #include "klee/Internal/Module/InstructionInfoTable.h"
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
+#include "klee/Internal/Support/ErrorHandling.h"
 #include "klee/OptionCategories.h"
 
 #include "llvm/IR/Function.h"
@@ -46,15 +47,17 @@ cl::opt<bool> DebugLogStateMerge(
 /***/
 
 StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
-  : caller(_caller), kf(_kf), callPathNode(0), 
+  : caller(_caller), kf(_kf), callPathNode(0),
     minDistToUncoveredOnReturn(0), varargs(0) {
   locals = new Cell[kf->numRegisters];
 }
 
-StackFrame::StackFrame(const StackFrame &s) 
+StackFrame::StackFrame(const StackFrame &s)
   : caller(s.caller),
     kf(s.kf),
     callPathNode(s.callPathNode),
+    nvmArgs(s.nvmArgs),
+    nvmDesc(s.nvmDesc),
     allocas(s.allocas),
     minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn),
     varargs(s.varargs) {
@@ -63,8 +66,8 @@ StackFrame::StackFrame(const StackFrame &s)
     locals[i] = s.locals[i];
 }
 
-StackFrame::~StackFrame() { 
-  delete[] locals; 
+StackFrame::~StackFrame() {
+  delete[] locals;
 }
 
 /***/
@@ -149,23 +152,19 @@ ExecutionState *ExecutionState::branch() {
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf,
     const NvmFunctionInfo &nvmInfo) {
+  // klee_warning("NVM push frame!");
   StackFrame new_frame(caller, kf);
   const CallInst *ci = dyn_cast<CallInst>(caller->inst);
   if (!stack.empty() && ci) {
     new_frame.nvmArgs = nvmInfo.getNvmArgs(stack.back().nvmDesc, ci);
   }
-  //errs() << "--- " << this << " - pushFrame ";
-  //errs() << kf << "->" << kf->function << "->" << kf->function->getName() << "\n";
   new_frame.nvmDesc = NvmFunctionCallDesc(kf->function, new_frame.nvmArgs);
-  //errs() << "\t---\n";
-  //new_frame.nvmDesc.dumpInfo();
 
   stack.push_back(new_frame);
-  //stack.back().nvmDesc.dumpInfo();
-  //errs() << "\t---\n";
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {
+  // klee_warning("Regular push frame!");
   stack.emplace_back(caller, kf);
 }
 
@@ -224,7 +223,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
   }
 
   std::set< ref<Expr> > aConstraints(constraints.begin(), constraints.end());
-  std::set< ref<Expr> > bConstraints(b.constraints.begin(), 
+  std::set< ref<Expr> > bConstraints(b.constraints.begin(),
                                      b.constraints.end());
   std::set< ref<Expr> > commonConstraints, aSuffix, bSuffix;
   std::set_intersection(aConstraints.begin(), aConstraints.end(),
@@ -259,7 +258,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
 
   // We cannot merge if addresses would resolve differently in the
   // states. This means:
-  // 
+  //
   // 1. Any objects created since the branch in either object must
   // have been free'd.
   //
@@ -271,7 +270,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
     llvm::errs() << "A: " << addressSpace.objects << "\n";
     llvm::errs() << "B: " << b.addressSpace.objects << "\n";
   }
-    
+
   std::set<const MemoryObject*> mutated;
   MemoryMap::iterator ai = addressSpace.objects.begin();
   MemoryMap::iterator bi = b.addressSpace.objects.begin();
@@ -299,15 +298,15 @@ bool ExecutionState::merge(const ExecutionState &b) {
       llvm::errs() << "\t\tmappings differ\n";
     return false;
   }
-  
+
   // merge stack
 
   ref<Expr> inA = ConstantExpr::alloc(1, Expr::Bool);
   ref<Expr> inB = ConstantExpr::alloc(1, Expr::Bool);
-  for (std::set< ref<Expr> >::iterator it = aSuffix.begin(), 
+  for (std::set< ref<Expr> >::iterator it = aSuffix.begin(),
          ie = aSuffix.end(); it != ie; ++it)
     inA = AndExpr::create(inA, *it);
-  for (std::set< ref<Expr> >::iterator it = bSuffix.begin(), 
+  for (std::set< ref<Expr> >::iterator it = bSuffix.begin(),
          ie = bSuffix.end(); it != ie; ++it)
     inB = AndExpr::create(inB, *it);
 
@@ -332,12 +331,12 @@ bool ExecutionState::merge(const ExecutionState &b) {
     }
   }
 
-  for (std::set<const MemoryObject*>::iterator it = mutated.begin(), 
+  for (std::set<const MemoryObject*>::iterator it = mutated.begin(),
          ie = mutated.end(); it != ie; ++it) {
     const MemoryObject *mo = *it;
     const ObjectState *os = addressSpace.findObject(mo);
     const ObjectState *otherOS = b.addressSpace.findObject(mo);
-    assert(os && !os->readOnly && 
+    assert(os && !os->readOnly &&
            "objects mutated but not writable in merging state");
     assert(otherOS);
 
@@ -350,7 +349,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
   }
 
   constraints = ConstraintManager();
-  for (std::set< ref<Expr> >::iterator it = commonConstraints.begin(), 
+  for (std::set< ref<Expr> >::iterator it = commonConstraints.begin(),
          ie = commonConstraints.end(); it != ie; ++it)
     constraints.addConstraint(*it);
   constraints.addConstraint(OrExpr::create(inA, inB));

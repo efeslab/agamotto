@@ -10,6 +10,7 @@
 #ifdef __FreeBSD__
 #include "FreeBSD.h"
 #endif
+#include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>
@@ -29,11 +30,25 @@
 #include <sys/times.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/syscall.h>
 
+#include "klee/klee.h"
 #include "klee/Config/config.h"
+#include "fd.h"
 
 void klee_warning(const char*);
 void klee_warning_once(const char*);
+void klee_error(const char*);
+
+static exe_file_t *__get_file(int fd) {
+  if (fd>=0 && fd<MAX_FDS) {
+    exe_file_t *f = &__exe_env.fds[fd];
+    if (f->flags & eOpen)
+      return f;
+  }
+
+  return 0;
+}
 
 /* Silent ignore */
 
@@ -588,23 +603,130 @@ ssize_t readahead(int fd, off64_t *offset, size_t count) {
   return -1;
 }
 
+// int flock(int fd, int operation) __attribute__((weak));
+// int flock(int fd, int operation) {
+//   klee_warning("ignoring (SUCCESS)");
+//   errno = 0;
+//   return 0;
+// }
+
+/*** Helper functions ***/#include "klee/klee.h"
+
+static void *__concretize_ptr(const void *p) {
+  /* XXX 32-bit assumption */
+  char *pc = (char*) klee_get_valuel((long) p);
+  klee_assume(pc == p);
+  return pc;
+}
+
+static size_t __concretize_size(size_t s) {
+  size_t sc = klee_get_valuel((long)s);
+  klee_assume(sc == s);
+  return sc;
+}
+
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) __attribute__((weak));
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) {
-  klee_warning("ignoring (EPERM)");
-  errno = EPERM;
-  return (void*) -1;
+  // klee_warning("ignoring (EPERM)");
+  // errno = EPERM;
+  // return (void*) -1;
+  char msg[4096];
+  memset(msg, 0, 4096);
+
+  int actual_fd = fd;
+  size_t actual_size = __concretize_size(length);
+
+  if (!(flags & MAP_ANONYMOUS)) {
+    exe_file_t *f = __get_file(fd);
+    if (!f) {
+      errno = EBADF;
+      return (void*)-1;
+    }
+
+    if (f->dfile) {
+      klee_error("iangneal: mmap not supported for symbolic files!");
+      errno = ENOTSUP;
+      return (void*)-1;
+    }
+
+    actual_fd = f->fd;
+
+    struct stat64 stat;
+    int err = __fd_fstat(fd, &stat);
+    if (err) {
+      snprintf(msg, 4096, "mmap fstat failed! ret=%d, errno=%d (%s)", err, errno, strerror(errno));
+      klee_error(msg);
+      return (void*)-1;
+    }
+
+    actual_size = stat.st_size;
+  }
+
+  void* ret = (void*)syscall(__NR_mmap, start, length, prot, flags, actual_fd, offset);
+  snprintf(msg, 4096, "(start=%p, length=%lu/%lu, prot=%d, flags=%d, fd=%d, offset=%ld) => %p (%lu)",
+           start, length, actual_size, prot, flags, fd, offset, ret, (unsigned long)ret);
+  klee_warning(msg);
+
+  if (ret != MAP_FAILED) {
+    // Do this in page sizes to make unmap easier
+    size_t pgsz = (size_t)getpagesize();
+    for (void *addr = ret; addr < ret + length; addr += pgsz) {
+      klee_define_fixed_object_from_existing(addr, pgsz);
+      // if (actual_fd >= 0 && !memcmp(addr, zeros, pgsz)) klee_warning("mmap-ed page is 0!");
+      if (actual_fd >= 0) {
+        snprintf(msg, 4096, "pmem-%d_page-%lu", fd, ((size_t)(addr - ret)) / pgsz);
+        klee_pmem_mark_persistent(addr, pgsz, msg);
+
+        // for (size_t cl = 0; cl < pgsz; cl += 64) {
+        //   _mm_clflush(addr + cl);
+        // }
+      }
+    }
+    
+    // klee_make_symbolic(ret, length, msg);
+  }
+
+  return ret;
 }
 
 void *mmap64(void *start, size_t length, int prot, int flags, int fd, off64_t offset) __attribute__((weak));
 void *mmap64(void *start, size_t length, int prot, int flags, int fd, off64_t offset) {
-  klee_warning("ignoring (EPERM)");
-  errno = EPERM;
-  return (void*) -1;
+  // klee_warning("ignoring (EPERM)");
+  // errno = EPERM;
+  // return (void*) -1;
+  klee_warning_once("iangneal: implementing mmap64 as mmap");
+  return mmap(start, length, prot, flags, fd, offset);
 }
 
-int munmap(void*start, size_t length) __attribute__((weak));
-int munmap(void*start, size_t length) {
-  klee_warning("ignoring (EPERM)");
-  errno = EPERM;
-  return -1;
+int munmap(void *start, size_t length) __attribute__((weak));
+int munmap(void *start, size_t length) {
+  // klee_warning("ignoring (EPERM)");
+  // errno = EPERM;
+  // return -1;
+  char msg[4096];
+  snprintf(msg, 4096, "munmap(start=%p, length=%lu)", start, length);
+  klee_warning(msg);
+
+  size_t pgsz = (size_t)getpagesize();
+  for (void *addr = start; addr < start + length; addr += pgsz) {
+    if (addr == start) {
+      snprintf(msg, 4096, "\tundef(addr=%p, length=%lu)", addr, pgsz);
+      klee_warning(msg);
+    }
+
+    klee_pmem_check_persisted(addr, pgsz);
+    klee_undefine_fixed_object(addr);
+  }
+
+  return syscall(__NR_munmap, start, length);
+}
+
+char *secure_getenv(const char *name) {
+  klee_warning_once("iangneal: secure_getenv returns bad strings, emulating with regular getenv.");
+  return getenv(name);
+}
+
+int flock(int fd, int operation) __attribute__((weak));
+int flock(int fd, int operation) {
+  return 0;
 }

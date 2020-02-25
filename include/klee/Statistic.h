@@ -56,10 +56,17 @@ namespace klee {
     operator uint64_t () const { return getValue(); }
 
     /// operator++ - Increment the statistic by 1.
+    /// -- prefix
     Statistic &operator ++() { return (*this += 1); }
+    /// -- postfix
+    Statistic operator ++(int) { return (*this += 1); }
 
     /// operator+= - Increment the statistic by \arg addend.
     Statistic &operator +=(const uint64_t addend);
+
+    /// operator+ - Adding together stats.
+    uint64_t operator +(const Statistic &s) { return getValue() + s.getValue(); }
+    uint64_t operator +(uint64_t i) { return getValue() + i; }
   };
 }
 

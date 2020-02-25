@@ -76,6 +76,10 @@ namespace klee {
       }
 
       void dumpInfo() const;
+
+      bool isValid() const { return nullptr != fn_; }
+
+      operator bool() const { return isValid(); }
   };
 
   /**
@@ -107,7 +111,8 @@ namespace klee {
 
       // Numbers for our factors.
       // -- "Importance factor": The number of modifiers in a single basic block.
-      std::unordered_map<const llvm::BasicBlock*, size_t> imp_factor_;
+      // -- Made mutable so we can return default 0 if asked for something with 0 importance.
+      mutable std::unordered_map<const llvm::BasicBlock*, size_t> imp_factor_;
       // -- "Nested factor": An intermediate calculation which adds in the
       // nested call's magnitude.
       std::unordered_map<const llvm::BasicBlock*, size_t> imp_nested_;
@@ -120,6 +125,9 @@ namespace klee {
       // calculation is a way of caching for other functions which may use this
       // function as a nested call.
       size_t magnitude_;
+
+      // The set of basic blocks which have a non-zero nested importance factor.
+      std::unordered_set<const llvm::BasicBlock*> imp_bbs_;
 
       /**
        * 1. Get the NVM pointers and pointer locations that are explicitly
@@ -168,6 +176,13 @@ namespace klee {
        */
       std::unordered_set<unsigned> queryNvmArgs(const llvm::CallInst*) const;
 
+      /**
+       * Gives a reference to the basic blocks which are interesting.
+       */
+      const std::unordered_set<const llvm::BasicBlock*> &getAllInterestingBB() const {
+        return imp_bbs_;
+      }
+
       void dumpInfo() const;
   };
 
@@ -176,8 +191,15 @@ namespace klee {
       std::unordered_map<NvmFunctionCallDesc,
                          std::shared_ptr<NvmFunctionCallInfo>,
                          NvmFunctionCallDesc::HashFn> fn_info_;
+
+      NvmFunctionCallDesc root_;
+
+      std::unordered_set<const llvm::BasicBlock*> allBBs;
+
     public:
       NvmFunctionInfo() = default;
+
+      void setRoot(const NvmFunctionCallDesc &desc);
 
       const NvmFunctionCallInfo* get(const NvmFunctionCallDesc&);
       // With a blacklist to prevent recursion.
@@ -185,6 +207,14 @@ namespace klee {
           const std::unordered_set<const llvm::Function*>&);
 
       const NvmFunctionCallInfo* findInfo(const NvmFunctionCallDesc&);
+
+      const std::unordered_set<const llvm::BasicBlock*> &getAllInterestingBB() const {
+        return allBBs;
+      }
+
+      // Compute the ratio of coverage of interesting basic blocks and perform
+      // a basic sanity check
+      double computeCoverageRatio(const std::unordered_set<const llvm::BasicBlock*>&);
 
       /**
        * Given the function call description of the function calling the "call"
@@ -196,6 +226,11 @@ namespace klee {
 
       void dumpAllInfo() const;
 
+      /**
+       * Check if we've been constructed yet.
+       */
+      bool isValid() const { return root_.isValid(); }
+      operator bool() const { return isValid(); }
   };
 }
 #endif //__NVM_FUNCTION_INFO_H__
