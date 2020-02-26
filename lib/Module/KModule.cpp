@@ -293,8 +293,9 @@ void KModule::instrument(const Interpreter::ModuleOptions &opts) {
   // to do everything beforehand.
   if (opts.EnableNvmInfo) {
     // (iangneal) The "add" function will destroy the pass for us.
-    klee_message("Running NvmAnalysisPass.");
-    pm.add(new NvmAnalysisPass(&nvmInfo));
+    // klee_message("Running NvmAnalysisPass.");
+    // pm.add(new NvmAnalysisPass(&nvmInfo));
+    klee_warning_once(0, "We are no longer using the static NvmAnalysisPass.");
   }
 
   pm.add(new RaiseAsmPass());
@@ -362,6 +363,13 @@ void KModule::optimiseAndPrepare(
   pm3.add(new IntrinsicCleanerPass(*targetData));
   pm3.add(new PhiCleanerPass());
   pm3.add(new FunctionAliasPass());
+
+  if (opts.EnableNvmInfo) {
+    klee_warning("NVM info requires isolating call instructions to separate "
+                 "basic blocks. Adding block-splitting pass...");
+    pm3.add(new IsolateCallInstsPass());
+  }
+
   pm3.run(*module);
 }
 
@@ -433,8 +441,12 @@ void KModule::checkModule() {
       new InstructionOperandTypeCheckPass();
 
   legacy::PassManager pm;
-  if (!DontVerify)
+  if (!DontVerify) {
+    klee_message("Creating verifier pass because DontVerify=False");
     pm.add(createVerifierPass());
+  } else {
+    klee_warning("Skipping verification!");
+  }
   pm.add(operandTypeCheckPass);
   pm.run(*module);
 

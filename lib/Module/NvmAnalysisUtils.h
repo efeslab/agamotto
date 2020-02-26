@@ -61,15 +61,19 @@ namespace utils {
 
   /** Returns true if any instruction represents a cache-flushing instruction.
    *
-   * TODO generalize for non-x86-based systems.
+   * TODO: generalize for non-x86-based systems.
    */
   bool isFlush(const llvm::Instruction &i);
 
   /** Returns true if any instruction represents a store-fencing instruction.
    *
-   * TODO generalize for non-x86-based systems.
+   * TODO: generalize for non-x86-based systems.
    */
   bool isFence(const llvm::Instruction &i);
+
+  /**
+   * If the given instruction is a call to mmap, we will 
+  llvm::Value *getMmapResult(const llvm::Instruction *i);
 
   /** For a pointer of type T*, find where the pointer is stored, aka a value
    * of type T**.

@@ -26,6 +26,7 @@
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/GlobalVariable.h"
 
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Format.h"
@@ -58,21 +59,26 @@ namespace klee {
     private:
       const llvm::Function *fn_;
       std::unordered_set<unsigned> nvm_args_;
+      std::unordered_set<llvm::GlobalVariable*> nvm_globals_;
     public:
       NvmFunctionCallDesc();
       NvmFunctionCallDesc(const llvm::Function*);
-      NvmFunctionCallDesc(const llvm::Function*, const std::unordered_set<unsigned>&);
+      NvmFunctionCallDesc(const llvm::Function*, 
+                          const std::unordered_set<unsigned>&);
+      NvmFunctionCallDesc(const llvm::Function*, 
+                          const std::unordered_set<unsigned>&,
+                          const std::unordered_set<llvm::GlobalVariable*>&);
 
       const llvm::Function* Fn() const { return fn_; }
-
-      const std::unordered_set<unsigned>& NvmArgs() const { return nvm_args_; };
+      const std::unordered_set<unsigned>& NvmArgs() const { return nvm_args_; }
+      const std::unordered_set<llvm::GlobalVariable*>& NvmGlobals() const { return nvm_globals_; }
 
       struct HashFn : public std::unary_function<NvmFunctionCallDesc, size_t> {
         size_t operator()(const NvmFunctionCallDesc&) const;
       };
 
       friend bool operator==(const NvmFunctionCallDesc &rhs, const NvmFunctionCallDesc &lhs) {
-        return rhs.Fn() == lhs.Fn() && rhs.NvmArgs() == lhs.NvmArgs();
+        return rhs.Fn() == lhs.Fn() && rhs.NvmArgs() == lhs.NvmArgs() && rhs.NvmGlobals() == lhs.NvmGlobals();
       }
 
       void dumpInfo() const;
@@ -96,6 +102,7 @@ namespace klee {
       // The defining characteristics of this Function call.
       const llvm::Function *fn_;
       const std::unordered_set<unsigned> nvm_args_;
+      const std::unordered_set<llvm::GlobalVariable*> nvm_globals_;
       // -- We need a blacklist either for recursive calls or if, for some
       // reason, you had weird interdependent function calls.
       std::unordered_set<const llvm::Function*> blacklist_;
