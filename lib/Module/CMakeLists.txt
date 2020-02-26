@@ -12,6 +12,7 @@ set(KLEE_MODULE_COMPONENT_SRCS
   InstructionInfoTable.cpp
   InstructionOperandTypeCheckPass.cpp
   IntrinsicCleaner.cpp
+  IsolateCallInsts.cpp
   KInstruction.cpp
   KModule.cpp
   LowerSwitch.cpp

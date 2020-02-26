@@ -56,3 +56,5 @@ set(CTOR_SRC
     constructor_test.c
 )
 add_executable(000_Ctor ${CTOR_SRC})
+
+add_executable(000_Mmap mmap_heuristic_test.c)
