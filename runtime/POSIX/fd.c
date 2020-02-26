@@ -15,6 +15,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <malloc.h>
+#include <math.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -128,47 +129,38 @@ static int has_permission(int flags, struct stat64 *s) {
   gid_t egid = getegid();
 #endif  
 
-  if (read_access && ((mode & S_IRUSR) | (mode & S_IRGRP) | (mode & S_IROTH)))
+  if (read_access && !((mode & S_IRUSR) | (mode & S_IRGRP) | (mode & S_IROTH))) {
+    // klee_warning("No permission for read");
+    fprintf(stderr, "read access: %d, %o, %o\n", read_access, mode, S_IRUSR| S_IRGRP | S_IROTH);
     return 0;
+  }
 
-  if (write_access && !((mode & S_IWUSR) | (mode & S_IWGRP) | (mode & S_IWOTH)))
+  if (write_access && !((mode & S_IWUSR) | (mode & S_IWGRP) | (mode & S_IWOTH))) {
+    // klee_warning("No permission for write");
+    fprintf(stderr, "read access: %d, %o, %o\n", read_access, mode, S_IWUSR| S_IWGRP | S_IWOTH);
     return 0;
+  }
 
   return 1;
 }
 
+static int __concretize_int(int i) {
+  int c = klee_get_value_i32(i);
+  klee_assume(c == i);
+  return c;
+}
 
-// largely copied from fd_init.c:__create_new_dfile
-// biggest difference is not allocating the contents until the mmap later
-// return value: 0 means fine, non-zero means error
-static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
-                               const char *name, struct stat64 *defaults) {
-  struct stat64 *s = malloc(sizeof(*s));
-  const char *sp;
-  char sname[64];
-  for (sp=name; *sp; ++sp)
-    sname[sp-name] = *sp;
-  memcpy(&sname[sp-name], "-stat", 6);
+static void __setup_pmem_struct_stat(struct stat64 *s, exe_disk_file_t *dfile, struct stat64 *defaults, const char *sname) {
 
-  assert(size);
-  if (size % 4096 != 0) {
-    klee_error("pmem file size must be multiple of page size (4096)");
-    return -1;
-  }
-
-  dfile->size = size;
-  // FIXME: page aligned vs. cache aligned
-  dfile->contents = memalign(4096, dfile->size);
-  // FIXME: proper name, not just "data"
-  klee_pmem_mark_persistent(dfile->contents, dfile->size, "data");
-  
+  size_t pgsz = (size_t)getpagesize();
   // FIXME: what should stat64 actually be?
   klee_make_symbolic(s, sizeof(*s), sname);
 
   /* For broken tests */
-  if (!klee_is_symbolic(s->st_ino) && (s->st_ino & 0x7FFFFFFF) == 0)
-	s->st_ino = defaults->st_ino;
-  
+  if (!klee_is_symbolic(s->st_ino) && (s->st_ino & 0x7FFFFFFF) == 0) {
+    s->st_ino = defaults->st_ino;
+  }
+	
   /* Important since we copy this out through getdents, and readdir
      will otherwise skip this entry. For same reason need to make sure
      it fits in low bits. */
@@ -188,32 +180,109 @@ static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
   klee_prefer_cex(s, s->st_nlink == 1);
   klee_prefer_cex(s, s->st_uid == defaults->st_uid);
   klee_prefer_cex(s, s->st_gid == defaults->st_gid);
-  klee_prefer_cex(s, s->st_blksize == 4096);
+  klee_prefer_cex(s, s->st_blksize == pgsz);
   klee_prefer_cex(s, s->st_atime == defaults->st_atime);
   klee_prefer_cex(s, s->st_mtime == defaults->st_mtime);
   klee_prefer_cex(s, s->st_ctime == defaults->st_ctime);
 
-  /* s->st_dev == defaults->st_dev; */
-  /* s->st_rdev = defaults->st_rdev; */
-  /* s->st_mode = defaults->st_mode; */
-  /* s->st_nlink = 1; */
-  /* s->st_uid = defaults->st_uid; */
-  /* s->st_gid = defaults->st_gid; */
-  /* s->st_blksize=4096; */
-  /* s->st_atime = defaults->st_atime; */
-  /* s->st_mtime = defaults->st_mtime; */
-  /* s->st_ctime = defaults->st_ctime; */
+  if (__exe_fs.sym_pmem_delay_create) {
+    s->st_dev     = defaults->st_dev;
+    s->st_rdev    = defaults->st_rdev;
+    s->st_mode    = S_IFREG | 0644;
+    s->st_nlink   = 1;
+    s->st_uid     = defaults->st_uid;
+    s->st_gid     = defaults->st_gid;
+    s->st_blksize = pgsz;
+    s->st_atime   = defaults->st_atime;
+    s->st_mtime   = defaults->st_mtime;
+    s->st_ctime   = defaults->st_ctime;
+  }
 
-  s->st_size = dfile->size;
+  // We pretend that the file is of size 0.
+  if (__exe_fs.sym_pmem_delay_create) {
+    s->st_size = 0;
+  } else {
+    s->st_size = dfile->size;
+  }
   s->st_blocks = 8;
+}
+
+// largely copied from fd_init.c:__create_new_dfile
+// biggest difference is not allocating the contents until the mmap later
+// return value: 0 means fine, non-zero means error
+static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
+                               const char *name, struct stat64 *defaults) {
+  struct stat64 *s = malloc(sizeof(*s));
+  const char *sp;
+  char sname[64];
+  for (sp=name; *sp; ++sp)
+    sname[sp-name] = *sp;
+  memcpy(&sname[sp-name], "-stat", 6);
+  // snprintf(sname, 64, "%s-stat", name);
+
+  assert(size);
+  size_t pgsz = getpagesize();
+  if (size % pgsz != 0) {
+    klee_error("pmem file size must be multiple of page size (4096)");
+    return -1;
+  }
+
+  dfile->size = size;
+  // FIXME: page aligned vs. cache aligned
+  dfile->contents = memalign(pgsz, dfile->size);
+  if (__exe_fs.sym_pmem_init_concrete) {
+    if (__exe_fs.sym_pmem_init_to_zero) {
+      // memset(dfile->contents, 0, dfile->size);
+      klee_init_concrete_zero(dfile->contents, dfile->size);
+    } else {
+      klee_warning("Setting up from the concrete file!");
+      klee_set_forking(0);
+      int fd = syscall(__NR_open, __exe_fs.sym_pmem_init_from, O_RDONLY, 0);
+      assert(fd != -1);
+      // Confirm the region is the right size.
+      struct stat64 init_stat;
+      int sret = __concretize_int(syscall(__NR_fstat, fd, &init_stat));
+      assert(!sret);
+      assert(dfile->size == __concretize_size(init_stat.st_size) && "init-from-file needs to be the same size as the symbolic pmem file!");
+
+      // Now give this file the same metadata as the concrete one.
+      memcpy(s, &init_stat, sizeof(struct stat64));
+
+      size_t total_read = 0;
+      while (total_read < (size_t)dfile->size) {
+        // (iangneal) XXX: this is a hack as read expects a single memory object, 
+        // and memalign splits them into smaller memory objects. So, we just read 
+        // a page at a time. 
+        size_t toRead = __concretize_size((dfile->size - total_read) < pgsz ? dfile->size - total_read : pgsz);
+        ssize_t ret = __concretize_int(syscall(__NR_read, fd, __concretize_ptr(dfile->contents + total_read), toRead));
+        if (ret <= 0) {
+          fprintf(stderr, "read(%d, %p, %lu) for setup returned %ld, reason is %d (%s)\n", 
+                  fd, dfile->contents + toRead, toRead, ret, errno, strerror(errno));
+        }
+        assert(ret > 0);
+        total_read += ret;
+      }
+      klee_set_forking(1);
+      klee_warning("done!");
+    }
+  }
+  // FIXME: proper name, not just "data"
+  klee_pmem_mark_persistent(dfile->contents, dfile->size, "pmem_file_data");
+  
+  if (!__exe_fs.sym_pmem_init_concrete || __exe_fs.sym_pmem_init_to_zero) {
+    __setup_pmem_struct_stat(s, dfile, defaults, sname);
+  }
+  
   dfile->stat = s;
 
-  unsigned num_pages = dfile->size / 4096;
+  unsigned num_pages = dfile->size / pgsz;
   unsigned total_size = sizeof(unsigned)*num_pages;
   dfile->page_refs = malloc(total_size);
-  for (unsigned i = 0; i < num_pages; i++) {
+  unsigned i;
+  for (i = 0; i < num_pages; i++) {
     dfile->page_refs[i] = 0;
   }
+
   return 0;
 }
 
@@ -225,19 +294,21 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
   /* Special case Persistent-Memory handling */
   // file to be used for persistent memory-mapping
   int isPmemFile = !strcmp(pathname, __exe_fs.sym_pmem_filename);
-  if (isPmemFile) {
+  if (isPmemFile && !__exe_fs.sym_pmem) {
+  // if (isPmemFile) {
     // stealing this code from fd_init.c:klee_init_fds
     struct stat64 s;
-    stat64(".", &s);
+    stat64(".", &s); // For the defaults.
     __exe_fs.sym_pmem = malloc(sizeof(*__exe_fs.sym_pmem) * 1);
     if (-1 == __create_pmem_dfile(__exe_fs.sym_pmem, __exe_fs.sym_pmem_size, pathname, &s)) {
       return -1;
     }
   }
 
-  for (fd = 0; fd < MAX_FDS; ++fd)
-    if (!(__exe_env.fds[fd].flags & eOpen))
-      break;
+  for (fd = 0; fd < MAX_FDS; ++fd) {
+    if (!(__exe_env.fds[fd].flags & eOpen)) break;
+  }
+    
   if (fd == MAX_FDS) {
     errno = EMFILE;
     return -1;
@@ -258,15 +329,26 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
     /* XXX Should check access against mode / stat / possible
        deletion. */
     f->dfile = df;
+
+    if (isPmemFile && !(flags & O_CREAT) && !__exe_fs.sym_pmem_created) {
+      errno = ENOENT;
+      return -1;
+    }
     
     if ((flags & O_CREAT) && (flags & O_EXCL)) {
-      errno = EEXIST;
-      return -1;
+      if (isPmemFile && __exe_fs.sym_pmem_delay_create && !__exe_fs.sym_pmem_created) {
+        __exe_fs.sym_pmem_created = true;
+      } else {
+        errno = EEXIST;
+        return -1;
+      }
+    } else if (isPmemFile && (flags & O_CREAT)) {
+      __exe_fs.sym_pmem_created = true;
     }
     
     if ((flags & O_TRUNC) && (flags & O_RDONLY)) {
       /* The result of using O_TRUNC with O_RDONLY is undefined, so we
-	 return error */
+	       return error */
       klee_warning("Undefined call to open(): O_TRUNC | O_RDONLY\n");
       errno = EACCES;
       return -1;
@@ -274,19 +356,23 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
 
     if ((flags & O_EXCL) && !(flags & O_CREAT)) {
       /* The result of using O_EXCL without O_CREAT is undefined, so
-	 we return error */
+	       we return error */
       klee_warning("Undefined call to open(): O_EXCL w/o O_RDONLY\n");
       errno = EACCES;
       return -1;
     }
 
     if (!has_permission(flags, df->stat)) {
-	errno = EACCES;
-	return -1;
-    }
-    else
+      klee_warning("!has_permission");
+      errno = EACCES;
+      return -1;
+    } else if (!isPmemFile) {
+      // (iangneal): why? We do this only for non-pmem files cuz otherwise
+      // we have to re-init the pmem file
       f->dfile->stat->st_mode = ((f->dfile->stat->st_mode & ~0777) |
 				 (mode & ~__exe_env.umask));
+    }
+      
   } else {    
     int os_fd = syscall(__NR_open, __concretize_string(pathname), flags, mode);
     if (os_fd == -1)
@@ -425,6 +511,25 @@ int close(int fd) {
     return -1;
   }
 
+  // If the file was mmap-ed and not unmapped, we also want to check for 
+  // persistence.
+  if (f->dfile && f->dfile->page_refs) {
+    size_t pgsz = getpagesize();
+
+    unsigned page_end = ceil(f->dfile->size / (double)pgsz);
+    // decrement page_refs in interval [page_start, page_end)
+    // if ref count goes to zero, check that the page is persisted
+    unsigned pageno;
+    for (pageno = 0u; pageno < page_end; pageno++) {
+      // Not sure if we should do anything about the page refs here.
+      void *addr = f->dfile->contents + (pgsz * pageno);
+      if (f->dfile->page_refs[pageno] && addr && klee_pmem_is_pmem(addr, pgsz)) {
+        klee_pmem_check_persisted(addr, pgsz);
+      }
+    }
+  }
+  
+
 #if 0
   if (!f->dfile) {
     /* if a concrete fd */
@@ -473,6 +578,7 @@ ssize_t read(int fd, void *buf, size_t count) {
     /* XXX In terms of looking for bugs we really should do this check
        before concretization, at least once the routine has been fixed
        to properly work with symbolics. */
+    // fprintf(stderr, "read: checking access to [%p, %p)\n", buf, buf + count);
     klee_check_memory_access(buf, count);
     if (f->fd == 0)
       r = syscall(__NR_read, f->fd, buf, count);
@@ -552,10 +658,10 @@ ssize_t write(int fd, const void *buf, size_t count) {
       actual_count = count;
     else {
       if (__exe_env.save_all_writes)
-	assert(0);
+	      assert(0);
       else {
-	if (f->off < (off64_t) f->dfile->size)
-	  actual_count = f->dfile->size - f->off;	
+        if (f->off < (off64_t) f->dfile->size)
+          actual_count = f->dfile->size - f->off;	
       }
     }
 
@@ -666,8 +772,7 @@ int fstatat(int fd, const char *path, struct stat *buf, int flags) {
   } 
 
 #if (defined __NR_newfstatat) && (__NR_newfstatat != 0)
-  return syscall(__NR_newfstatat, (long)fd,
-                 (path ? __concretize_string(path) : NULL), buf, (long)flags);
+  return syscall(__NR_newfstatat, (long)fd, __concretize_string(path), buf, (long)flags);
 #else
   return syscall(__NR_fstatat64, (long)fd,
                  (path ? __concretize_string(path) : NULL), buf, (long)flags);
@@ -858,9 +963,15 @@ int __fd_ftruncate(int fd, off64_t length) {
   }
   
   if (f->dfile) {
-    klee_warning("symbolic file, ignoring (EIO)");
-    errno = EIO;
-    return -1;
+    if (length > (off64_t)f->dfile->size) {
+      klee_warning("cannot dynamically resize memory (EIO");
+      errno = EIO;
+      return -1;
+    }
+
+    klee_warning("symbolic file, only changing stat64 struct");
+    f->dfile->stat->st_size = length;
+    return 0;
   }
 #if __WORDSIZE == 64
   return syscall(__NR_ftruncate, f->fd, length);
@@ -1469,6 +1580,7 @@ static size_t __concretize_size(size_t s) {
 static const char *__concretize_string(const char *s) {
   char *sc = __concretize_ptr(s);
   unsigned i;
+  if (!sc) return sc;
 
   for (i = 0;; ++i, ++sc) {
     char c = *sc;
@@ -1525,9 +1637,17 @@ int fallocate(int fd, int mode, off_t offset, off_t len) {
   }
 
   if (f->dfile) {
-    klee_error("iangneal: mmap not supported for symbolic files!");
-    errno = ENOTSUP;
-    return -1;
+    // klee_error("iangneal: mmap not supported for symbolic files!");
+    // errno = ENOTSUP;
+    // return -1;
+    if (offset + len > f->dfile->size) {
+      errno = EIO;
+      return -1;
+    } else {
+      f->dfile->stat->st_size = offset + len;
+    }
+
+    return 0;
   }
 
   return syscall(__NR_fallocate, f->fd, mode, offset, len);

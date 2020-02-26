@@ -41,8 +41,8 @@ if(WLLVM STREQUAL "WLLVM-NOTFOUND")
 endif()
 
 # Doing CC.... make doesn't work. Need to have the command first, then the variables
-# set(KLEE_FLAGS "-g -O1 -Xclang -disable-llvm-passes -D__NO_STRING_INLINES")
-set(KLEE_FLAGS "-g -O0 -Xclang -disable-O0-optnone -D__NO_STRING_INLINES")
+set(KLEE_FLAGS "-g -O1 -Xclang -disable-llvm-passes -D__NO_STRING_INLINES -DVALGRIND_ENABLED=0")
+# set(KLEE_FLAGS "-g -O0 -Xclang -disable-O0-optnone -D__NO_STRING_INLINES")
 execute_process(COMMAND make 
                         DEBUG=1
                         CC=wllvm 
@@ -50,6 +50,7 @@ execute_process(COMMAND make
                         EXTRA_CFLAGS=${KLEE_FLAGS}
                         EXTRA_CXXFLAGS=${KLEE_FLAGS}
                         NDCTL_ENABLE=n
+                        AVX512F_AVAILABLE=n
                         -C ${PMDK_ROOT_DIR} -j${N})
 execute_process(COMMAND make 
                         DEBUG=1
@@ -58,6 +59,7 @@ execute_process(COMMAND make
                         EXTRA_CFLAGS=${KLEE_FLAGS}
                         EXTRA_CXXFLAGS=${KLEE_FLAGS}
                         NDCTL_ENABLE=n
+                        AVX512F_AVAILABLE=n
                         -C ${PMDK_ROOT_DIR} -j${N} install prefix=${PMDK_INSTALL_DIR})
 
 # Now we need to do the extraction
@@ -75,3 +77,5 @@ endif()
 add_custom_target(set_wllvm_env COMMAND export LLVM_COMPILER=clang; export LLVM_CC_NAME=clang-8)
 
 add_subdirectory(000_pmdk_btree_map)
+add_subdirectory(001_simple)
+add_subdirectory(002_simple_symbolic)

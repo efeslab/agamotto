@@ -30,6 +30,8 @@
 
 #include <errno.h>
 #include <sstream>
+#include <sys/mman.h>
+#include <unistd.h>
 
 using namespace llvm;
 using namespace klee;
@@ -90,6 +92,7 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("klee_get_value_i64", handleGetValue, true),
   add("klee_define_fixed_object", handleDefineFixedObject, false),
   add("klee_define_fixed_object_from_existing", handleDefineFixedObjectFromExisting, false),
+  add("klee_init_concrete_zero", handleInitConcreteZero, false),
   add("klee_undefine_fixed_object", handleUndefineFixedObject, false),
   add("klee_get_obj_size", handleGetObjSize, true),
   add("klee_get_errno", handleGetErrno, true),
@@ -139,9 +142,10 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("__ubsan_handle_mul_overflow", handleMulOverflow, false),
   add("__ubsan_handle_divrem_overflow", handleDivRemOverflow, false),
 
-  add("klee_pmem_mark_persistent", handleMarkPersistent, false),
+  add("klee_pmem_mark_persistent", handleMarkPersistent, true),
   add("klee_pmem_check_persisted", handleIsPersisted, false),
   add("klee_pmem_check_ordered_before", handleIsOrderedBefore, false),
+  add("klee_pmem_is_pmem", handleIsPmem, true),
 
 #undef addDNR
 #undef add
@@ -450,8 +454,52 @@ void SpecialFunctionHandler::handleMemalign(ExecutionState &state,
         0, "Symbolic alignment for memalign. Choosing smallest alignment");
   }
 
-  executor.executeAlloc(state, arguments[1], false, target, false, 0,
-                        alignment);
+  // Try to split up the memory allocation
+  if (ConstantExpr *ce = dyn_cast<ConstantExpr>(arguments[1].get())) {
+    // Should be concrete for the case we care about--pmem file.
+    uint64_t size = ce->getZExtValue();
+    uint64_t unitSz = PersistentState::MaxSize;
+
+    uint64_t mmap_size = (size % unitSz) ? ((size / unitSz) + 1) * unitSz : size;
+
+    // We'll treat it like a fixed object and just call mmap internally.
+    // TODO: reclaim
+    void *base_addr = mmap(nullptr, mmap_size, PROT_READ | PROT_WRITE, 
+                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (MAP_FAILED == base_addr) {
+      klee_error("Could not map!");
+    }
+
+    MemoryObject *baseObj = nullptr;
+    for (uint64_t offset = 0; offset < size; offset += unitSz) {
+      MemoryObject *mo = executor.memory->allocateFixed(
+                (uint64_t)base_addr + offset, unitSz, state.prevPC->inst);
+      if (mo) {
+        ObjectState *os = executor.bindObjectInState(state, mo, false);
+        os->initializeToZero();
+
+        if (!baseObj) baseObj = mo;
+      }
+    }
+
+    if (!baseObj) {
+      executor.bindLocal(target, state,
+                ConstantExpr::alloc(0, Context::get().getPointerWidth()));
+    } else {
+      // ObjectState *os = bindObjectInState(state, mo, isLocal);
+      // if (zeroMemory) {
+      //   os->initializeToZero();
+      // } else {
+      //   os->initializeToRandom();
+      // }
+      executor.bindLocal(target, state, baseObj->getBaseExpr());
+    }
+
+  } else {
+    klee_warning("Could not split memalign--symbolic size!\n");
+    executor.executeAlloc(state, arguments[1], false, target, false, 0,
+                          alignment);
+  }
 }
 
 void SpecialFunctionHandler::handleAssume(ExecutionState &state,
@@ -734,7 +782,7 @@ void SpecialFunctionHandler::handleCheckMemoryAccess(ExecutionState &state,
 
     if (!state.addressSpace.resolveOne(cast<ConstantExpr>(address), op)) {
       executor.terminateStateOnError(state,
-                                     "check_memory_access: memory error",
+                                     "check_memory_access: memory error (failed to resolve one)",
 				     Executor::Ptr, NULL,
                                      executor.getAddressInfo(state, address));
     } else {
@@ -743,7 +791,7 @@ void SpecialFunctionHandler::handleCheckMemoryAccess(ExecutionState &state,
                                         cast<ConstantExpr>(size)->getZExtValue());
       if (!chk->isTrue()) {
         executor.terminateStateOnError(state,
-                                       "check_memory_access: memory error",
+                                       "check_memory_access: memory error (failed bounds check)",
 				       Executor::Ptr, NULL,
                                        executor.getAddressInfo(state, address));
       }
@@ -798,7 +846,28 @@ void SpecialFunctionHandler::handleDefineFixedObjectFromExisting(
   assert(os);
   char *data = (char*)address;
   for (uint64_t i = 0; i < size; ++i) {
-    os->write8(i, data[i]);
+    os->write8(state, i, data[i]);
+  }
+}
+
+void SpecialFunctionHandler::handleInitConcreteZero(ExecutionState &state,
+                                                    KInstruction *target,
+                                                    std::vector<ref<Expr> > &arguments) {
+  assert(arguments.size()==2 &&
+         "invalid number of arguments to klee_init_concrete_zero");
+  assert(isa<ConstantExpr>(arguments[0]) &&
+         "expect constant address argument to klee_init_concrete_zero");
+
+  Executor::ExactResolutionList rl;
+  executor.resolveExact(state, arguments[0], rl, "klee_init_concrete_zero");
+
+  for (Executor::ExactResolutionList::iterator it = rl.begin(), ie = rl.end(); 
+          it != ie; ++it) {
+    const MemoryObject *mo = it->first.first;
+    const ObjectState *cos = it->first.second;
+    ObjectState *os = state.addressSpace.getWriteable(mo, cos);
+    
+    os->initializeToZero();
   }
 }
 
@@ -813,8 +882,13 @@ void SpecialFunctionHandler::handleUndefineFixedObject(ExecutionState &state,
   Executor::ExactResolutionList rl;
   executor.resolveExact(state, arguments[0], rl, "klee_undefine_fixed_object");
 
-  for (Executor::ExactResolutionList::iterator it = rl.begin(),
-          ie = rl.end(); it != ie; ++it) {
+  for (Executor::ExactResolutionList::iterator it = rl.begin(), ie = rl.end(); 
+          it != ie; ++it) {
+    const MemoryObject *mo = it->first.first;
+    if (state.persistentObjects.count(mo)) {
+      state.persistentObjects.erase(mo);
+    }
+
     it->second->addressSpace.unbindObject(it->first.first);
   }
 }
@@ -936,24 +1010,44 @@ void SpecialFunctionHandler::handleMarkPersistent(ExecutionState &state,
 
   if (name.length() == 0) {
     name = "unnamed";
-    klee_warning("klee_pmem_mark_persistent: renamed empty name to \"unnamed\"");
+    klee_warning("klee_pmem_mark_persistent: name parameter empty, using \"unnamed\"");
+  }
+
+  ref<Expr> addr = arguments[0];
+  ref<Expr> size = arguments[1];
+  uint64_t realSize = 0;
+  if (ConstantExpr *ce = dyn_cast<ConstantExpr>(size.get())) {
+    realSize = ce->getZExtValue();
+  } else {
+    size->dump();
+    klee_error("Not sure how to handle symbolic size argument yet!");
   }
 
   Executor::ExactResolutionList rl;
-  executor.resolveExact(state, arguments[0], rl, "mark_persistent");
+  for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
+    ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
+    ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
+    executor.resolveExact(state, ptrExpr, rl, "mark_persistent");
+  }
   
   for (Executor::ExactResolutionList::iterator it = rl.begin(), 
          ie = rl.end(); it != ie; ++it) {
     const MemoryObject *mo = it->first.first;
     mo->setName(name);
+    // klee_warning("Marking object at %p as persistent", (void*)mo->address);
     
     ExecutionState *s = it->second;
-
     // FIXME: Type coercion should be done consistently somewhere.
     bool res;
+    // bool success __attribute__ ((unused)) =
+    //   executor.solver->mustBeTrue(*s, 
+    //                               EqExpr::create(ZExtExpr::create(arguments[1],
+    //                                                               Context::get().getPointerWidth()),
+    //                                              mo->getSizeExpr()),
+    //                               res);
     bool success __attribute__ ((unused)) =
       executor.solver->mustBeTrue(*s, 
-                                  EqExpr::create(ZExtExpr::create(arguments[1],
+                                  EqExpr::create(ConstantExpr::create(PersistentState::MaxSize,
                                                                   Context::get().getPointerWidth()),
                                                  mo->getSizeExpr()),
                                   res);
@@ -961,23 +1055,88 @@ void SpecialFunctionHandler::handleMarkPersistent(ExecutionState &state,
     
     if (res) {
       executor.executeMarkPersistent(*s, mo);
+      // Just return the same address as what we received.
+      // -- This may get re-executed, but technically "s" can be a different state.
+      executor.bindLocal(target, *s, addr);
     } else {      
       executor.terminateStateOnError(*s, 
                                      "wrong size given to klee_pmem_mark_persistent[_name]", 
                                      Executor::User);
     }
   }
+
+}
+
+void SpecialFunctionHandler::handleIsPmem(ExecutionState &state,
+                                          KInstruction *target,
+                                          std::vector<ref<Expr> > &arguments) {
+  assert(arguments.size() == 2 &&
+      "invalid number of arguments to klee_pmem_is_pmem");
+
+  ref<Expr> addr = arguments[0];
+  ref<Expr> size = arguments[1];
+  uint64_t realSize = 0;
+  if (ConstantExpr *ce = dyn_cast<ConstantExpr>(size.get())) {
+    realSize = ce->getZExtValue();
+  } else {
+    size->dump();
+    klee_error("Not sure how to handle symbolic size argument yet!");
+  }
+
+  std::list<ObjectPair> pmemObjs;
+  for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
+    ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
+    ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
+    
+    ObjectPair res;
+    bool success;
+    assert(state.addressSpace.resolveOne(state, executor.solver, ptrExpr, res, success));
+    assert(success && "could not resolve one! (isPmem)");
+    pmemObjs.push_back(res);
+  }
+  
+  for (ObjectPair &op : pmemObjs) {
+    const ObjectState *os = op.second;
+
+    ref<Expr> isPmem = ConstantExpr::create(isa<PersistentState>(os), Expr::Bool);
+    assert(!isPmem.isNull() && "null boolean expr from klee_pmem_is_pmem!");
+    executor.bindLocal(target, state, isPmem);  
+  }
 }
 
 void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,
                                                KInstruction *target,
-                                               std::vector<ref<Expr> > &arguments) {
+                                               std::vector<ref<Expr>> &arguments) {
   assert(arguments.size()==2 &&
       "invalid number of arguments to klee_pmem_check_persisted");
 
   ref<Expr> addr = arguments[0];
   ref<Expr> size = arguments[1];
-  for (const MemoryObject *mo : state.persistentObjects) {
+  uint64_t realSize = 0;
+  if (ConstantExpr *ce = dyn_cast<ConstantExpr>(size.get())) {
+    realSize = ce->getZExtValue();
+  } else {
+    size->dump();
+    klee_error("Not sure how to handle symbolic size argument yet!");
+  }
+
+  std::list<ObjectPair> pmemObjs;
+  for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
+    ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
+    ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
+    
+    ObjectPair res;
+    bool success;
+    assert(state.addressSpace.resolveOne(state, executor.solver, ptrExpr, res, success));
+    assert(success && "could not resolve one! (isPersisted)");
+    pmemObjs.push_back(res);
+  }
+  
+  for (ObjectPair &op : pmemObjs) {
+    const MemoryObject *mo = op.first; 
+    const ObjectState *os = op.second;
+    assert(isa<PersistentState>(os) && "trying to check if non-pmem is persisted!");
+
     executor.executeCheckPersistence(state, mo);
   }
 }

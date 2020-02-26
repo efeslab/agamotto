@@ -768,6 +768,8 @@ message(STATUS "KLEE_SOLVER_LIBRARIES: '${KLEE_SOLVER_LIBRARIES}'")
 # KLEE components
 ################################################################################
 include("${CMAKE_SOURCE_DIR}/cmake/klee_add_component.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/klee_add_test_executable.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/klee_add_test_object.cmake")
 add_subdirectory(lib)
 add_subdirectory(runtime)
 

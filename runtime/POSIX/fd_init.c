@@ -114,7 +114,8 @@ static unsigned __sym_uint32(const char *name) {
 void klee_init_fds(unsigned n_files, unsigned file_length,
                    unsigned stdin_length, int sym_stdout_flag,
                    int save_all_writes_flag, unsigned max_failures,
-                   char* sym_pmem_filename, unsigned sym_pmem_size) {
+                   char* sym_pmem_filename, unsigned sym_pmem_size,
+                   char* sym_pmem_init, bool sym_pmem_delay_create) {
   unsigned k;
   char name[7] = "?-data";
   struct stat64 s;
@@ -131,6 +132,17 @@ void klee_init_fds(unsigned n_files, unsigned file_length,
   if (strlen(sym_pmem_filename)) {
     strncpy(__exe_fs.sym_pmem_filename, sym_pmem_filename, sizeof __exe_fs.sym_pmem_filename);
     __exe_fs.sym_pmem_size = sym_pmem_size;
+    __exe_fs.sym_pmem_delay_create = sym_pmem_delay_create;
+    __exe_fs.sym_pmem_created = !sym_pmem_delay_create;
+
+    if (strlen(sym_pmem_init) || sym_pmem_delay_create) {
+      __exe_fs.sym_pmem_init_concrete = true;
+      if (sym_pmem_delay_create || (strlen(sym_pmem_init) == 1 && 0 == atoi(sym_pmem_init))) {
+        __exe_fs.sym_pmem_init_to_zero = true;
+      } else {
+        strncpy(__exe_fs.sym_pmem_init_from, sym_pmem_init, sizeof __exe_fs.sym_pmem_init_from);
+      }
+    }
   }
 
   /* setting symbolic stdin */

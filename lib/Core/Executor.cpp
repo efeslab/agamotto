@@ -23,7 +23,6 @@
 #include "StatsTracker.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
-#include "../Module/NvmFunctionInfo.h"
 
 #include "klee/Common.h"
 #include "klee/Config/Version.h"
@@ -588,7 +587,7 @@ void Executor::initializeGlobalObject(ExecutionState &state, ObjectState *os,
   } else if (isa<ConstantAggregateZero>(c)) {
     unsigned i, size = targetData->getTypeStoreSize(c->getType());
     for (i=0; i<size; i++)
-      os->write8(offset+i, (uint8_t) 0);
+      os->write8(state, offset+i, (uint8_t) 0);
   } else if (const ConstantArray *ca = dyn_cast<ConstantArray>(c)) {
     unsigned elementSize =
       targetData->getTypeStoreSize(ca->getType()->getElementType());
@@ -617,7 +616,7 @@ void Executor::initializeGlobalObject(ExecutionState &state, ObjectState *os,
     if (StoreBits > C->getWidth())
       C = C->ZExt(StoreBits);
 
-    os->write(offset, C);
+    os->write(state, offset, C);
   }
 }
 
@@ -628,7 +627,7 @@ MemoryObject * Executor::addExternalObject(ExecutionState &state,
                                   size, nullptr);
   ObjectState *os = bindObjectInState(state, mo, false);
   for(unsigned i = 0; i < size; i++)
-    os->write8(i, ((uint8_t*)addr)[i]);
+    os->write8(state, i, ((uint8_t*)addr)[i]);
   if(isReadOnly)
     os->setReadOnly(true);
   return mo;
@@ -759,7 +758,7 @@ void Executor::initializeGlobals(ExecutionState &state) {
                      i->getName().data());
 
         for (unsigned offset=0; offset<mo->size; offset++)
-          os->write8(offset, ((unsigned char*)addr)[offset]);
+          os->write8(state, offset, ((unsigned char*)addr)[offset]);
       }
     } else {
       Type *ty = i->getType()->getElementType();
@@ -1460,7 +1459,7 @@ void Executor::executeCall(ExecutionState &state,
       v = v->stripPointerCasts();
       KInstruction *kv = kmodule->getKInstruction(dyn_cast<Instruction>(v));
       ref<Expr> address = getDestCell(state, kv).value;
-      executePersistentMemoryFlush(state, cast<ConstantExpr>(address));
+      executePersistentMemoryFlush(state, address);
       executePersistentMemoryFence(state);
       break;
     }
@@ -1487,7 +1486,7 @@ void Executor::executeCall(ExecutionState &state,
       // The first operand to the annotation is a pointer, the second
       // is which annotation is being applied.
       auto annotationStr = getAnnotationStringFromAnnotationCall(ki);
-      if (annotationStr == "nvmvar") {
+      if (false && annotationStr == "nvmvar") {
         llvm::Instruction *bitcastInst =
           dyn_cast<Instruction>(ki->inst->getOperand(0));
         KInstruction *bitcastKInst = kmodule->getKInstruction(bitcastInst);
@@ -1530,11 +1529,12 @@ void Executor::executeCall(ExecutionState &state,
 
     // (iangneal): We need to propagate NVM info
     // klee_warning("Module options for NVM (push): %d", modOpts.EnableNvmInfo);
-    if (modOpts.EnableNvmInfo) {
-      state.pushFrame(state.prevPC, kf, searcher->getNvmInfo());
-    } else {
-      state.pushFrame(state.prevPC, kf);
-    }
+    // if (modOpts.EnableNvmInfo) {
+    //   state.pushFrame(state.prevPC, kf, searcher->getNvmInfo());
+    // } else {
+    //   state.pushFrame(state.prevPC, kf);
+    // }
+    state.pushFrame(state.prevPC, kf);
 
     state.pc = kf->instructions;
 
@@ -1617,7 +1617,7 @@ void Executor::executeCall(ExecutionState &state,
           // FIXME: This is really specific to the architecture, not the pointer
           // size. This happens to work for x86-32 and x86-64, however.
           if (WordSize == Expr::Int32) {
-            os->write(offset, arguments[i]);
+            os->write(state, offset, arguments[i]);
             offset += Expr::getMinBytesForWidth(arguments[i]->getWidth());
           } else {
             assert(WordSize == Expr::Int64 && "Unknown word size!");
@@ -1630,7 +1630,7 @@ void Executor::executeCall(ExecutionState &state,
               offset = llvm::RoundUpToAlignment(offset, 16);
 #endif
             }
-            os->write(offset, arguments[i]);
+            os->write(state, offset, arguments[i]);
 #if LLVM_VERSION_CODE >= LLVM_VERSION(3, 9)
             offset += llvm::alignTo(argWidth, WordSize) / 8;
 #else
@@ -2022,7 +2022,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         Expr::Width outWidth = getWidthForLLVMType(t);      
         // The concrete output of CPUID
         unsigned regs[4];
-        uint64_t regConst[4];
 
         if (numArgs == 1) {
           klee_error("implement cpuid for one arg!");
@@ -2033,18 +2032,30 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           unsigned leaf = cast<ConstantExpr>(leafExpr)->getZExtValue();
           unsigned subleaf = cast<ConstantExpr>(subleafExpr)->getZExtValue();
           __get_cpuid_count(leaf, subleaf, &regs[0], &regs[1], &regs[2], &regs[3]);
-          klee_warning("cpuid(leaf=%u, subleaf=%u) returned {%u, %u, %u, %u}",
-            leaf, subleaf, regs[0], regs[1], regs[2], regs[3]);
-          
-          for (int i = 0; i < 4; ++i) regConst[i] = (uint64_t)regs[i];
+          // klee_warning("cpuid(leaf=%u, subleaf=%u) returned {%u, %u, %u, %u}",
+          //   leaf, subleaf, regs[0], regs[1], regs[2], regs[3]);
 
+          // Now we remove the features we don't like, hehe.
+          // Regs are EAX=0, EBX=1, ECX=2, EDX=3
+          // AVX
+          if (leaf == 0x1) {
+            regs[2] = regs[2] & ~(bit_AVX);
+          }
+          if (leaf == 0x7) {
+            regs[1] = regs[1] & ~(bit_AVX512F);
+          }
         } else {
           terminateStateOnExecError(state, "unsupported number of arguments for cpuid");
         }
 
-        // Now we remove the features we don't like, hehe.
 
-        llvm::APInt output = llvm::APInt(outWidth, 4, regConst); // 4 words
+        llvm::APInt output = llvm::APInt(outWidth, 0); // initial value
+        // shift in the values
+        for (int i = 0; i < 4; i++) {
+          llvm::APInt field = llvm::APInt(outWidth, regs[i]);
+          field <<= (sizeof(unsigned) * CHAR_BIT) /* bits to shift */ * i /* pos */;
+          output |= field;
+        }
         ref<Expr> result = ConstantExpr::alloc(output);
         bindLocal(ki, state, result);
         break;
@@ -2855,6 +2866,46 @@ void Executor::updateStates(ExecutionState *current) {
   if (searcher) {
     searcher->update(current, addedStates, removedStates);
   }
+  
+  // (iangneal): Update the heuristic as well.
+  std::vector<ExecutionState*> toUpdate;
+  toUpdate.push_back(current);
+  toUpdate.insert(toUpdate.end(), addedStates.begin(), addedStates.end());
+
+  for (ExecutionState *s : toUpdate) {
+    if (s && s->nvmInfo) {
+      
+      // TODO: this all needs to be timed
+      if (current->prevPC->dest < s->stack.back().kf->numRegisters) {
+        ref<Expr> val = getDestCell(*s, s->prevPC).value;
+        // update for prevPC, then set the instruction to the current pc for the
+        // next round.
+        // errs() << "prevPC = " << *current->prevPC->inst << "\n";
+        // errs() << "nvmPC  = " << *current->nvmInfo->currentInst() << "\n";
+        // errs() << "pc     = " << *current->pc->inst << "\n";
+
+        ObjectPair op;
+        bool success;
+        solver->setTimeout(coreSolverTimeout);
+        if (!val.isNull() && 
+            val->getWidth() == Context::get().getPointerWidth() &&
+            s->addressSpace.resolveOne(*s, solver, val, op, success) &&
+            success && 
+            op.second && 
+            op.second->getKind() == ObjectState::Persistent) 
+        {
+          // This value is a pointer into nvm.
+          s->nvmInfo->updateCurrentState(s, s->prevPC, true);
+        } else {
+          s->nvmInfo->updateCurrentState(s, s->prevPC, false);
+        }
+        solver->setTimeout(time::Span());
+      }
+
+      // Now go to the next
+      s->nvmInfo->stepState(s, s->pc);
+    }
+  }
 
   states.insert(addedStates.begin(), addedStates.end());
   addedStates.clear();
@@ -3311,6 +3362,54 @@ void Executor::terminateStateOnError(ExecutionState &state,
     haltExecution = true;
 }
 
+void Executor::terminateStateOnPmemError(ExecutionState &state,
+                                         const std::unordered_set<std::string> &errors) {
+  Instruction * lastInst;
+  const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
+
+  std::string info_str;
+  llvm::raw_string_ostream info(info_str);
+
+  for (const std::string &err : errors) {
+    if (pmemErrorDescriptions.insert(err).second) {
+      if (ii.file != "") {
+        klee_message("ERROR: %s:%d: %s", ii.file.c_str(), ii.line, TerminateReasonNames[TerminateReason::PMem]);
+      } else {
+        klee_message("ERROR: (location information missing) %s", TerminateReasonNames[TerminateReason::PMem]);
+      }
+
+      info << pmemErrorDescriptions.size() << ") " << err << "\n";
+    }
+  }
+
+  if (info.str() != "") {
+    std::string MsgString;
+    llvm::raw_string_ostream msg(MsgString);
+    msg << "Error: persistent memory violation!\n";
+    if (ii.file != "") {
+      msg << "File: " << ii.file << "\n";
+      msg << "Line: " << ii.line << "\n";
+      msg << "assembly.ll line: " << ii.assemblyLine << "\n";
+    }
+    msg << "Stack: \n";
+    state.dumpStack(msg);
+
+    msg << "Errors: \n" << info.str();
+
+    std::string suffix_buf;
+    suffix_buf = TerminateReasonNames[TerminateReason::PMem];
+    suffix_buf += ".err";
+
+    interpreterHandler->processTestCase(state, msg.str().c_str(), suffix_buf.c_str());
+  }  
+
+  terminateState(state);
+
+  if (shouldExitOn(TerminateReason::PMem)) {
+    haltExecution = true;
+  }
+}
+
 // XXX shoot me
 static const char *okExternalsList[] = { "printf",
                                          "fprintf",
@@ -3520,7 +3619,7 @@ void Executor::executeAlloc(ExecutionState &state,
       if (reallocFrom) {
         unsigned count = std::min(reallocFrom->size, os->size);
         for (unsigned i=0; i<count; i++)
-          os->write(i, reallocFrom->read8(i));
+          os->write(state, i, reallocFrom->read8(i));
         state.addressSpace.unbindObject(reallocFrom->getObject());
       }
     }
@@ -3722,11 +3821,11 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           terminateStateOnError(state, "memory error: object read only",
                                 ReadOnly);
         } else {
-          if (isPersistentMemory(state, mo)) {
-            klee_message("Modifying non-volatile MemoryObject");
-          }
+          // if (isPersistentMemory(state, mo)) {
+          //   klee_message("Modifying non-volatile MemoryObject");
+          // }
           ObjectState *wos = state.addressSpace.getWriteable(mo, os);
-          wos->write(offset, value);
+          wos->write(state, offset, value);
         }
       } else {
         ref<Expr> result = os->read(offset, type);
@@ -3770,10 +3869,12 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                                 ReadOnly);
         } else {
           if (isPersistentMemory(state, mo)) {
-            klee_message("Modifying non-volatile MemoryObject");
+            // klee_message("Modifying non-volatile MemoryObject");
+            // klee_message("Modifying non-volatile MemoryObject (%p)", 
+            //     (void*)dyn_cast<ConstantExpr>(address)->getZExtValue());
           }
           ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
-          wos->write(mo->getOffsetExpr(address), value);
+          wos->write(state, mo->getOffsetExpr(address), value);
         }
       } else {
         ref<Expr> result = os->read(mo->getOffsetExpr(address), type);
@@ -3810,7 +3911,11 @@ void Executor::executeMarkPersistent(ExecutionState &state,
 
 void Executor::executeMarkPersistent(ExecutionState &state,
                                      const MemoryObject *mo) {
+  // klee_warning("Executor: Marking %p persistent!", (void*)mo->address);
   state.persistentObjects.insert(mo);
+  // for (const MemoryObject* m : state.persistentObjects) {
+  //   klee_warning("MemoryObject %p points to %p", m, (void*)m->address);
+  // }
 
   const ObjectState *os = state.addressSpace.findObject(mo);
   assert(os && "Cannot mark unbound MemoryObject persistent");
@@ -3826,8 +3931,23 @@ void Executor::executeMarkPersistent(ExecutionState &state,
       &InitialValues[0], &InitialValues[0] + InitialValues.size(),
       Expr::Int32 /* domain */, Expr::Int8 /* range */);
 
+  // Create a symbolic pointer array to track the source of modifications 
+  // to persistent cache lines. Initialize to nullptr (64-bit 0)
+  ref<ConstantExpr> nullInst = PersistentState::getNullptr();
+  std::vector<ref<ConstantExpr>> initPtrs(nCacheLines, nullInst);
+  const Array *rootCauseArr = arrayCache.CreateArray(
+      baseName + "_rootCause", nCacheLines,
+      &initPtrs[0], &initPtrs[0] + initPtrs.size(),
+      Expr::Int32 /* indicies */, Expr::Int64 /* value size */);
+
+  // Create array so we can create an unbounded value.
+  const Array *idxArray = arrayCache.CreateArray(
+      baseName + "_idxArray", 1, nullptr, nullptr,
+      Expr::Int32, Expr::Int32);
+
   // Construct a persistent ObjectState and bind it to the memory object.
-  state.addressSpace.bindObject(mo, new PersistentState(os, cacheLines));
+  state.addressSpace.bindObject(mo, 
+      new PersistentState(os, cacheLines, rootCauseArr, idxArray));
 
   /* std::string name; */
   /* mo->getAllocInfo(name); */
@@ -3836,8 +3956,12 @@ void Executor::executeMarkPersistent(ExecutionState &state,
 }
 
 bool Executor::isPersistentMemory(ExecutionState &state, const MemoryObject *mo) {
+  // for (const MemoryObject* m : state.persistentObjects) {
+  //   klee_warning("(isPersistentMemory) MemoryObject %p points to %p", m, (void*)m->address);
+  // }
   if (state.persistentObjects.count(mo)) {
     const ObjectState *os = state.addressSpace.findObject(mo);
+    // klee_warning("Checking if %p is persistent memory", (void*)mo->address);
     assert(dyn_cast<PersistentState>(os) != nullptr &&
            "MemoryObject marked persistent but not bound to any PersistentState");
     return true;
@@ -3888,17 +4012,73 @@ void Executor::executeCheckPersistence(ExecutionState &state,
   assert(os);
   ObjectState *wos = state.addressSpace.getWriteable(mo, os);
   PersistentState *ps = dyn_cast<PersistentState>(wos);
+  assert(ps);
 
-  StatePair isPersisted = fork(state, ps->isPersisted(), true);
+  #if 1
+  ConstraintManager orig = state.constraints;
+
+  for (const ref<Expr> &sliceConstraint : ps->getConstraints()) {
+    // fprintf(stderr, "check slice for %p\n", (void*)mo->address);
+    // sliceConstraint->dump();
+    ConstraintManager cm = orig;
+    cm.addConstraint(sliceConstraint);
+    state.constraints = cm;
+
+    StatePair isPersisted = fork(state, ps->isPersistedUnconstrained(), true);
+
+    // If there's a state where it's not definitely persisted, terminate it.
+    ExecutionState *notPersisted = isPersisted.second;
+    if (notPersisted) {
+      const ObjectState *nos = notPersisted->addressSpace.findObject(mo);
+      assert(nos);
+      ObjectState *nwos = notPersisted->addressSpace.getWriteable(mo, nos);
+      PersistentState *nps = dyn_cast<PersistentState>(nwos);
+      assert(nps);
+
+      // for (const ref<Expr> cons : notPersisted->constraints) {
+      //   cons->dump();
+      // }
+      // klee_warning("Non-persistence detected!");
+      // Should instead do the root cause analysis.
+      // std::string' addrInfo("\npmem persistence failures:\n");
+      // mo->getAllocInfo(addrInfo);
+      // uint64_t id = 1;
+      // for (const auto &str : ) {
+      //   addrInfo += std::to_string(id++) + ") " + str + std::string("\n");
+      // }
+      // klee_warning("addrInfo: '%s'", addrInfo.c_str());
+
+      terminateStateOnPmemError(*notPersisted, nps->getRootCauses(solver, *notPersisted));
+    }
+  } 
+
+  state.constraints = orig;
+  #else 
+  StatePair isPersisted = fork(state, ps->isPersistedUnconstrained(), true);
 
   // If there's a state where it's not definitely persisted, terminate it.
   ExecutionState *notPersisted = isPersisted.second;
   if (notPersisted) {
-    std::string addrInfo;
-    mo->getAllocInfo(addrInfo);
-    terminateStateOnError(state, "memory object not persisted",
+    for (const ref<Expr> cons : notPersisted->constraints) {
+      cons->dump();
+    }
+    klee_warning("Non-persistence detected!");
+    // Should instead do the root cause analysis.
+    std::string addrInfo("\npmem persistence failures:\n");
+    // mo->getAllocInfo(addrInfo);
+    uint64_t id = 1;
+    for (const auto &str : ps->getRootCauses(solver, *notPersisted)) {
+      addrInfo += std::to_string(id++) + ") " + str + std::string("\n");
+    }
+    klee_warning("addrInfo: '%s'", addrInfo.c_str());
+    klee_warning("can we do it twice?");
+    (void)ps->getRootCauses(solver, *notPersisted);
+    klee_warning("i guess");
+
+    terminateStateOnError(*notPersisted, "memory object not persisted",
                           Executor::PMem, NULL, addrInfo);
   }
+  #endif 
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state,
@@ -3940,11 +4120,11 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
               ((!(AllowSeedExtension || ZeroSeedExtension)
                 && obj->numBytes < mo->size) ||
                (!AllowSeedTruncation && obj->numBytes > mo->size))) {
-	    std::stringstream msg;
-	    msg << "replace size mismatch: "
-		<< mo->name << "[" << mo->size << "]"
-		<< " vs " << obj->name << "[" << obj->numBytes << "]"
-		<< " in test\n";
+                std::stringstream msg;
+                msg << "replace size mismatch: "
+              << mo->name << "[" << mo->size << "]"
+              << " vs " << obj->name << "[" << obj->numBytes << "]"
+              << " in test\n";
 
             terminateStateOnError(state, msg.str(), User);
             break;
@@ -3970,7 +4150,7 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
         terminateStateOnError(state, "replay size mismatch", User);
       } else {
         for (unsigned i=0; i<mo->size; i++)
-          os->write8(i, obj->bytes[i]);
+          os->write8(state, i, obj->bytes[i]);
       }
     }
   }
@@ -4026,9 +4206,9 @@ void Executor::runFunctionAsMain(Function *f,
     }
   }
 
-  ExecutionState *state = new ExecutionState(kmodule->functionMap[f]);
+  ExecutionState *state = new ExecutionState(this, kmodule->functionMap[f], modOpts.EnableNvmInfo);
   // (iangneal): I want to start my stack frame with the main function
-  if (modOpts.EnableNvmInfo) {
+  if (false && modOpts.EnableNvmInfo) {
     state->stack.back().nvmDesc = NvmFunctionCallDesc(
         kmodule->functionMap[f]->function);
   }
@@ -4052,7 +4232,7 @@ void Executor::runFunctionAsMain(Function *f,
     for (int i=0; i<argc+1+envc+1+1; i++) {
       if (i==argc || i>=argc+1+envc) {
         // Write NULL pointer
-        argvOS->write(i * NumPtrBytes, Expr::createPointer(0));
+        argvOS->write(*state, i * NumPtrBytes, Expr::createPointer(0));
       } else {
         char *s = i<argc ? argv[i] : envp[i-(argc+1)];
         int j, len = strlen(s);
@@ -4064,10 +4244,10 @@ void Executor::runFunctionAsMain(Function *f,
           klee_error("Could not allocate memory for function arguments");
         ObjectState *os = bindObjectInState(*state, arg, false);
         for (j=0; j<len+1; j++)
-          os->write8(j, s[j]);
+          os->write8(*state, j, s[j]);
 
         // Write pointer to newly allocated and initialised argv/envp c-string
-        argvOS->write(i * NumPtrBytes, arg->getBaseExpr());
+        argvOS->write(*state, i * NumPtrBytes, arg->getBaseExpr());
       }
     }
   }
@@ -4221,7 +4401,7 @@ void Executor::doImpliedValueConcretization(ExecutionState &state,
         assert(!os->readOnly &&
                "not possible? read only object with static read?");
         ObjectState *wos = state.addressSpace.getWriteable(mo, os);
-        wos->write(CE, it->second);
+        wos->write(state, CE, it->second);
       }
     }
   }

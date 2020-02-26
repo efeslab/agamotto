@@ -61,15 +61,16 @@ namespace utils {
 
   /** Returns true if any instruction represents a cache-flushing instruction.
    *
-   * TODO generalize for non-x86-based systems.
+   * TODO: generalize for non-x86-based systems.
    */
   bool isFlush(const llvm::Instruction &i);
 
   /** Returns true if any instruction represents a store-fencing instruction.
    *
-   * TODO generalize for non-x86-based systems.
+   * TODO: generalize for non-x86-based systems.
    */
   bool isFence(const llvm::Instruction &i);
+
 
   /** For a pointer of type T*, find where the pointer is stored, aka a value
    * of type T**.
@@ -109,10 +110,16 @@ namespace utils {
       llvm::Value*> &s);
 
   /**
+   * Returns a pointer to the nested function.
+   */
+  llvm::Function *getCallInstFunction(llvm::CallInst *ci);
+
+  /**
    * Returns a pointer to the CallInst if the given Instruction is a non-intrinsic
    * which we can examine. Otherwise, returns nullptr.
    */
   const llvm::CallInst* getNestedFunctionCallInst(const llvm::Instruction*);
+  llvm::CallInst* getNestedFunctionCallInst(llvm::Instruction*);
 
   /**
    * Finds all of the function calls nested within the given basic block and

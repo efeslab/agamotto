@@ -15,7 +15,7 @@
 
 #include "llvm/ADT/ArrayRef.h"
 
-#include "../../../../lib/Module/NvmFunctionInfo.h"
+#include "../../../../lib/Core/NvmFunctionInfo.h"
 
 #include <map>
 #include <memory>

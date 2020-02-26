@@ -11,6 +11,7 @@
 #define KLEE_H
 
 #include "stdint.h"
+#include "stdbool.h"
 #include "stddef.h"
 
 #ifdef __cplusplus
@@ -29,6 +30,11 @@ extern "C" {
    * Given that addr->addr+nbytes is a valid memory region, 
    */
   void klee_define_fixed_object_from_existing(void *addr, size_t nbytes);
+
+   /**
+    * Initializes the memory to 0 concretely.
+    */
+  void klee_init_concrete_zero(void *addr, size_t nbytes);
 
   /* Remove an accesible memory object at a user specified location. This is
    * required for when external memory leaves scope. (mmap syscall)
@@ -170,8 +176,11 @@ extern "C" {
    * \arg size - The number of bytes in the memory range.
    * \arg name - A name used for identifying the object in messages, output
    * files, etc. If NULL, object is called "unnamed".
+   * 
+   * \return The persistent pointer. This is a hack to make this work better
+   * for the NVM heuristic, which expects mmap calls.
    */
-  void klee_pmem_mark_persistent(void *addr, size_t size, const char *name);
+  void *klee_pmem_mark_persistent(void *addr, size_t size, const char *name);
 
   /* Assert that the entire memory range [addr, addr+size) is guaranteed
    * to be persisted to main memory at the time of calling.
@@ -184,6 +193,11 @@ extern "C" {
    */
   void klee_pmem_check_ordered_before(void *addrA, size_t sizeA,
                                       void *addrB, size_t sizeB);
+
+  /**
+   * Returns whether or not this pointer refers to a persistent memory object
+   */
+  bool klee_pmem_is_pmem(void *addr, size_t size);
 
 #ifdef __cplusplus
 }

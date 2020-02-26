@@ -17,16 +17,17 @@ link_directories(${PMDK_LIB_DIR})
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O1 -Xclang -disable-llvm-passes -D__NO_STRING_INLINES -D_FORTIFY_SOURCE=0 -U__OPTIMIZE__")
 
-add_executable(000_Clean ${CLEAN_SRC})
-target_link_libraries(000_Clean pmemobj pmem)
+klee_add_test_executable(TARGET 000_Clean SOURCES ${CLEAN_SRC} EXTRA_LIBS pmemobj pmem)
+
+# target_link_libraries(000_Clean pmemobj pmem)
 set(CLEAN_EXEC ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/000_Clean)
 add_custom_target(EXTRACT_CLEAN COMMAND extract-bc ${CLEAN_EXEC} -o ${CLEAN_EXEC}.bc)
 add_dependencies(EXTRACT_CLEAN 000_Clean)
 add_custom_target(LINK_CLEAN COMMAND llvm-link-8 -o ${CLEAN_EXEC}.linked.bc ${CLEAN_EXEC}.bc ${PMDK_LIB_DIR}/libpmemobj.so.bc)
 add_dependencies(LINK_CLEAN EXTRACT_CLEAN)
 
-add_executable(000_Buggy ${BUGGY_SRC})
-target_link_libraries(000_Buggy pmemobj pmem)
+klee_add_test_executable(TARGET 000_Buggy SOURCES ${BUGGY_SRC} EXTRA_LIBS pmemobj pmem)
+# target_link_libraries(000_Buggy pmemobj pmem)
 
 set(TEST_SRC
     test.c
@@ -56,3 +57,5 @@ set(CTOR_SRC
     constructor_test.c
 )
 add_executable(000_Ctor ${CTOR_SRC})
+
+add_executable(000_Mmap mmap_heuristic_test.c)

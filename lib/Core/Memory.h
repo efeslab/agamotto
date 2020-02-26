@@ -17,8 +17,11 @@
 
 #include "llvm/ADT/StringExtras.h"
 
+#include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace llvm {
   class Value;
@@ -30,6 +33,7 @@ class BitArray;
 class MemoryManager;
 class Solver;
 class ArrayCache;
+struct KInstruction;
 
 class MemoryObject {
   friend class STPBuilder;
@@ -216,13 +220,13 @@ public:
   virtual ref<Expr> read8(unsigned offset) const;
 
   // return bytes written.
-  virtual void write(unsigned offset, ref<Expr> value);
-  virtual void write(ref<Expr> offset, ref<Expr> value);
+  virtual void write(const ExecutionState &state, unsigned offset, ref<Expr> value);
+  virtual void write(const ExecutionState &state, ref<Expr> offset, ref<Expr> value);
 
-  virtual void write8(unsigned offset, uint8_t value);
-  virtual void write16(unsigned offset, uint16_t value);
-  virtual void write32(unsigned offset, uint32_t value);
-  virtual void write64(unsigned offset, uint64_t value);
+  virtual void write8(const ExecutionState &state, unsigned offset, uint8_t value);
+  virtual void write16(const ExecutionState &state, unsigned offset, uint16_t value);
+  virtual void write32(const ExecutionState &state, unsigned offset, uint32_t value);
+  virtual void write64(const ExecutionState &state, unsigned offset, uint64_t value);
   virtual void print() const;
 
   /*
@@ -240,8 +244,8 @@ protected:
   void makeSymbolic();
 
   virtual ref<Expr> read8(ref<Expr> offset) const;
-  virtual void write8(unsigned offset, ref<Expr> value);
-  virtual void write8(ref<Expr> offset, ref<Expr> value);
+  virtual void write8(const ExecutionState &state, unsigned offset, ref<Expr> value);
+  virtual void write8(const ExecutionState &state, ref<Expr> offset, ref<Expr> value);
 
   void fastRangeCheckOffset(ref<Expr> offset, unsigned *base_r, 
                             unsigned *size_r) const;
@@ -317,27 +321,61 @@ class PersistentState : public ObjectState {
     UpdateList cacheLineUpdates;
     UpdateList pendingCacheLineUpdates;
 
+    // (iangneal): We need a small symbolic array to construct an index variable which
+    // can represent a range.
+    UpdateList idxEmptyUpdates;
+    ref<Expr> idxUnbounded;
+    // We need to solve in slices for efficiency purposes.
+    const unsigned nrLinesPerSlice = 1; // pageszie
+    std::vector<ref<Expr>> idxConstraints;
+
+    /**
+     * (iangneal): We want symbolic root-cause detection. This is how:
+     * 
+     * Every time we dirty a cacheline, we create an update to those same 
+     * cachelines with a pointer value. This pointer will point to a program
+     * location. We will also track a set with all possible locations, as we
+     * need to resolve a root cause by checking against each value in the
+     * list.
+     * 
+     * On a flush, we write nullptr.
+     * 
+     * At any given point, if all cache lines are persisted, we can reset the 
+     * set.
+     */
+    UpdateList rootCauseLocations;
+    // We store all of the unique root cause locations. We can't use the pointer
+    // due to copies, but we can make unique IDs
+    uint64_t nextLocId = 1; // Start at 1
+    std::unordered_map<std::string, uint64_t> allRootLocations;
+
     /// DO NOT USE. Use clone() instead.
     PersistentState(const PersistentState &ps);
 
   public:
+
+    static const uint64_t MaxSize = 4 * (4096);
     /// Create a new persistent object state from the given non-persistent
-    /// object state and symbolic bool array of cache lines.
-    PersistentState(const ObjectState *os, const Array *cacheLines);
+    /// object state and symbolic bool array of cache lines. Also requires
+    /// a symbolic void* array (int64) for root cause.
+    PersistentState(const ObjectState *os, 
+                    const Array *cacheLines,
+                    const Array *rootCauses,
+                    const Array *idxArray);
 
     ObjectState *clone() const override;
 
-    virtual Kind getKind() const { return Persistent; }
+    virtual Kind getKind() const override { return Persistent; }
     static bool classof(const ObjectState *os) {
       return os->getKind() == Persistent;
     }
 
-    void write8(unsigned offset, uint8_t value) override;
-    void write8(unsigned offset, ref<Expr> value) override;
-    void write8(ref<Expr> offset, ref<Expr> value) override;
+    void write8(const ExecutionState &state, unsigned offset, uint8_t value) override;
+    void write8(const ExecutionState &state, unsigned offset, ref<Expr> value) override;
+    void write8(const ExecutionState &state, ref<Expr> offset, ref<Expr> value) override;
 
-    void dirtyCacheLineAtOffset(unsigned offset);
-    void dirtyCacheLineAtOffset(ref<Expr> offset);
+    void dirtyCacheLineAtOffset(const ExecutionState &state, unsigned offset);
+    void dirtyCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset);
 
     // Make a *pending* persist of the cache line containing offset.
     void persistCacheLineAtOffset(unsigned offset);
@@ -347,18 +385,37 @@ class PersistentState : public ObjectState {
 
     // Returns true if all modified cache lines
     // are guaranteed to be persisted.
-    ref<Expr> isPersisted() const;
+    ref<Expr> isPersisted(ExecutionState &state) const;
+
+    ref<Expr> isPersistedUnconstrained() const;
+
+    const std::vector<ref<Expr>> getConstraints() const { return idxConstraints; }
+
+    // If we are known to per persistent, do this to optimize.
+    void clearRootCauses();
+
+    std::unordered_set<std::string> getRootCauses(TimingSolver *solver, ExecutionState &state) const;
+
+    bool mustBePersisted(TimingSolver *solver, ExecutionState &state) const;
 
     static ref<ConstantExpr> getPersistedExpr();
     static ref<ConstantExpr> getDirtyExpr();
+    static ref<ConstantExpr> getNullptr();
 
   private:
     ref<Expr> isCacheLinePersisted(unsigned offset) const;
     ref<Expr> isCacheLinePersisted(ref<Expr> offset) const;
 
+    std::unordered_set<std::string> getRootCause(TimingSolver *solver, ExecutionState &state, unsigned offset) const;
+    std::unordered_set<std::string> getRootCause(TimingSolver *solver, ExecutionState &state, ref<Expr> offset) const;
+
+    static ref<Expr> ptrAsExpr(void *kinst);
+
     ref<Expr> getCacheLine(ref<Expr> offset) const;
     unsigned numCacheLines() const;
     unsigned cacheLineSize() const;
+
+    std::string getLocationInfo(const ExecutionState &state);
 };
   
 } // End klee namespace

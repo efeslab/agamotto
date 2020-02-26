@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <assert.h>
 #include <errno.h>
+#include <emmintrin.h>
+#include <immintrin.h>
 
 #include "btree_map.h"
 
@@ -26,6 +28,7 @@ int main(int argc, const char *argv[]) {
 
     uint64_t n_entries = (uint64_t)atoi(argv[2]);
 
+    // (void*)pop is actually the mmap-ed region...
     PMEMobjpool *pop = pmemobj_create(argv[1], POBJ_LAYOUT_NAME(000_driver), PMEMOBJ_MIN_POOL, 0666);
     if (pop == NULL) {
         printf("Create failed, trying open layout %s. (%s)\n", POBJ_LAYOUT_NAME(000_driver), strerror(errno));
@@ -37,16 +40,22 @@ int main(int argc, const char *argv[]) {
 		exit(1);
 	}
 
-    printf("Getting root...\n");
+    printf("Getting root from pool (%p)...\n", pop);
 
     TOID(driver_root_t) root = POBJ_ROOT(pop, driver_root_t);
     
     assert(!TOID_IS_NULL(root) && "Root is null!");
+    assert(TOID_VALID(root) && "Root is invalid!");
+    printf("\troot.oid.offset: %lu\n", root.oid.off);
+    printf("\troot._type: %p\n", root._type);
+    printf("\troot._type_num: %d\n", root._type_num);
+    assert(D_RO(root) && "Root direct is null!");
 
     printf("Checking persistent state...\n");
 
     TX_BEGIN(pop) {
-        assert((TOID_IS_NULL(D_RO(root)->tree) || TOID_VALID(D_RO(root)->tree)) && "Invalid thing!");
+        // assert((TOID_IS_NULL(D_RO(root)->tree) || TOID_VALID(D_RO(root)->tree)) && "Invalid thing!");
+        assert(TOID_IS_NULL(D_RO(root)->tree) || TOID_VALID(D_RO(root)->tree));
         printf("\tChecking btree_map for old nodes...\n");
         if (!TOID_IS_NULL(D_RO(root)->tree) && !btree_map_is_empty(pop, D_RO(root)->tree)) {
             printf("\t+ Removing old nodes...\n");
