@@ -19,6 +19,8 @@ klee_add_component(kleeCore
   ImpliedValue.cpp
   Memory.cpp
   MemoryManager.cpp
+  NvmAnalysisUtils.cpp
+  NvmFunctionInfo.cpp
   NvmHeuristicInfo.cpp
   PTree.cpp
   Searcher.cpp

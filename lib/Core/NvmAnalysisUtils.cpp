@@ -217,4 +217,5 @@ unordered_set<const Value*> utils::getPtrsFromLoc(const Value *ptr_loc) {
 
   return s;
 }
+
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2: */

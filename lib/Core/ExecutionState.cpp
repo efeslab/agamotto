@@ -24,8 +24,6 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "../Core/UserSearcher.h"
-#include "../Module/NvmFunctionInfo.h"
-#include "../Module/NvmAnalysisUtils.h"
 
 #include <cassert>
 #include <iomanip>

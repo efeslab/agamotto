@@ -19,7 +19,7 @@
 // FIXME: We do not want to be exposing these? :(
 #include "../../lib/Core/AddressSpace.h"
 #include "klee/Internal/Module/KInstIterator.h"
-#include "../../lib/Module/NvmFunctionInfo.h"
+#include "../../lib/Core/NvmFunctionInfo.h"
 
 #include <map>
 #include <set>

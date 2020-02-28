@@ -71,9 +71,6 @@ namespace utils {
    */
   bool isFence(const llvm::Instruction &i);
 
-  /**
-   * If the given instruction is a call to mmap, we will 
-  llvm::Value *getMmapResult(const llvm::Instruction *i);
 
   /** For a pointer of type T*, find where the pointer is stored, aka a value
    * of type T**.

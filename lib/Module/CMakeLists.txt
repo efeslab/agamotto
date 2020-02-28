@@ -17,8 +17,6 @@ set(KLEE_MODULE_COMPONENT_SRCS
   KModule.cpp
   LowerSwitch.cpp
   NvmAnalysisPass.cpp
-  NvmAnalysisUtils.cpp
-  NvmFunctionInfo.cpp
   ModuleUtil.cpp
   Optimize.cpp
   OptNone.cpp

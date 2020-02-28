@@ -23,7 +23,6 @@
 #include "StatsTracker.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
-#include "../Module/NvmFunctionInfo.h"
 
 #include "klee/Common.h"
 #include "klee/Config/Version.h"

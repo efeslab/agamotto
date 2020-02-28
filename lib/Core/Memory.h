@@ -327,7 +327,7 @@ class PersistentState : public ObjectState {
 
     ObjectState *clone() const override;
 
-    virtual Kind getKind() const { return Persistent; }
+    virtual Kind getKind() const override { return Persistent; }
     static bool classof(const ObjectState *os) {
       return os->getKind() == Persistent;
     }
