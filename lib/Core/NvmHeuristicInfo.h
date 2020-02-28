@@ -60,13 +60,13 @@ namespace klee {
 
   class Hashable {
     private:
-      virtual uint64_t hash(void) = 0;
+      virtual uint64_t hash(void) const = 0;
   }
 
   template<class X>
-  class StaticStorage {
-    static_assert(std::is_base_of<Hashable, X>::value, "Stored class must be hashable!");
+  class StaticStorage {    
     private:
+      static_assert(std::is_base_of<Hashable, X>::value, "Stored class must be hashable!");
 
       struct HashFn : public unary_function<X, uint64_t> {
         uint64_t operator(const X &x) {
@@ -80,19 +80,8 @@ namespace klee {
       static std::unordered_map<X, std::shared_ptr<X>, HashFn> objects_;    
       
     protected:
-
-      std::shared_ptr<X> getShared(const X &x) {
-        if (objects_[x]) return objects_[x];
-        
-        objects_[x] = std::shared_ptr<X>::make_shared(x);
-        return objects_[x];
-      } 
-
-    public:
-
+      static std::shared_ptr<X> getShared(const X &x);
   };
-
-  class NvmValueDesc
 
   /**
    * This class represents the state of all values at any point during  
@@ -104,26 +93,16 @@ namespace klee {
    */
   class NvmValueDesc : public Hashable, public StaticStorage<NvmValueDesc> {
     private:
-
       std::unordered_map<llvm::Value*, NvmValueState> state_;
 
-      NvmValueDesc();
+      NvmValueDesc() {}
 
-      override uint64_t hash(void) {
-        uint64_t hash_value = 0;
-        uint64_t count = 0;
-        for (const auto &p : state_) {
-          uint64_t val = (uint64_t)p.second;
-          hash_value ^= (val << count) | (val >> (64llu - count));
-          count++;
-        }
+      override uint64_t hash(void) const;
 
-        return hash_value;
-      }
-
-      void mutateState(llvm::Value *val, NvmValueState vs) {
-        state_[val] = vs;
-      }
+      /**
+       * 
+       */
+      void mutateState(llvm::Value *val, NvmValueState vs);
 
     public:
 
@@ -136,89 +115,74 @@ namespace klee {
       /**
        * Directly create a new description
        */
-      std::shared_ptr<NvmValueDesc> changeState(llvm::Value *val, NvmValueState vs) {
-        NvmValueDesc vd = *this;
-        gvd.mutateState(val, vs);
-        return getShared(vd);
-      }
+      std::shared_ptr<NvmValueDesc> changeState(llvm::Value *val, NvmValueState vs) const;
 
       /**
        * Compute a state change if we need it, otherwise returns this same value.
        */
-      std::shared_ptr<NvmValueDesc> changeState(KInstruction *pc) {
-
-      }
+      std::shared_ptr<NvmValueDesc> changeState(KInstruction *pc) const;
 
   };
-
-  class NvmHeuristicBasicBlockWrapper;
-
 
   /**
    * This describes the call stack information we need for the heuristic.
    * Different than the runtime stack information.
+   * 
+   * All we need to do is to store the return instruction, as we will inherit
+   * the value state from the return instruction.
    */
   class NvmStackFrameDesc : public Hashable, public StaticStorage<NvmStackFrameDesc> {
     private:
-      // A vector of return basic blocks
-      typedef std::vector<std::shared_ptr<NvmHeuristicBasicBlockWrapper>> stack_t;
+      typedef std::vector<std::shared_ptr<llvm::Instruction*>> stack_t;
       stack_t return_stack;
 
       NvmStackFrameDesc() {}
 
-      override uint64_t hash(void) {
-        uint64_t hash_value = 0;
-        for (uint64_t i = 0; i < return_stack.size(); ++i) {
-          ptr_val = ((uint64_t)return_stack[i].get())
-          hash_value ^= (ptr_val << i) | (ptr_val >> (64llu - i)); // Rotational shift.
-        }
-
-        return hash_value;
-      }
+      override uint64_t hash(void) const;
 
     public:
-      NvmStackFrameDesc doReturn(void) const {
+      std::shared_ptr<NvmStackFrameDesc> doReturn(void) const {
         NvmStackFrameDesc ns = *this;
         ns->return_stack.pop_back();
         return getShared(ns);
       }
 
-      NvmStackFrameDesc doCall(std::shared_ptr<NvmHeuristicBasicBlockWrapper> ptr) const {
+      std::shared_ptr<NvmStackFrameDesc> doCall(llvm::Instruction *i) const {
         NvmStackFrameDesc ns = *this;
-        ns->return_stack.push_back(ptr);
+        ns->return_stack.push_back(i);
         return getShared(ns);
       }
-
-      /**
-       * We could either do this or allow the default constructor. Personally,
-       * I like this better as it's more semantically meaningful. Also, it 
-       * will give us erros if we don't construct the wrapper class correctly,
-       * which is nice.
-       */
-      static NvmStackFrameDesc empty() { return NvmStackFrameDesc(); }
+      
+      static std::shared_ptr<NvmStackFrameDesc> empty() { 
+        return getShared(NvmStackFrameDesc()); 
+      }
   }
 
-  class NvmHeuristicBasicBlockWrapper : public Hashable, public StaticStorage<NvmStackFrameDesc> {
+  class NvmInstructionDesc : public Hashable, public StaticStorage<NvmInstructionDesc> {
     private:
 
-      NvmValueDesc values_;
-      NvmStackFrameDesc stackframe_;
-      const llvm::BasicBlock *block_;
+      // The real state.
+      std::shared_ptr<NvmValueDesc> values_;
+      std::shared_ptr<NvmStackFrameDesc> stackframe_;
+      KInstruction *curr_;
 
-      std::list<std::shared_ptr<NvmHeuristicBasicBlockWrapper>> successors;
-      std::list<std::shared_ptr<NvmHeuristicBasicBlockWrapper>> predecessors;
+      // The utility state.
+      KModule *mod_;
 
-      struct HashFn : public std::unary_function<NvmHeuristicBasicBlockWrapper, uint64_t> {
-        uint64_t operator()(const NvmHeuristicBasicBlockWrapper &blkw) {
-          return ((uint64_t)block_) ^ globals.hash() ^ ptrs.hash() ^ stack.hash();
-        }
+      std::list<std::shared_ptr<NvmInstructionDesc>> successors;
+      bool isTerminal = false;
+      std::list<std::shared_ptr<NvmInstructionDesc>> predecessors;
+      bool isEntry = false;
+
+      override uint64_t hash(void) {
+        return ((uint64_t)curr_) ^ globals.hash() ^ ptrs.hash() ^ stack.hash();
       }
 
       /**
        * Part of the heuristic calculation. This weight is the "interesting-ness"
-       * of the underlying basic block given the current state of values in the system.
+       * of an instreuction given the current state of values in the system.
        * 
-       * Weight is given to basic blocks which:
+       * Weight is given to instructions which:
        * (1) Contain a call to mmap.
        * (2) Perform a write to a memory location know to be NVM.
        * (3) Perform cacheline writebacks on known NVM addresses.
@@ -228,11 +192,35 @@ namespace klee {
        */
       uint64_t weight_;
 
-      NvmHeuristicBasicBlockWrapper();
+      NvmInstructionDesc() = delete;
+      NvmInstructionDesc(KModule *mod, KInstruction *location, 
+                         std::shared_ptr<NvmValueDesc> values, 
+                         std::shared_ptr<NvmStackFrameDesc> stackframe) 
+        : mod_(mod), curr_(location), values_(values), stackframe_(stackframe) {}
 
       /* Methods for creating successor states. */
       NvmValueDesc maybeModifyValues(void);
       NvmStackFrameDesc maybeModifyStack(void);
+
+      /* Helper functions. */
+
+      // This creates the descriptions of the successor states, but does not
+      // retrieve the actual shared successors.
+      std::list<NvmInstructionDesc> constructSuccessors(void);
+
+      void setSuccessors() {
+        for (const NvmInstructionDesc &succ : constructSuccessors()) {
+          std::shared_ptr<NvmInstructionDesc> sptr = getShared(succ);
+          successors.push_back(sptr);
+          sptr->addPredecessor(*this);
+        }
+      }
+
+      // When you get the successors, you want to add yourself to your successor's
+      // predecessor list.
+      void addPredecessor(const NvmInstructionDesc& pred) {
+        predecessors.push_back(getShared(pred));
+      }
 
     public:
 
@@ -240,18 +228,40 @@ namespace klee {
        * Essentially, the successors are speculative. They assume that:
        * (1) Only the current set of values that point to NVM do so.
        */
-      std::list<std::shared_ptr<NvmHeuristicBasicBlockWrapper>> getSuccessors();
+      const std::list<std::shared_ptr<NvmInstructionDesc>> &getSuccessors() {
+        if (successors.size() == 0 && !isTerminal) {
+          setSuccessors();
+        }
+
+        assert((successors.size() > 0 || isTerminal) && "Error in succ calculation!");
+
+        return successors;
+      }
 
       /**
        * This allows the process to be forward and backward. After we find all
        * block weights, we go from the ends back up to bubble up the overall
        * priority.
        */
-      std::list<std::shared_ptr<NvmHeuristicBasicBlockWrapper>> getPredecessors();
+      const std::list<std::shared_ptr<NvmInstructionDesc>> &getPredecessors() {
+        // Predecessors are set externally. This call should only ever occur after
+        // all successors have been calculated.
+        assert((predecessors.size() > 0 || isEntry) && "Error in pred calculation!");
 
-      static std::shared_ptr<NvmHeuristicBasicBlockWrapper> createEntry(llvm::Module*);
+        return predecessors;
+      }
 
       uint64_t getWeight(void) const { return weight_; };
+
+      /**
+       */
+      static std::shared_ptr<NvmInstructionDesc> createEntry(KModule *m, KFunction *mainFn) {
+        llvm::Instruction *inst = &(mainFn->function->getEntryBlock().front());
+        KInstuction *start = mainFn->getKInstruction(inst);
+        NvmInstructionDesc entryInst = NvmInstructionDesc(m, start);
+
+        return getShared(entryInst);
+      }
   }
 
 
@@ -262,11 +272,11 @@ namespace klee {
        */
 
       // This is the final heuristic value
-      static std::unordered_map<std::shared_ptr<NvmHeuristicBasicBlockWrapper>, uint64_t> priority;
+      static std::unordered_map<std::shared_ptr<NvmInstructionDesc>, uint64_t> priority;
 
-      std::shared_ptr<NvmHeuristicBasicBlockWrapper> current_state;
+      std::shared_ptr<NvmInstructionDesc> current_state;
 
-      uint64_t computePriority(std::shared_ptr<NvmHeuristicBasicBlockWrapper>);
+      uint64_t computePriority(std::shared_ptr<NvmInstructionDesc>);
 
     public:
       NvmHeuristicInfo(const llvm::Module *theModule);
