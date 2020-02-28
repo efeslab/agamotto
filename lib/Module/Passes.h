@@ -11,7 +11,7 @@
 #define KLEE_PASSES_H
 
 #include "klee/Config/Version.h"
-#include "NvmFunctionInfo.h"
+#include "../Core/NvmFunctionInfo.h"
 
 #include "llvm/ADT/Triple.h"
 #include "llvm/CodeGen/IntrinsicLowering.h"
