@@ -47,6 +47,11 @@ namespace stats {
   /// distance to a function return.
   extern Statistic minDistToReturn;
 
+  /// (iangneal): Core NVM stats. We don't want to go through the manager 
+  /// for everything...
+  extern Statistic nvmStatesKilledEndTrace;
+  extern Statistic nvmStatesKilledIrrelevant;
+  extern Statistic nvmStatesDeferred;
 }
 }
 

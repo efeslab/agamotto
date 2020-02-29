@@ -15,11 +15,13 @@
 
 #include <memory>
 #include <set>
+#include <unordered_map>
 #include <sqlite3.h>
 
 namespace llvm {
   class BranchInst;
   class Function;
+  class BasicBlock;
   class Instruction;
   class raw_fd_ostream;
 }
@@ -55,6 +57,10 @@ namespace klee {
 
     bool updateMinDistToUncovered;
 
+    // (iangneal): NVM-KLEE tracking for coverage.
+    // -- This will get incremented once 
+    std::unordered_map<const llvm::BasicBlock*, std::uint64_t> nvmBlockCoverage;
+
   public:
     static bool useStatistics();
     static bool useIStats();
@@ -64,6 +70,13 @@ namespace klee {
     void writeStatsHeader();
     void writeStatsLine();
     void writeIStats();
+
+    // (iangneal): Calculate NVM-KLEE numbers
+    std::uint64_t getNvmNumBlocksCovered() const;
+
+    std::uint64_t getNvmNumBlocksUnique() const;
+
+    double getNvmCoverage() const;
 
   public:
     StatsTracker(Executor &_executor, std::string _objectFilename,
@@ -86,6 +99,9 @@ namespace klee {
     // the index for the branch itself.
     void markBranchVisited(ExecutionState *visitedTrue,
                            ExecutionState *visitedFalse);
+
+    // (iangneal): For NVM-KLEE
+    void markNvmBasicBlockVisited(const llvm::BasicBlock *visited);
 
     // called when execution is done and stats files should be flushed
     void done();

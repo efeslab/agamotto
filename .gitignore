@@ -39,3 +39,6 @@ examples/**/*.bc
 examples/**/*.ll
 examples/**/klee-last
 examples/**/klee-out-*
+
+# Google test
+googletest-release-*

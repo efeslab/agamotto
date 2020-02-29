@@ -42,6 +42,13 @@ Legend = [
     ('TResolve', 'time spent in object resolution'),
     ('QCexCMisses', 'Counterexample cache misses'),
     ('QCexCHits', 'Counterexample cache hits'),
+    # (iangneal): For NVM-KLEE
+    ('NvmBlocksTotal', 'Number of total NVM-relevant basic blocks'),
+    ('NvmBlocksCovered', 'Number of executed NVM-relevant basic blocks'),
+    ('NvmBlocksUnique', 'Number of uniquely executed NVM-relevant basic blocks'),
+    ('NvmCoverage', 'Overall NVM-relevant basic block coverage'),
+    ('NvmStatesKilled', 'Number of the states killed by the NVM-aware heuristic'),
+    ('NvmStatesDeferred', 'Number of the states deferred by the NVM-aware heuristic')
 ]
 
 KleeTable = TableFormat(lineabove=Line("-", "-", "-", "-"),
@@ -121,6 +128,10 @@ def getLabels(pr):
     elif pr == 'more':
         labels = ('Path', 'Instrs', 'Time(s)', 'ICov(%)', 'BCov(%)', 'ICount',
                   'TSolver(%)', 'States', 'maxStates', 'Mem(MB)', 'maxMem(MB)')
+    elif pr == 'nvm':
+        labels = ('Path', 'Instrs', 'Time(s)', 'ICov(%)', 'BCov(%)', 'ICount',
+                  'NvmBlocks', 'NvmBlocksExec', 'NvmUnique', 'NvmCov(%)',
+                  'NvmStatesKilled', 'NvmStatesDeferred')
     else:
         labels = ('Path', 'Instrs', 'Time(s)', 'ICov(%)',
                   'BCov(%)', 'ICount', 'TSolver(%)')
@@ -130,7 +141,8 @@ def getLabels(pr):
 def getRow(record, stats, pr):
     """Compose data for the current run into a row."""
     I, BFull, BPart, BTot, T, St, Mem, QTot, QCon,\
-        _, Treal, SCov, SUnc, _, Ts, Tcex, Tf, Tr, QCexMiss, QCexHits = record
+        _, Treal, SCov, SUnc, _, Ts, Tcex, Tf, Tr, QCexMiss, QCexHits,\
+        NvmBlocks, NvmExec, NvmUniq, NvmCov, NvmKill, NvmDefer = record
     maxMem, avgMem, maxStates, avgStates = stats
 
     # special case for straight-line code: report 100% branch coverage
@@ -158,6 +170,11 @@ def getRow(record, stats, pr):
                100 * (2 * BFull + BPart) / (2 * BTot),
                SCov + SUnc, 100 * Ts / Treal,
                St, maxStates, Mem, maxMem)
+    elif pr == 'nvm':
+        row = (I, Treal, 100 * SCov / (SCov + SUnc),
+               100 * (2 * BFull + BPart) / (2 * BTot),
+               SCov + SUnc, NvmBlocks, NvmExec, NvmUniq, 
+               100.0 * NvmCov, NvmKill, NvmDefer)
     else:
         row = (I, Treal, 100 * SCov / (SCov + SUnc),
                100 * (2 * BFull + BPart) / (2 * BTot),
@@ -274,6 +291,10 @@ def main():
                           action='store_true', dest='pMore',
                           help='Print extra information (needed when '
                           'monitoring an ongoing run).')
+    pControl.add_argument('--print-nvm',
+                          action='store_true', dest='pNvm',
+                          help='Print extra information (needed when '
+                          'monitoring an ongoing run).')
 
     args = parser.parse_args()
 
@@ -288,6 +309,8 @@ def main():
         pr = 'abstime'
     elif args.pMore:
         pr = 'more'
+    elif args.pNvm:
+        pr = 'nvm'
 
     dirs = getKleeOutDirs(args.dir)
     if args.grafana:

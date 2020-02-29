@@ -24,6 +24,11 @@ namespace klee {
   extern llvm::cl::OptionCategory SolvingCat;
   extern llvm::cl::OptionCategory TerminationCat;
   extern llvm::cl::OptionCategory TestGenCat;
+  extern llvm::cl::OptionCategory SearchCat;
 }
 
 #endif /* KLEE_OPTIONCATEGORIES_H */
+/*
+ * vim: set tabstop=2 softtabstop=2 shiftwidth=2:
+ * vim: set filetype=cpp:
+ */

@@ -29,7 +29,8 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/IR/Dominators.h"
 
-namespace klee::utils {
+namespace klee {
+namespace utils {
 
   /** Checks whether the given Instruction i is: 1. An instance of a InlineAsm
    * instruction, and 2. Equals any of the specified assembly instruction
@@ -42,7 +43,7 @@ namespace klee::utils {
    * Returns true if the Instruction is an inline assembly call and equal to
    * any one of the specified assembly literals and returns false otherwise.
    */
-  bool checkInlineAsmEq(const llvm::Instruction &i...);
+  bool checkInlineAsmEq(const llvm::Instruction *i...);
 
 
   /** Checks whether the given Instruction i is: 1. An instance of a LLVM
@@ -56,7 +57,7 @@ namespace klee::utils {
    * Returns true if the Instruction is an instrinic call and contains any one
    * of the partial string names and returns false otherwise.
    */
-  bool checkInstrinicInst(const llvm::Instruction &i...);
+  bool checkInstrinicInst(const llvm::Instruction *i...);
 
   /** Returns true if any instruction represents a cache-flushing instruction.
    *
@@ -152,6 +153,7 @@ namespace klee::utils {
    * Do we need this and getPtrsFromStoredLocs?
    */
   std::unordered_set<const llvm::Value*> getPtrsFromLoc(const llvm::Value*);
+}
 }
 #endif //__NVM_ANALYSIS_UTILS_H__
 /*

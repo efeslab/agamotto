@@ -89,6 +89,8 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("klee_get_value_i32", handleGetValue, true),
   add("klee_get_value_i64", handleGetValue, true),
   add("klee_define_fixed_object", handleDefineFixedObject, false),
+  add("klee_define_fixed_object_from_existing", handleDefineFixedObjectFromExisting, false),
+  add("klee_undefine_fixed_object", handleUndefineFixedObject, false),
   add("klee_get_obj_size", handleGetObjSize, true),
   add("klee_get_errno", handleGetErrno, true),
 #ifndef __APPLE__
@@ -773,6 +775,48 @@ void SpecialFunctionHandler::handleDefineFixedObject(ExecutionState &state,
   MemoryObject *mo = executor.memory->allocateFixed(address, size, state.prevPC->inst);
   executor.bindObjectInState(state, mo, false);
   mo->isUserSpecified = true; // XXX hack;
+}
+
+void SpecialFunctionHandler::handleDefineFixedObjectFromExisting(
+  ExecutionState &state, KInstruction *target, std::vector<ref<Expr> > &arguments) 
+{
+  assert(arguments.size()==2 &&
+         "invalid number of arguments to klee_define_fixed_object");
+  assert(isa<ConstantExpr>(arguments[0]) &&
+         "expect constant address argument to klee_define_fixed_object");
+  assert(isa<ConstantExpr>(arguments[1]) &&
+         "expect constant size argument to klee_define_fixed_object");
+  
+  uint64_t address = cast<ConstantExpr>(arguments[0])->getZExtValue();
+  uint64_t size = cast<ConstantExpr>(arguments[1])->getZExtValue();
+  MemoryObject *mo = executor.memory->allocateFixed(address, size, state.prevPC->inst);
+  executor.bindObjectInState(state, mo, false);
+  mo->isUserSpecified = true; // XXX hack;
+
+  const ObjectState *cos = state.addressSpace.findObject(mo);
+  ObjectState *os = state.addressSpace.getWriteable(mo, cos);
+  assert(os);
+  char *data = (char*)address;
+  for (uint64_t i = 0; i < size; ++i) {
+    os->write8(i, data[i]);
+  }
+}
+
+void SpecialFunctionHandler::handleUndefineFixedObject(ExecutionState &state,
+                                                       KInstruction *target,
+                                                       std::vector<ref<Expr> > &arguments) {
+  assert(arguments.size()==1 &&
+         "invalid number of arguments to klee_undefine_fixed_object");
+  assert(isa<ConstantExpr>(arguments[0]) &&
+         "expect constant address argument to klee_undefine_fixed_object");
+
+  Executor::ExactResolutionList rl;
+  executor.resolveExact(state, arguments[0], rl, "klee_undefine_fixed_object");
+
+  for (Executor::ExactResolutionList::iterator it = rl.begin(),
+          ie = rl.end(); it != ie; ++it) {
+    it->second->addressSpace.unbindObject(it->first.first);
+  }
 }
 
 void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,

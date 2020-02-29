@@ -14,6 +14,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <malloc.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -33,6 +34,10 @@
 #include <termios.h>
 #include <unistd.h>
 
+void klee_error(const char*);
+void klee_warning(const char*);
+void klee_warning_once(const char*);
+
 /* Returns pointer to the symbolic file structure fs the pathname is symbolic */
 static exe_disk_file_t *__get_sym_file(const char *pathname) {
   if (!pathname)
@@ -41,11 +46,11 @@ static exe_disk_file_t *__get_sym_file(const char *pathname) {
   /* Handle potential persistent memory files first */
   int isPmemFile = !strcmp(pathname, __exe_fs.sym_pmem_filename);
   if (isPmemFile) {
-	  exe_disk_file_t *df = __exe_fs.sym_pmem;
-	  if (!df || df->stat->st_ino == 0) {
-			  return NULL;
-	  }
-	  return df;
+    exe_disk_file_t *df = __exe_fs.sym_pmem;
+    if (!df || df->stat->st_ino == 0) {
+      return NULL;
+    }
+    return df;
   }
 
   char c = pathname[0];
@@ -135,7 +140,8 @@ static int has_permission(int flags, struct stat64 *s) {
 
 // largely copied from fd_init.c:__create_new_dfile
 // biggest difference is not allocating the contents until the mmap later
-static void __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
+// return value: 0 means fine, non-zero means error
+static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
                                const char *name, struct stat64 *defaults) {
   struct stat64 *s = malloc(sizeof(*s));
   const char *sp;
@@ -145,6 +151,10 @@ static void __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
   memcpy(&sname[sp-name], "-stat", 6);
 
   assert(size);
+  if (size % 4096 != 0) {
+    klee_error("pmem file size must be multiple of page size (4096)");
+    return -1;
+  }
 
   dfile->size = size;
   // FIXME: page aligned vs. cache aligned
@@ -197,6 +207,14 @@ static void __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
   s->st_size = dfile->size;
   s->st_blocks = 8;
   dfile->stat = s;
+
+  unsigned num_pages = dfile->size / 4096;
+  unsigned total_size = sizeof(unsigned)*num_pages;
+  dfile->page_refs = malloc(total_size);
+  for (unsigned i = 0; i < num_pages; i++) {
+    dfile->page_refs[i] = 0;
+  }
+  return 0;
 }
 
 int __fd_open(const char *pathname, int flags, mode_t mode) {
@@ -204,18 +222,17 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
   exe_file_t *f;
   int fd;
 
-    /* Special case Persistent-Memory handling */
+  /* Special case Persistent-Memory handling */
   // file to be used for persistent memory-mapping
   int isPmemFile = !strcmp(pathname, __exe_fs.sym_pmem_filename);
   if (isPmemFile) {
-#if 0
-	  printf("Open called for pmem file; creating sym-file\n");
-#endif
-	  // stealing this code from fd_init.c:klee_init_fds
-	  struct stat64 s;
-	  stat64(".", &s);
-	  __exe_fs.sym_pmem = malloc(sizeof(*__exe_fs.sym_pmem) * 1);
-	  __create_pmem_dfile(__exe_fs.sym_pmem, __exe_fs.sym_pmem_size, pathname, &s);
+    // stealing this code from fd_init.c:klee_init_fds
+    struct stat64 s;
+    stat64(".", &s);
+    __exe_fs.sym_pmem = malloc(sizeof(*__exe_fs.sym_pmem) * 1);
+    if (-1 == __create_pmem_dfile(__exe_fs.sym_pmem, __exe_fs.sym_pmem_size, pathname, &s)) {
+      return -1;
+    }
   }
 
   for (fd = 0; fd < MAX_FDS; ++fd)
@@ -235,7 +252,7 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
   // Should be the case, since we're trying to create a new sym file for
   // persistent mapping...
   if (isPmemFile) {
-	  assert(df);
+    assert(df);
   }
   if (df) {    
     /* XXX Should check access against mode / stat / possible
@@ -541,15 +558,6 @@ ssize_t write(int fd, const void *buf, size_t count) {
 	  actual_count = f->dfile->size - f->off;	
       }
     }
-
-#if 0
-	// FIXME: only in debug mode please
-	if (f->dfile == __exe_fs.sym_pmem) {
-		printf("Writing to the symbolic pmem file:\n");
-		printf("\tOffset: %lld\n", f->off);
-		printf("\tActual count: %zu\n", actual_count);
-	}
-#endif
 
     if (actual_count)
       memcpy(f->dfile->contents + f->off, buf, actual_count);
@@ -1266,11 +1274,16 @@ int unlink(const char *pathname) {
       errno = EPERM;
       return -1;
     }
+  } else {
+    // (iangneal): call OS unlink
+    const char *concrete = __concretize_string(pathname);
+    klee_warning("calling concrete unlink");
+    klee_warning(concrete);
+    return syscall(__NR_unlink, concrete);
   }
-
-  klee_warning("ignoring (EPERM)");
-  errno = EPERM;
-  return -1;
+  // klee_warning("ignoring (EPERM)");
+  // errno = EPERM;
+  // return -1;
 }
 
 int unlinkat(int dirfd, const char *pathname, int flags) {
@@ -1501,4 +1514,26 @@ int chroot(const char *path) {
   klee_warning("ignoring (ENOENT)");
   errno = ENOENT;
   return -1;
+}
+
+
+int fallocate(int fd, int mode, off_t offset, off_t len) {
+  exe_file_t *f = __get_file(fd);
+  if (!f) {
+    errno = EBADF;
+    return -1;
+  }
+
+  if (f->dfile) {
+    klee_error("iangneal: mmap not supported for symbolic files!");
+    errno = ENOTSUP;
+    return -1;
+  }
+
+  return syscall(__NR_fallocate, f->fd, mode, offset, len);
+}
+
+
+int posix_fallocate(int fd, off_t offset, off_t len) {
+  return fallocate(fd, 0, offset, len);
 }

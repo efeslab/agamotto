@@ -58,6 +58,7 @@ bool RaiseAsmPass::runOnInstruction(Module &M, Instruction *I) {
   if (TLI->ExpandInlineAsm(ci))
     return true;
 
+  // NVM-KLEE
   // Non-volatile memory library PMDK encodes NVM intrinsics as inline assembly.
   // Convert these back into the NVM intrinsics.
   if (triple.getArch() == llvm::Triple::x86_64) {

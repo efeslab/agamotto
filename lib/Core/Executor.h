@@ -91,6 +91,7 @@ class Executor : public Interpreter {
   friend class StatsTracker;
   friend class MergeHandler;
   // (iangneal): Needed so that we can access the root module for analysis.
+  friend class Searcher;
   friend class NvmPathSearcher;
 
 public:
@@ -129,6 +130,11 @@ private:
   SpecialFunctionHandler *specialFunctionHandler;
   TimerGroup timers;
   std::unique_ptr<PTree> processTree;
+
+  /// (iangneal): For NVM-KLEE, copy the module options so we can validate we
+  /// are using the correct searcher/warn the user if they are using the wrong
+  /// searcher for the kind of bugsthat they want, i.e. NVM  persistence bugs.
+  ModuleOptions modOpts;
 
   /// Used to track states that have been added during the current
   /// instructions step. 
@@ -528,6 +534,8 @@ public:
 
   MergingSearcher *getMergingSearcher() const { return mergingSearcher; };
   void setMergingSearcher(MergingSearcher *ms) { mergingSearcher = ms; };
+
+  const ModuleOptions &getModuleOptions() const { return modOpts; };
 };
   
 } // End klee namespace
