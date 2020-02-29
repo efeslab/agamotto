@@ -201,17 +201,16 @@ usage: (klee_init_env) [options] [program arguments]\n\
         __emit_error(msg);
 
       sym_stdin_len = __str_to_int(argv[k++], msg);
-    } else if (__streq(argv[k], "--sym-pmem") ||
-				__streq(argv[k], "-sym-pmem")) {
-		const char *msg = "--sym-pmem expects one string argument <sym-pmem-filename> and one integer argument <sym-pmem-size>";
-		if (k + 2 >= argc)
-			__emit_error(msg);
-		k++;
-		strncpy(sym_pmem_filename, argv[k++], sizeof(sym_pmem_filename));
-		sym_pmem_size = __str_to_int(argv[k++], msg);
-		if (sym_pmem_size == 0) {
-			__emit_error("The second argument to --sym-pmem (file size) cannot be 0\n");
-		}
+    } else if (__streq(argv[k], "--sym-pmem") || __streq(argv[k], "-sym-pmem")) {
+      const char *msg = "--sym-pmem expects one string argument <sym-pmem-filename> and one integer argument <sym-pmem-size>";
+      if (k + 2 >= argc)
+        __emit_error(msg);
+      k++;
+      strncpy(sym_pmem_filename, argv[k++], sizeof(sym_pmem_filename));
+      sym_pmem_size = __str_to_int(argv[k++], msg);
+      if (sym_pmem_size == 0) {
+        __emit_error("The second argument to --sym-pmem (file size) cannot be 0\n");
+      }
 	} else if (__streq(argv[k], "--sym-stdout") ||
                __streq(argv[k], "-sym-stdout")) {
       sym_stdout_flag = 1;
@@ -247,8 +246,7 @@ usage: (klee_init_env) [options] [program arguments]\n\
   *argvPtr = final_argv;
 
   klee_init_fds(sym_files, sym_file_len, sym_stdin_len, sym_stdout_flag,
-                save_all_writes_flag, fd_fail, sym_pmem_filename, 
-				sym_pmem_size);
+                save_all_writes_flag, fd_fail, sym_pmem_filename, sym_pmem_size);
 }
 
 /* The following function represents the main function of the user application

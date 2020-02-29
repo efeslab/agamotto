@@ -96,7 +96,7 @@ static void __create_new_dfile(exe_disk_file_t *dfile, unsigned size,
 
 void create_new_dfile(exe_disk_file_t *dfile, unsigned size, 
                                const char *name, struct stat64 *defaults) {
-	__create_new_dfile(dfile, size, name, defaults);
+  __create_new_dfile(dfile, size, name, defaults);
 }
 static unsigned __sym_uint32(const char *name) {
   unsigned x;
@@ -129,8 +129,8 @@ void klee_init_fds(unsigned n_files, unsigned file_length,
   }
   
   if (strlen(sym_pmem_filename)) {
-	  strncpy(__exe_fs.sym_pmem_filename, sym_pmem_filename, sizeof __exe_fs.sym_pmem_filename);
-	  __exe_fs.sym_pmem_size = sym_pmem_size;
+    strncpy(__exe_fs.sym_pmem_filename, sym_pmem_filename, sizeof __exe_fs.sym_pmem_filename);
+    __exe_fs.sym_pmem_size = sym_pmem_size;
   }
 
   /* setting symbolic stdin */
