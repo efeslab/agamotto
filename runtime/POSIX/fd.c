@@ -14,6 +14,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <malloc.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -33,10 +34,24 @@
 #include <termios.h>
 #include <unistd.h>
 
+void klee_error(const char*);
+void klee_warning(const char*);
+void klee_warning_once(const char*);
+
 /* Returns pointer to the symbolic file structure fs the pathname is symbolic */
 static exe_disk_file_t *__get_sym_file(const char *pathname) {
   if (!pathname)
     return NULL;
+
+  /* Handle potential persistent memory files first */
+  int isPmemFile = !strcmp(pathname, __exe_fs.sym_pmem_filename);
+  if (isPmemFile) {
+    exe_disk_file_t *df = __exe_fs.sym_pmem;
+    if (!df || df->stat->st_ino == 0) {
+      return NULL;
+    }
+    return df;
+  }
 
   char c = pathname[0];
   unsigned i;
@@ -61,7 +76,8 @@ static size_t __concretize_size(size_t s);
 static const char *__concretize_string(const char *s);
 
 /* Returns pointer to the file entry for a valid fd */
-static exe_file_t *__get_file(int fd) {
+// FIXME: making this back to static probably should be done
+exe_file_t *__get_file(int fd) {
   if (fd>=0 && fd<MAX_FDS) {
     exe_file_t *f = &__exe_env.fds[fd];
     if (f->flags & eOpen)
@@ -122,10 +138,102 @@ static int has_permission(int flags, struct stat64 *s) {
 }
 
 
+// largely copied from fd_init.c:__create_new_dfile
+// biggest difference is not allocating the contents until the mmap later
+// return value: 0 means fine, non-zero means error
+static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
+                               const char *name, struct stat64 *defaults) {
+  struct stat64 *s = malloc(sizeof(*s));
+  const char *sp;
+  char sname[64];
+  for (sp=name; *sp; ++sp)
+    sname[sp-name] = *sp;
+  memcpy(&sname[sp-name], "-stat", 6);
+
+  assert(size);
+  if (size % 4096 != 0) {
+    klee_error("pmem file size must be multiple of page size (4096)");
+    return -1;
+  }
+
+  dfile->size = size;
+  // FIXME: page aligned vs. cache aligned
+  dfile->contents = memalign(4096, dfile->size);
+  // FIXME: proper name, not just "data"
+  klee_pmem_mark_persistent(dfile->contents, dfile->size, "data");
+  
+  // FIXME: what should stat64 actually be?
+  klee_make_symbolic(s, sizeof(*s), sname);
+
+  /* For broken tests */
+  if (!klee_is_symbolic(s->st_ino) && (s->st_ino & 0x7FFFFFFF) == 0)
+	s->st_ino = defaults->st_ino;
+  
+  /* Important since we copy this out through getdents, and readdir
+     will otherwise skip this entry. For same reason need to make sure
+     it fits in low bits. */
+  klee_assume((s->st_ino & 0x7FFFFFFF) != 0);
+
+  /* uclibc opendir uses this as its buffer size, try to keep
+     reasonable. */
+  klee_assume((s->st_blksize & ~0xFFFF) == 0);
+
+  klee_prefer_cex(s, !(s->st_mode & ~(S_IFMT | 0777)));
+  klee_prefer_cex(s, s->st_dev == defaults->st_dev);
+  klee_prefer_cex(s, s->st_rdev == defaults->st_rdev);
+  klee_prefer_cex(s, (s->st_mode&0700) == 0600);
+  klee_prefer_cex(s, (s->st_mode&0070) == 0040);
+  klee_prefer_cex(s, (s->st_mode&0007) == 0004);
+  klee_prefer_cex(s, (s->st_mode&S_IFMT) == S_IFREG);
+  klee_prefer_cex(s, s->st_nlink == 1);
+  klee_prefer_cex(s, s->st_uid == defaults->st_uid);
+  klee_prefer_cex(s, s->st_gid == defaults->st_gid);
+  klee_prefer_cex(s, s->st_blksize == 4096);
+  klee_prefer_cex(s, s->st_atime == defaults->st_atime);
+  klee_prefer_cex(s, s->st_mtime == defaults->st_mtime);
+  klee_prefer_cex(s, s->st_ctime == defaults->st_ctime);
+
+  /* s->st_dev == defaults->st_dev; */
+  /* s->st_rdev = defaults->st_rdev; */
+  /* s->st_mode = defaults->st_mode; */
+  /* s->st_nlink = 1; */
+  /* s->st_uid = defaults->st_uid; */
+  /* s->st_gid = defaults->st_gid; */
+  /* s->st_blksize=4096; */
+  /* s->st_atime = defaults->st_atime; */
+  /* s->st_mtime = defaults->st_mtime; */
+  /* s->st_ctime = defaults->st_ctime; */
+
+  s->st_size = dfile->size;
+  s->st_blocks = 8;
+  dfile->stat = s;
+
+  unsigned num_pages = dfile->size / 4096;
+  unsigned total_size = sizeof(unsigned)*num_pages;
+  dfile->page_refs = malloc(total_size);
+  for (unsigned i = 0; i < num_pages; i++) {
+    dfile->page_refs[i] = 0;
+  }
+  return 0;
+}
+
 int __fd_open(const char *pathname, int flags, mode_t mode) {
   exe_disk_file_t *df;
   exe_file_t *f;
   int fd;
+
+  /* Special case Persistent-Memory handling */
+  // file to be used for persistent memory-mapping
+  int isPmemFile = !strcmp(pathname, __exe_fs.sym_pmem_filename);
+  if (isPmemFile) {
+    // stealing this code from fd_init.c:klee_init_fds
+    struct stat64 s;
+    stat64(".", &s);
+    __exe_fs.sym_pmem = malloc(sizeof(*__exe_fs.sym_pmem) * 1);
+    if (-1 == __create_pmem_dfile(__exe_fs.sym_pmem, __exe_fs.sym_pmem_size, pathname, &s)) {
+      return -1;
+    }
+  }
 
   for (fd = 0; fd < MAX_FDS; ++fd)
     if (!(__exe_env.fds[fd].flags & eOpen))
@@ -141,6 +249,11 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
   memset(f, 0, sizeof *f);
 
   df = __get_sym_file(pathname); 
+  // Should be the case, since we're trying to create a new sym file for
+  // persistent mapping...
+  if (isPmemFile) {
+    assert(df);
+  }
   if (df) {    
     /* XXX Should check access against mode / stat / possible
        deletion. */
@@ -445,7 +558,7 @@ ssize_t write(int fd, const void *buf, size_t count) {
 	  actual_count = f->dfile->size - f->off;	
       }
     }
-    
+
     if (actual_count)
       memcpy(f->dfile->contents + f->off, buf, actual_count);
     
@@ -1403,10 +1516,6 @@ int chroot(const char *path) {
   return -1;
 }
 
-// (iangneal): needed by PMDK
-// Essentially, if it uses a file descriptor, we need to intercept it in this
-// layer, so we can translate it.
-void klee_error(const char*);
 
 int fallocate(int fd, int mode, off_t offset, off_t len) {
   exe_file_t *f = __get_file(fd);

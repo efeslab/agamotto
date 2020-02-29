@@ -94,6 +94,10 @@ static void __create_new_dfile(exe_disk_file_t *dfile, unsigned size,
   dfile->stat = s;
 }
 
+void create_new_dfile(exe_disk_file_t *dfile, unsigned size, 
+                               const char *name, struct stat64 *defaults) {
+  __create_new_dfile(dfile, size, name, defaults);
+}
 static unsigned __sym_uint32(const char *name) {
   unsigned x;
   klee_make_symbolic(&x, sizeof x, name);
@@ -109,7 +113,8 @@ static unsigned __sym_uint32(const char *name) {
    max_failures: maximum number of system call failures */
 void klee_init_fds(unsigned n_files, unsigned file_length,
                    unsigned stdin_length, int sym_stdout_flag,
-                   int save_all_writes_flag, unsigned max_failures) {
+                   int save_all_writes_flag, unsigned max_failures,
+                   char* sym_pmem_filename, unsigned sym_pmem_size) {
   unsigned k;
   char name[7] = "?-data";
   struct stat64 s;
@@ -123,6 +128,11 @@ void klee_init_fds(unsigned n_files, unsigned file_length,
     __create_new_dfile(&__exe_fs.sym_files[k], file_length, name, &s);
   }
   
+  if (strlen(sym_pmem_filename)) {
+    strncpy(__exe_fs.sym_pmem_filename, sym_pmem_filename, sizeof __exe_fs.sym_pmem_filename);
+    __exe_fs.sym_pmem_size = sym_pmem_size;
+  }
+
   /* setting symbolic stdin */
   if (stdin_length) {
     __exe_fs.sym_stdin = malloc(sizeof(*__exe_fs.sym_stdin));

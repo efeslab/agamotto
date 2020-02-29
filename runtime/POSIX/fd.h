@@ -41,6 +41,7 @@ typedef struct {
   unsigned size;  /* in bytes */
   char* contents;
   struct stat64* stat;
+  unsigned* page_refs;
 } exe_disk_file_t;
 
 typedef enum {
@@ -64,6 +65,11 @@ typedef struct {
   exe_disk_file_t *sym_stdin, *sym_stdout;
   unsigned stdout_writes; /* how many chars were written to stdout */
   exe_disk_file_t *sym_files;
+
+  exe_disk_file_t *sym_pmem;
+  unsigned sym_pmem_size; // in bytes
+  //FIXME: handle sizes better
+  char sym_pmem_filename[128];
   /* --- */
   /* the maximum number of failures on one path; gets decremented after each failure */
   unsigned max_failures; 
@@ -93,7 +99,8 @@ extern exe_sym_env_t __exe_env;
 
 void klee_init_fds(unsigned n_files, unsigned file_length,
                    unsigned stdin_length, int sym_stdout_flag,
-                   int do_all_writes_flag, unsigned max_failures);
+                   int do_all_writes_flag, unsigned max_failures,
+                   char* sym_pmem_filename, unsigned sym_pmem_size);
 void klee_init_env(int *argcPtr, char ***argvPtr);
 
 /* *** */
@@ -108,4 +115,7 @@ int __fd_ftruncate(int fd, off64_t length);
 int __fd_statfs(const char *path, struct statfs *buf);
 int __fd_getdents(unsigned int fd, struct dirent64 *dirp, unsigned int count);
 
+// non-static wrapper
+void create_new_dfile(exe_disk_file_t *dfile, unsigned size, 
+                      const char *name, struct stat64 *defaults);
 #endif /* KLEE_FD_H */
