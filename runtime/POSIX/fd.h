@@ -100,7 +100,7 @@ extern exe_sym_env_t __exe_env;
 void klee_init_fds(unsigned n_files, unsigned file_length,
                    unsigned stdin_length, int sym_stdout_flag,
                    int do_all_writes_flag, unsigned max_failures,
-				   char* sym_pmem_filename, unsigned sym_pmem_size);
+                   char* sym_pmem_filename, unsigned sym_pmem_size);
 void klee_init_env(int *argcPtr, char ***argvPtr);
 
 /* *** */
@@ -117,5 +117,5 @@ int __fd_getdents(unsigned int fd, struct dirent64 *dirp, unsigned int count);
 
 // non-static wrapper
 void create_new_dfile(exe_disk_file_t *dfile, unsigned size, 
-                               const char *name, struct stat64 *defaults);
+                      const char *name, struct stat64 *defaults);
 #endif /* KLEE_FD_H */
