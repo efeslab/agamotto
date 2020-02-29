@@ -114,7 +114,7 @@ static unsigned __sym_uint32(const char *name) {
 void klee_init_fds(unsigned n_files, unsigned file_length,
                    unsigned stdin_length, int sym_stdout_flag,
                    int save_all_writes_flag, unsigned max_failures,
-				   char* sym_pmem_filename, unsigned sym_pmem_size) {
+                   char* sym_pmem_filename, unsigned sym_pmem_size) {
   unsigned k;
   char name[7] = "?-data";
   struct stat64 s;
@@ -129,9 +129,6 @@ void klee_init_fds(unsigned n_files, unsigned file_length,
   }
   
   if (strlen(sym_pmem_filename)) {
-#if 0
-	  printf("PMEM File provided: \'%s\', with size: %lld\n", sym_pmem_filename, sym_pmem_size);
-#endif
 	  strncpy(__exe_fs.sym_pmem_filename, sym_pmem_filename, sizeof __exe_fs.sym_pmem_filename);
 	  __exe_fs.sym_pmem_size = sym_pmem_size;
   }
