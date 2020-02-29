@@ -231,7 +231,7 @@ namespace {
                   clEnumValN(NvmCheckType::Debug, "full",
                              "Check for PM bugs and track coverage statistics. Search strategy is selected in a separate option.")
                   KLEE_LLVM_CL_VAL_END),
-       cl::init(NvmCheckType::Debug),
+       cl::init(NvmCheckType::None),
        cl::cat(ChecksCat));
 
   cl::alias PmCheck("pm-check-type",
