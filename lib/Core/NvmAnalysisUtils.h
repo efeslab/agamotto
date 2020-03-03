@@ -114,6 +114,7 @@ namespace utils {
    * which we can examine. Otherwise, returns nullptr.
    */
   const llvm::CallInst* getNestedFunctionCallInst(const llvm::Instruction*);
+  llvm::CallInst* getNestedFunctionCallInst(llvm::Instruction*);
 
   /**
    * Finds all of the function calls nested within the given basic block and
