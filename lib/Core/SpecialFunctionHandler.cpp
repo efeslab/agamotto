@@ -30,6 +30,7 @@
 
 #include <errno.h>
 #include <sstream>
+#include <sys/mman.h>
 
 using namespace llvm;
 using namespace klee;

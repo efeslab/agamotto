@@ -1529,11 +1529,12 @@ void Executor::executeCall(ExecutionState &state,
 
     // (iangneal): We need to propagate NVM info
     // klee_warning("Module options for NVM (push): %d", modOpts.EnableNvmInfo);
-    if (modOpts.EnableNvmInfo) {
-      state.pushFrame(state.prevPC, kf, searcher->getNvmInfo());
-    } else {
-      state.pushFrame(state.prevPC, kf);
-    }
+    // if (modOpts.EnableNvmInfo) {
+    //   state.pushFrame(state.prevPC, kf, searcher->getNvmInfo());
+    // } else {
+    //   state.pushFrame(state.prevPC, kf);
+    // }
+    state.pushFrame(state.prevPC, kf);
 
     state.pc = kf->instructions;
 
@@ -2854,6 +2855,31 @@ void Executor::updateStates(ExecutionState *current) {
   if (searcher) {
     searcher->update(current, addedStates, removedStates);
   }
+  
+  // (iangneal): Update the heuristic as well.
+  if (current->nvmInfo) {
+    // TODO: this all needs to be timed
+    ref<Expr> val = getDestCell(*current, current->prevPC).value;
+    // update for prevPC, then set the instruction to the current pc for the
+    // next round.
+
+    ObjectPair op;
+    bool success;
+    solver->setTimeout(coreSolverTimeout);
+    if (val->getWidth() == Context::get().getPointerWidth() &&
+        current->addressSpace.resolveOne(*current, solver, val, op, success) && 
+        op.second->getKind() == ObjectState::Persistent) 
+    {
+      // This value is a pointer into nvm.
+      current->nvmInfo->updateCurrentState(current->prevPC, ContainsPointer);
+    } else {
+      current->nvmInfo->updateCurrentState(current->prevPC, DoesNotContain);
+    }
+    solver->setTimeout(time::Span());
+
+    // Now go to the next
+    current->nvmInfo->stepState(current->pc);
+  }
 
   states.insert(addedStates.begin(), addedStates.end());
   addedStates.clear();
@@ -4025,9 +4051,9 @@ void Executor::runFunctionAsMain(Function *f,
     }
   }
 
-  ExecutionState *state = new ExecutionState(kmodule->functionMap[f]);
+  ExecutionState *state = new ExecutionState(kmodule.get(), kmodule->functionMap[f], modOpts.EnableNvmInfo);
   // (iangneal): I want to start my stack frame with the main function
-  if (modOpts.EnableNvmInfo) {
+  if (false && modOpts.EnableNvmInfo) {
     state->stack.back().nvmDesc = NvmFunctionCallDesc(
         kmodule->functionMap[f]->function);
   }

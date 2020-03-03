@@ -77,3 +77,4 @@ endif()
 add_custom_target(set_wllvm_env COMMAND export LLVM_COMPILER=clang; export LLVM_CC_NAME=clang-8)
 
 add_subdirectory(000_pmdk_btree_map)
+add_subdirectory(001_simple)

@@ -327,6 +327,8 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
  * NvmHeuristicInfo
  */
 
+std::unordered_map<std::shared_ptr<NvmInstructionDesc>, uint64_t> NvmHeuristicInfo::priority;
+
 NvmHeuristicInfo::NvmHeuristicInfo(KModule *m, KFunction *mainFn) {
   current_state = NvmInstructionDesc::createEntry(m, mainFn);
   computeCurrentPriority();
