@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/syscall.h>
+#include <immintrin.h>
 
 #include "klee/klee.h"
 #include "klee/Config/config.h"

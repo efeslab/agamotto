@@ -46,24 +46,23 @@ namespace klee {
 }
 
 Searcher::Searcher(Executor &_executor) 
-  : executor(_executor),
-    nvmInfo(_executor.kmodule->getNvmFunctionInfo()) {}
+  : executor(_executor) {}
 
 Searcher::~Searcher() {}
 
 ExecutionState &Searcher::selectStateAndUpdateInfo() {
   ExecutionState &ref = selectState();
-  if (nvmInfo) {
-    const NvmFunctionCallDesc &desc = ref.stack.back().nvmDesc;
-    const BasicBlock *bb = ref.pc->inst->getParent();
-    const NvmFunctionCallInfo *callInfo = nvmInfo->findInfo(desc);
-    size_t importance = callInfo->getImportanceFactor(bb);
+  // if (nvmInfo) {
+  //   const NvmFunctionCallDesc &desc = ref.stack.back().nvmDesc;
+  //   const BasicBlock *bb = ref.pc->inst->getParent();
+  //   const NvmFunctionCallInfo *callInfo = nvmInfo->findInfo(desc);
+  //   size_t importance = callInfo->getImportanceFactor(bb);
 
-    if (importance) {
-      errs() << *bb << "\n";
-      executor.statsTracker->markNvmBasicBlockVisited(bb);
-    }
-  }
+  //   if (importance) {
+  //     errs() << *bb << "\n";
+  //     executor.statsTracker->markNvmBasicBlockVisited(bb);
+  //   }
+  // }
 
   return ref;
 }
@@ -360,7 +359,7 @@ size_t NvmPathSearcher::calculateGeneration(ExecutionState *current, ExecutionSt
 bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *execState) {
   // We need the current basic block and the function description to determine
   // the heuristic value.
-  const NvmFunctionCallDesc &desc = execState->stack.back().nvmDesc;
+  // const NvmFunctionCallDesc &desc = execState->stack.back().nvmDesc;
   const BasicBlock *bb = execState->pc->inst->getParent();
 
   size_t gen = calculateGeneration(current, execState);
@@ -371,8 +370,9 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *ex
   //  errs() << *execState->pc->inst << "\n";
   //}
   //nvm_info_.findInfo(desc)->dumpInfo();
-  const NvmFunctionCallInfo *callInfo = nvmInfo->findInfo(desc);
-  size_t importance = callInfo->getImportanceFactor(bb);
+  // const NvmFunctionCallInfo *callInfo = nvmInfo->findInfo(desc);
+  // size_t importance = callInfo->getImportanceFactor(bb);
+  size_t importance = 1;
   if (importance) {
     generateTest[execState] = true;
     //errs() << format("Previous coverage: %d\n", (int)(nvm_info_.computeCoverageRatio(covered) * 100.0));
@@ -382,7 +382,8 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *ex
     // executor.statsTracker->markNvmBasicBlockVisited(bb);
   }
 
-  size_t priority = nvmInfo->findInfo(desc)->getSuccessorFactor(bb);
+  // size_t priority = nvmInfo->findInfo(desc)->getSuccessorFactor(bb);
+  size_t priority = 1;
   if (!priority && generateTest[execState]) {
     //errs() << "\tKilling state with test!!\n";
     stats::nvmStatesKilledEndTrace++;
@@ -428,18 +429,18 @@ bool NvmPathSearcher::empty() {
 }
 
 void NvmPathSearcher::outputCoverage() {
-  bool useColors = errs().is_displayed();
-  if (useColors)
-    errs().changeColor(raw_ostream::MAGENTA, /*bold=*/true, /*bg=*/false);
+  // bool useColors = errs().is_displayed();
+  // if (useColors)
+  //   errs().changeColor(raw_ostream::MAGENTA, /*bold=*/true, /*bg=*/false);
 
-  char tmp[101];
-  snprintf(tmp, 100, "\tKLEE-NVM: important basic block coverage = %3d%%\n",
-      (int)(nvmInfo->computeCoverageRatio(covered) * 100.0));
+  // char tmp[101];
+  // snprintf(tmp, 100, "\tKLEE-NVM: important basic block coverage = %3d%%\n",
+  //     (int)(nvmInfo->computeCoverageRatio(covered) * 100.0));
 
-  errs() << tmp;
+  // errs() << tmp;
 
-  if (useColors)
-    errs().resetColor();
+  // if (useColors)
+  //   errs().resetColor();
 }
 
 ///

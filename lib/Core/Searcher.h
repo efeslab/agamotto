@@ -44,7 +44,6 @@ namespace klee {
 
   protected:
     Executor &executor;
-    NvmFunctionInfo *nvmInfo;
 
     virtual ExecutionState &selectState() = 0;
 
@@ -88,8 +87,6 @@ namespace klee {
       tmp.push_back(es);
       update(current, std::vector<ExecutionState *>(), tmp);
     }
-
-    const NvmFunctionInfo &getNvmInfo() const { return *nvmInfo; }
 
     enum CoreSearchType {
       DFS,

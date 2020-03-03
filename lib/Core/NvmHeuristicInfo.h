@@ -16,6 +16,7 @@
 #include <string>
 #include <deque>
 #include <memory>
+#include <typeinfo>
 #include <type_traits>
 
 #include "llvm/Pass.h"
@@ -300,6 +301,7 @@ namespace klee {
 
     public:
       NvmHeuristicInfo(KModule *m, KFunction *mainFn);
+      NvmHeuristicInfo(const NvmHeuristicInfo&) = default;
       
       /**
        * May change the current_state, or may not.
@@ -308,6 +310,10 @@ namespace klee {
 
       /**
        * Advance the current state.
+       * 
+       * It's fine if the current PC was a jump, branch, etc. We already computed
+       * the possible successor states for ourself (without symbolic values of course).
+       * If we did our job correctly, this should work fine. Otherwise, we error.
        */
       void stepState(KInstruction *nextPC);
 

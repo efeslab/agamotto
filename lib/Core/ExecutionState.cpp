@@ -70,7 +70,7 @@ StackFrame::~StackFrame() {
 
 /***/
 
-ExecutionState::ExecutionState(KFunction *kf) :
+ExecutionState::ExecutionState(KModule *km, KFunction *kf, bool enableNvmHeuristic) :
     pc(kf->instructions),
     prevPC(pc),
 
@@ -80,8 +80,11 @@ ExecutionState::ExecutionState(KFunction *kf) :
     coveredNew(false),
     forkDisabled(false),
     ptreeNode(0),
-    steppedInstructions(0){
+    steppedInstructions(0) {
   pushFrame(0, kf);
+  if (enableNvmHeuristic) {
+    nvmInfo = std::make_unique<NvmHeuristicInfo>(km, kf);
+  }
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
@@ -110,6 +113,10 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     prevPC(state.prevPC),
     stack(state.stack),
     incomingBBIndex(state.incomingBBIndex),
+
+    // Copy constructor for NvmHeuristicInfo
+    nvmInfo(state.nvmInfo ? std::make_unique<NvmHeuristicInfo>(*state.nvmInfo)
+                          : nullptr),
 
     addressSpace(state.addressSpace),
     constraints(state.constraints),
