@@ -39,6 +39,8 @@
 
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
+#include "klee/Internal/Support/ErrorHandling.h"
+
 #include "NvmAnalysisUtils.h"
 
 /**
@@ -55,6 +57,13 @@ namespace klee {
 
   struct Hashable {
     virtual uint64_t hash(void) const = 0;
+
+    template <class H>
+    struct HashFn : public std::unary_function<H, uint64_t> {
+      uint64_t operator()(const H &hashable) const {
+        return hashable.hash();
+      } 
+    };
   };
 
   template<class X>
@@ -62,19 +71,23 @@ namespace klee {
     private:
       // static_assert(std::is_base_of<Hashable, X>::value, "Stored class must be hashable!");
 
-      struct HashFn : public std::unary_function<X, uint64_t> {
-        uint64_t operator()(const X &x) {
-          return x.hash();
-        } 
-      };
+      typedef std::unordered_map<X, std::shared_ptr<X>, Hashable::HashFn<X>> object_map_t;
+      typedef std::shared_ptr<object_map_t> shared_map_t;
 
       /**
        * This way, we don't end up with a ton of duplicates.
        */
-      static std::unordered_map<X, std::shared_ptr<X>, HashFn> objects_;    
-      
+      static object_map_t objects_;
+
     protected:
+      
+      /**
+       * Creates a shared pointer instance 
+       */ 
       static std::shared_ptr<X> getShared(const X &x);
+
+    public:
+      virtual ~StaticStorage() {}
   };
 
   /**
@@ -108,6 +121,8 @@ namespace klee {
       static std::shared_ptr<NvmStackFrameDesc> empty() { 
         return getShared(NvmStackFrameDesc()); 
       }
+
+      friend bool operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
   };
 
   /**
@@ -136,7 +151,7 @@ namespace klee {
        * Speculate on the type of value that will be returned by the instruction
        * based on the values we currently have.
        */
-      NvmValueState getOutput(llvm::Instruction *i);
+      NvmValueState getOutput(llvm::Instruction *i) const;
 
     public:
 
@@ -156,6 +171,7 @@ namespace klee {
 
       static std::shared_ptr<NvmValueDesc> empty(void) { return getShared(NvmValueDesc()); }
 
+      friend bool operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs);
   };
 
   class NvmInstructionDesc : public Hashable, public StaticStorage<NvmInstructionDesc> {
@@ -168,10 +184,10 @@ namespace klee {
       std::shared_ptr<NvmValueDesc> values_;
       std::shared_ptr<NvmStackFrameDesc> stackframe_;
 
-      std::list<std::shared_ptr<NvmInstructionDesc>> successors;
+      std::list<std::shared_ptr<NvmInstructionDesc>> successors_;
       bool isTerminal = false;
 
-      std::list<std::shared_ptr<NvmInstructionDesc>> predecessors;
+      std::list<std::shared_ptr<NvmInstructionDesc>> predecessors_;
       bool isEntry = true;
 
       /**
@@ -213,7 +229,7 @@ namespace klee {
       // When you get the successors, you want to add yourself to your successor's
       // predecessor list.
       void addPredecessor(const NvmInstructionDesc& pred) {
-        predecessors.push_back(getShared(pred));
+        predecessors_.push_back(getShared(pred));
         isEntry = false;
       }
 
@@ -240,8 +256,8 @@ namespace klee {
       const std::list<std::shared_ptr<NvmInstructionDesc>> &getPredecessors() {
         // Predecessors are set externally. This call should only ever occur after
         // all successors have been calculated.
-        assert((predecessors.size() > 0 || isEntry) && "Error in pred calculation!");
-        return predecessors;
+        assert((predecessors_.size() > 0 || isEntry) && "Error in pred calculation!");
+        return predecessors_;
       }
 
       uint64_t getWeight(void) const { return weight_; };
@@ -264,6 +280,8 @@ namespace klee {
 
       std::list<std::shared_ptr<NvmInstructionDesc>> 
           getMatchingSuccessors(KInstruction *nextPC);
+
+      friend bool operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &rhs);
   };
 
 

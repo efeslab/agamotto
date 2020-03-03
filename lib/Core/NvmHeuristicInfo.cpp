@@ -9,11 +9,29 @@ using namespace klee;
  */
 
 template<class X>
-static std::shared_ptr<X> StaticStorage<X>::getShared(const X &x) {
-  if (objects_[x]) return objects_[x];
+typename StaticStorage<X>::object_map_t StaticStorage<X>::objects_;
 
-  objects_[x] = std::shared_ptr<X>::make_shared(x);
+template<class X>
+std::shared_ptr<X> StaticStorage<X>::getShared(const X &x) {
+  
+  // static shared_map_t objects_;
+
+  if (objects_[x]) return objects_[x];
+  
+  objects_[x] = std::make_shared<X>(x);
   return objects_[x];
+  // return std::make_shared<X>(x);
+  // if (!rootObject_) {
+  //   rootObject_ = std::make_shared<X>(x);
+  //   rootObject_->objects_ = std::make_shared<shared_map_t>();
+  //   rootObject_->objects()[x] = rootObject_;
+  //   return rootObject_;
+  // }
+
+  // if (rootObject_->objects()[x]) return rootObject_->objects()[x];
+  
+  // rootObject_->objects()[x] = std::make_shared<X>(x);
+  // return rootObject_->objects()[x];
 }
 
 /**
@@ -22,9 +40,14 @@ static std::shared_ptr<X> StaticStorage<X>::getShared(const X &x) {
 
 uint64_t NvmStackFrameDesc::hash(void) const {
   uint64_t hash_value = 0;
-  for (uint64_t i = 0; i < return_stack.size(); ++i) {
-    ptr_val = ((uint64_t)return_stack[i].get())
+  auto iter = return_stack.begin();
+  for (uint64_t i = 0;
+       i < return_stack.size() && iter != return_stack.end(); 
+       ++i) 
+  {
+    uint64_t ptr_val = ((uint64_t)*iter);
     hash_value ^= (ptr_val << i) | (ptr_val >> (64llu - i)); // Rotational shift.
+    iter++;
   }
 
   return hash_value;
@@ -32,24 +55,29 @@ uint64_t NvmStackFrameDesc::hash(void) const {
 
 std::shared_ptr<NvmStackFrameDesc> NvmStackFrameDesc::doReturn(void) const {
   NvmStackFrameDesc ns = *this;
-  ns->caller_stack.pop_back();
-  ns->return_stack.pop_back();
+  ns.caller_stack.pop_back();
+  ns.return_stack.pop_back();
   return getShared(ns);
 }
 
 std::shared_ptr<NvmStackFrameDesc> NvmStackFrameDesc::doCall(
     Instruction *caller, Instruction *retLoc) const {
   NvmStackFrameDesc ns = *this;
-  ns->caller_stack.push_back(caller);
-  ns->return_stack.push_back(retLoc);
+  ns.caller_stack.push_back(caller);
+  ns.return_stack.push_back(retLoc);
   return getShared(ns);
 }
+
+
+ bool klee::operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs) {
+   return lhs.caller_stack == rhs.caller_stack && lhs.return_stack == rhs.return_stack;
+ }
 
 /**
  * NvmValueDesc
  */
 
-uint64_t NvmValueDesc::hash(void) {
+uint64_t NvmValueDesc::hash(void) const {
   uint64_t hash_value = 0;
   uint64_t count = 0;
   for (const auto &p : state_) {
@@ -65,9 +93,10 @@ void NvmValueDesc::mutateState(Value *val, NvmValueState vs) {
   state_[val] = vs;
 }
 
-NvmValueState NvmValueDesc::getOutput(Instruction *i) {
+NvmValueState NvmValueDesc::getOutput(Instruction *i) const {
   bool contains = false;
-  for (Use *u : i->op_range()) {
+  for (auto iter = i->op_begin(); iter != i->op_end(); iter++) {
+    Use *u = &(*iter);
     NvmValueState nvs = state_.at(u->get());
     if (nvs != DoesNotContain) {
       contains = true;
@@ -82,7 +111,7 @@ NvmValueState NvmValueDesc::getOutput(Instruction *i) {
 
 std::shared_ptr<NvmValueDesc> NvmValueDesc::updateState(Value *val, NvmValueState vs) const {
   NvmValueDesc vd = *this;
-  gvd.mutateState(val, vs);
+  vd.mutateState(val, vs);
   return getShared(vd);
 }
 
@@ -96,7 +125,7 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::speculateOnNext(
     
     // Return instructions should mutate the call location's value.
     case Instruction::Ret:
-      return retDesc->mutateState(sf.getCaller(), outState);
+      return retDesc->updateState(sf->getCaller(), outState);
     // Control flow -- doesn't mutate values.
     case Instruction::Br:
     case Instruction::IndirectBr:
@@ -105,7 +134,7 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::speculateOnNext(
     case Instruction::Call:
     // Compare -- not modifying 
     case Instruction::ICmp:
-      return retDesc->mutateState(pc->inst, DoesNotContain);
+      return retDesc->updateState(pc->inst, DoesNotContain);
 
     // Value assignments
     case Instruction::PHI:
@@ -124,11 +153,11 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::speculateOnNext(
     case Instruction::Shl:
     case Instruction::LShr:
     case Instruction::AShr:
-      return retDesc->mutateState(pc->inst, outState);
+      return retDesc->updateState(pc->inst, outState);
 
     // Memory Instructions -- potentially modifying
     case Instruction::Alloca:
-      return retDesc->mutateState(pc->inst, DoesNotContain);
+      return retDesc->updateState(pc->inst, DoesNotContain);
     case Instruction::Load:
     case Instruction::Store:
     case Instruction::GetElementPtr:
@@ -138,7 +167,7 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::speculateOnNext(
     case Instruction::IntToPtr:
     case Instruction::PtrToInt:
     case Instruction::BitCast:
-      return retDesc->mutateState(pc->inst, outState);
+      return retDesc->updateState(pc->inst, outState);
 
     // Floating point instructions...
     case Instruction::FAdd:
@@ -153,7 +182,7 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::speculateOnNext(
     case Instruction::UIToFP:
     case Instruction::SIToFP:
     case Instruction::FCmp:
-      return retDesc->mutateState(pc->inst, outState);
+      return retDesc->updateState(pc->inst, outState);
 
     // ???
     case Instruction::InsertValue:
@@ -161,7 +190,7 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::speculateOnNext(
     case Instruction::Fence:
     case Instruction::InsertElement:
     case Instruction::ExtractElement:
-      return retDesc->mutateState(pc->inst, outState);
+      return retDesc->updateState(pc->inst, outState);
 
     // Error states -- also don't mutate
     case Instruction::ShuffleVector:
@@ -177,8 +206,12 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::speculateOnNext(
     } 
   }
 
-  klee_error("Reached end of function!\n";
+  klee_error("Reached end of function!\n");
   return std::shared_ptr<NvmValueDesc>();
+}
+
+bool klee::operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs) {
+  return lhs.state_ == rhs.state_;
 }
 
 /**
@@ -188,48 +221,48 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::speculateOnNext(
 std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
   std::list<NvmInstructionDesc> ret;
   // I essentially need to figure out the next instruction.
-  llvm::Instruction *ip = curr_->inst;
-  llvm::BasicBlock *bb = ip->getParent();
+  Instruction *ip = curr_->inst;
+  BasicBlock *bb = ip->getParent();
 
   if (ip == bb->getTerminator()) {
     // Figure out the transition to the next basic block.
     // -- Could be a return or a branch.
-    if ((ReturnInst *ri = dyn_cast<ReturnInst>(ip))) {
-      llvm::Instruction *ni = stackframe_->getCaller();
+    if (ReturnInst *ri = dyn_cast<ReturnInst>(ip)) {
+      Instruction *ni = stackframe_->getCaller();
       std::shared_ptr<NvmValueDesc> new_values = values_->speculateOnNext(stackframe_, curr_);
       std::shared_ptr<NvmStackFrameDesc> ns = stackframe_->doReturn();
 
       NvmInstructionDesc desc(mod_, mod_->getKInstruction(ni), new_values, stackframe_);
       ret.push_back(desc);
-    } else if ((BranchInst *bi = dyn_cast<BranchInst>(ip))) {
-      for (auto &s : bi->successors()) {
-        Instruction *ni = &(s->front());
-        NvmStackFrameDesc desc(mod_, mod_->getKInstruction(ni), values_, stackframe_);
+    } else if (BranchInst *bi = dyn_cast<BranchInst>(ip)) {
+      for (auto *sbb : bi->successors()) {
+        Instruction *ni = &(sbb->front());
+        NvmInstructionDesc desc(mod_, mod_->getKInstruction(ni), values_, stackframe_);
         ret.push_back(desc);
       }
-    } else if ((SwitchInst *si = dyn_cast<SwitchInst>(ip))) {
+    } else if (SwitchInst *si = dyn_cast<SwitchInst>(ip)) {
       for (auto &c : si->cases()) {
-        Instruction *ni = &(s->getCaseSuccessor()->front());
-        NvmStackFrameDesc desc(mod_, mod_->getKInstruction(ni), values_, stackframe_);
+        Instruction *ni = &(c.getCaseSuccessor()->front());
+        NvmInstructionDesc desc(mod_, mod_->getKInstruction(ni), values_, stackframe_);
         ret.push_back(desc);
       }
     } else {
-      assert(retLoc && "Assumption violated -- terminator instruction is not a return or branch!");
+      assert(false && "Assumption violated -- terminator instruction is not a return or branch!");
     }
 
-  } else if ((llvm::CallInst *ci = utils::getNestedFunctionCallInst(ip))) {
+  } else if (CallInst *ci = utils::getNestedFunctionCallInst(ip)) {
     // Successor is the entry to the next function.
-    llvm::Function *nf = ci->getCalledFunction();
-    llvm::Instruction *nextInst = &(nf->getEntryBlock().front());
-    llvm::Instruction *retLoc = ci->getNextNonDebugInstruction();
+    Function *nf = ci->getCalledFunction();
+    Instruction *nextInst = &(nf->getEntryBlock().front());
+    Instruction *retLoc = ci->getNextNonDebugInstruction();
     assert(retLoc && "Assumption violated -- call instruction is the last instruction in a basic block!");
 
     std::shared_ptr<NvmStackFrameDesc> newStack = stackframe_->doCall(ci, retLoc);
 
-    NvmStackFrameDesc desc(mod_, mod_->getKInstruction(nextInst), values_, newStack);
+    NvmInstructionDesc desc(mod_, mod_->getKInstruction(nextInst), values_, newStack);
     ret.push_back(desc);
   } else {
-    llvm::Instruction *ni = ip->getNextNonDebugInstruction();
+    Instruction *ni = ip->getNextNonDebugInstruction();
     std::shared_ptr<NvmValueDesc> new_values = values_->speculateOnNext(stackframe_, curr_);
     NvmInstructionDesc desc(mod_, mod_->getKInstruction(ni), new_values, stackframe_);
     ret.push_back(desc);
@@ -241,43 +274,53 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
 void NvmInstructionDesc::setSuccessors(const std::unordered_set<std::shared_ptr<NvmInstructionDesc>> &traversed) {
   for (const NvmInstructionDesc &succ : constructSuccessors()) {
     std::shared_ptr<NvmInstructionDesc> sptr = getShared(succ);
-    successors.push_back(sptr);
+    successors_.push_back(sptr);
     sptr->addPredecessor(*this);
   }
 
   std::list<std::shared_ptr<NvmInstructionDesc>> trueSuccessors;
-  for (auto sptr : successors) {
+  for (auto sptr : successors_) {
     if (traversed.find(sptr) == traversed.end()) {
       trueSuccessors.push_back(sptr);
     }
   }
 
-  successors = std::move(trueSuccessors);
+  successors_ = std::move(trueSuccessors);
 
-  isTerminal = successors.size() == 0;
+  isTerminal = successors_.size() == 0;
 }
 
 const std::list<std::shared_ptr<NvmInstructionDesc>> 
 &NvmInstructionDesc::getSuccessors(
     const std::unordered_set<std::shared_ptr<NvmInstructionDesc>> &traversed) {
-  if (successors.size() == 0 && !isTerminal) {
+  if (successors_.size() == 0 && !isTerminal) {
     setSuccessors(traversed);
   }
 
-  assert((successors.size() > 0 || isTerminal) 
+  assert((successors_.size() > 0 || isTerminal) 
           && "Error in successor calculation!");
 
-  return successors;
+  return successors_;
 }
 
-std::list<std::shared_ptr<NvmInstructionDesc>> getMatchingSuccessors(KInstruction *nextPC) {
+std::list<std::shared_ptr<NvmInstructionDesc>> 
+NvmInstructionDesc::getMatchingSuccessors(KInstruction *nextPC) {
   std::list<std::shared_ptr<NvmInstructionDesc>> ret;
 
-  for (std::shared_ptr<NvmInstructionDesc> p : successors) {
+  for (std::shared_ptr<NvmInstructionDesc> p : successors_) {
     if (p->curr_ == nextPC) ret.push_back(p);
   }
 
   return ret;
+}
+
+bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &rhs) {
+  return lhs.curr_ == rhs.curr_ &&
+         lhs.values_ == rhs.values_ &&
+         lhs.stackframe_ == rhs.stackframe_ &&
+         lhs.successors_ == rhs.successors_ &&
+         lhs.predecessors_ == rhs.predecessors_ &&
+         lhs.weight_ == rhs.weight_;
 }
 
 /**
@@ -286,10 +329,10 @@ std::list<std::shared_ptr<NvmInstructionDesc>> getMatchingSuccessors(KInstructio
 
 NvmHeuristicInfo::NvmHeuristicInfo(KModule *m, KFunction *mainFn) {
   current_state = NvmInstructionDesc::createEntry(m, mainFn);
-  computePriority();
+  computeCurrentPriority();
 }
 
-void NvmHeuristicInfo::computePriority(void) {
+void NvmHeuristicInfo::computeCurrentPriority(void) {
   if (priority.find(current_state) != priority.end()) return;
 
   std::list<std::shared_ptr<NvmInstructionDesc>> toTraverse;
@@ -301,10 +344,10 @@ void NvmHeuristicInfo::computePriority(void) {
   // Downward traversal.
   while (toTraverse.size()) {
     std::shared_ptr<NvmInstructionDesc> instDesc = toTraverse.front();
-    traversed.push_back(instDesc);
+    traversed.insert(instDesc);
     toTraverse.pop_front();
 
-    const auto &succ = instDesc->getSuccesors(traversed);
+    const auto &succ = instDesc->getSuccessors(traversed);
     if (succ.size()) {
       for (auto sptr : succ) toTraverse.push_back(sptr);
     } else {
