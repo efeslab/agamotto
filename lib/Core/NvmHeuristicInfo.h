@@ -16,8 +16,7 @@
 #include <string>
 #include <deque>
 #include <memory>
-#include <typeinfo>
-#include <type_traits>
+// #include <type_traits>
 
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
@@ -281,6 +280,8 @@ namespace klee {
 
       llvm::Instruction *inst(void) const { return curr_->inst; }
 
+      KInstruction *kinst(void) const { return curr_; }
+
       /**
        */
       static std::shared_ptr<NvmInstructionDesc> createEntry(KModule *m, KFunction *mainFn) {
@@ -336,6 +337,10 @@ namespace klee {
        * If we did our job correctly, this should work fine. Otherwise, we error.
        */
       void stepState(KInstruction *nextPC);
+
+      llvm::Instruction *currentInst(void) const {
+        return current_state->inst();
+      }
 
       uint64_t getCurrentPriority(void) const { return priority.at(current_state); };
   };

@@ -2857,30 +2857,34 @@ void Executor::updateStates(ExecutionState *current) {
   }
   
   // (iangneal): Update the heuristic as well.
-  if (current->nvmInfo && current->prevPC->dest < current->stack.back().kf->numRegisters) {
+  if (current->nvmInfo) {
+    
     // TODO: this all needs to be timed
+    if (current->prevPC->dest < current->stack.back().kf->numRegisters) {
+      ref<Expr> val = getDestCell(*current, current->prevPC).value;
+      // update for prevPC, then set the instruction to the current pc for the
+      // next round.
+      errs() << "prevPC = " << *current->prevPC->inst << "\n";
+      errs() << "nvmPC  = " << *current->nvmInfo->currentInst() << "\n";
+      errs() << "pc     = " << *current->pc->inst << "\n";
 
-    ref<Expr> val = getDestCell(*current, current->prevPC).value;
-    // update for prevPC, then set the instruction to the current pc for the
-    // next round.
-    errs() << "prevPC = " << *current->prevPC->inst << "\n";
-
-    ObjectPair op;
-    bool success;
-    solver->setTimeout(coreSolverTimeout);
-    if (!val.isNull() && 
-        val->getWidth() == Context::get().getPointerWidth() &&
-        current->addressSpace.resolveOne(*current, solver, val, op, success) &&
-        success && 
-        op.second && 
-        op.second->getKind() == ObjectState::Persistent) 
-    {
-      // This value is a pointer into nvm.
-      current->nvmInfo->updateCurrentState(current->prevPC, ContainsPointer);
-    } else {
-      current->nvmInfo->updateCurrentState(current->prevPC, DoesNotContain);
+      ObjectPair op;
+      bool success;
+      solver->setTimeout(coreSolverTimeout);
+      if (!val.isNull() && 
+          val->getWidth() == Context::get().getPointerWidth() &&
+          current->addressSpace.resolveOne(*current, solver, val, op, success) &&
+          success && 
+          op.second && 
+          op.second->getKind() == ObjectState::Persistent) 
+      {
+        // This value is a pointer into nvm.
+        current->nvmInfo->updateCurrentState(current->prevPC, ContainsPointer);
+      } else {
+        current->nvmInfo->updateCurrentState(current->prevPC, DoesNotContain);
+      }
+      solver->setTimeout(time::Span());
     }
-    solver->setTimeout(time::Span());
 
     // Now go to the next
     current->nvmInfo->stepState(current->pc);

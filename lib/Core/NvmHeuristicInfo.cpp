@@ -107,6 +107,7 @@ uint64_t NvmValueDesc::hash(void) const {
 }
 
 void NvmValueDesc::mutateState(Value *val, NvmValueState vs) {
+  if (vs == DoesNotContain) return; // Make sparse
   state_[val] = vs;
 }
 
@@ -124,8 +125,9 @@ NvmValueState NvmValueDesc::getOutput(Instruction *i) const {
   }
 
   if (!contains) return DoesNotContain;
-  if (i->getType()->isPtrOrPtrVectorTy()) return ContainsPointer;
-  return ContainsDerivative;
+  return ContainsPointer;
+  // if (i->getType()->isPtrOrPtrVectorTy()) return ContainsPointer;
+  // return ContainsDerivative;
 }
 
 std::shared_ptr<NvmValueDesc> NvmValueDesc::updateState(Value *val, NvmValueState vs) const {
@@ -358,13 +360,15 @@ NvmInstructionDesc::getMatchingSuccessors(KInstruction *nextPC) {
 
   assert(successors_.size() || isTerminal);
 
+  errs() << __PRETTY_FUNCTION__ << " for " << *curr_->inst << "\n";
   errs() << "Number of successors: " << successors_.size() << 
-    (isTerminal ? " isTerminal" : " not terminal") <<"\n";
+    (isTerminal ? " (terminal)" : " (not terminal)") <<"\n";
+  errs() << "Looking for " << *nextPC->inst << "\n";
 
   for (std::shared_ptr<NvmInstructionDesc> p : successors_) {
     if (p->curr_ == nextPC) ret.push_back(p);
     else {
-      errs() << *p->curr_->inst << " != " << *nextPC->inst << "\n";
+      errs() << "|succ| " <<*p->curr_->inst << " != |next| " << *nextPC->inst << "\n";
     }
   }
 
@@ -489,12 +493,18 @@ void NvmHeuristicInfo::updateCurrentState(KInstruction *pc, NvmValueState state)
 }
 
 void NvmHeuristicInfo::stepState(KInstruction *nextPC) {
+  if (current_state->isTerminator()) {
+    assert(nextPC == current_state->kinst() && "assumption violated");
+    return;
+  }
+
   auto candidates = current_state->getMatchingSuccessors(nextPC);
   if (candidates.size() > 1) {
     klee_error("too many candidates!");
     return;
   }
   if (!candidates.size()) {
+    errs() << *nextPC->inst << "\n";
     klee_error("no candidates!");
     return;
   }
