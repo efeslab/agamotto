@@ -110,6 +110,10 @@ namespace klee {
 
       uint64_t hash(void) const override;
 
+      bool isEmpty(void) const {
+        return !caller_stack.size();
+      }
+
       std::shared_ptr<NvmStackFrameDesc> doReturn(void) const;
 
       std::shared_ptr<NvmStackFrameDesc> doCall(
@@ -118,10 +122,16 @@ namespace klee {
       llvm::Instruction *getCaller(void) const {
         return caller_stack.back();
       }
+
+      llvm::Instruction *getReturnLocation(void) const {
+        return return_stack.back();
+      }
       
       static std::shared_ptr<NvmStackFrameDesc> empty() { 
         return getShared(NvmStackFrameDesc()); 
       }
+
+      std::string str(void) const;
 
       friend bool operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
   };
@@ -171,6 +181,8 @@ namespace klee {
         std::shared_ptr<NvmStackFrameDesc> sf, KInstruction *pc) const;
 
       static std::shared_ptr<NvmValueDesc> empty(void) { return getShared(NvmValueDesc()); }
+
+      std::string str(void) const;
 
       friend bool operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs);
   };
@@ -224,8 +236,10 @@ namespace klee {
       // retrieve the actual shared successors.
       std::list<NvmInstructionDesc> constructSuccessors(void);
 
-      void setSuccessors(
-        const std::unordered_set<std::shared_ptr<NvmInstructionDesc>> &traversed);
+      /**
+       * All successors.
+       */
+      void setSuccessors();
 
       // When you get the successors, you want to add yourself to your successor's
       // predecessor list.
@@ -240,13 +254,15 @@ namespace klee {
         return ((uint64_t)curr_) ^ values_->hash() ^ stackframe_->hash();
       }
 
+      bool isTerminator(void) const { return isTerminal; } 
+
       /**
        * Essentially, the successors are speculative. They assume that:
        * (1) Only the current set of values that point to NVM do so.
        * 
        * By checking against the traversed list, we do some backedge detection.
        */
-      const std::list<std::shared_ptr<NvmInstructionDesc>> &getSuccessors(
+      std::list<std::shared_ptr<NvmInstructionDesc>> getSuccessors(
         const std::unordered_set<std::shared_ptr<NvmInstructionDesc>> &traversed);
 
       /**
@@ -262,6 +278,8 @@ namespace klee {
       }
 
       uint64_t getWeight(void) const { return weight_; };
+
+      llvm::Instruction *inst(void) const { return curr_->inst; }
 
       /**
        */
@@ -281,6 +299,8 @@ namespace klee {
 
       std::list<std::shared_ptr<NvmInstructionDesc>> 
           getMatchingSuccessors(KInstruction *nextPC);
+
+      std::string str(void) const;
 
       friend bool operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &rhs);
   };

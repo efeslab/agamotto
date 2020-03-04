@@ -363,11 +363,11 @@ void KModule::optimiseAndPrepare(
   pm3.add(new PhiCleanerPass());
   pm3.add(new FunctionAliasPass());
 
-  if (opts.EnableNvmInfo) {
-    klee_warning("NVM info requires isolating call instructions to separate "
-                 "basic blocks. Adding block-splitting pass...");
-    pm3.add(new IsolateCallInstsPass());
-  }
+  // if (opts.EnableNvmInfo) {
+  //   klee_warning("NVM info requires isolating call instructions to separate "
+  //                "basic blocks. Adding block-splitting pass...");
+  //   pm3.add(new IsolateCallInstsPass());
+  // }
 
   pm3.run(*module);
 }
