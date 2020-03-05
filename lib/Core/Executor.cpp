@@ -2022,7 +2022,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         Expr::Width outWidth = getWidthForLLVMType(t);      
         // The concrete output of CPUID
         unsigned regs[4];
-        uint64_t regConst[4];
 
         if (numArgs == 1) {
           klee_error("implement cpuid for one arg!");
@@ -2036,15 +2035,21 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           klee_warning("cpuid(leaf=%u, subleaf=%u) returned {%u, %u, %u, %u}",
             leaf, subleaf, regs[0], regs[1], regs[2], regs[3]);
           
-          for (int i = 0; i < 4; ++i) regConst[i] = (uint64_t)regs[i];
 
         } else {
           terminateStateOnExecError(state, "unsupported number of arguments for cpuid");
         }
 
         // Now we remove the features we don't like, hehe.
+        // We could remove features, but I currently don't see the need.
 
-        llvm::APInt output = llvm::APInt(outWidth, 4, regConst); // 4 words
+        llvm::APInt output = llvm::APInt(outWidth, 0); // 4inital value
+        // shift in the values
+        for (int i = 0; i < 4; i++) {
+          llvm::APInt field = llvm::APInt(outWidth, regs[i]);
+          field <<= (sizeof(unsigned) * CHAR_BIT) /* bits to shift */ * i /* pos */;
+          output |= field;
+        }
         ref<Expr> result = ConstantExpr::alloc(output);
         bindLocal(ki, state, result);
         break;

@@ -26,6 +26,7 @@ int main(int argc, const char *argv[]) {
 
     uint64_t n_entries = (uint64_t)atoi(argv[2]);
 
+    // (void*)pop is actually the mmap-ed region...
     PMEMobjpool *pop = pmemobj_create(argv[1], POBJ_LAYOUT_NAME(000_driver), PMEMOBJ_MIN_POOL, 0666);
     if (pop == NULL) {
         printf("Create failed, trying open layout %s. (%s)\n", POBJ_LAYOUT_NAME(000_driver), strerror(errno));
