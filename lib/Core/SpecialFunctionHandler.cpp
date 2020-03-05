@@ -814,8 +814,13 @@ void SpecialFunctionHandler::handleUndefineFixedObject(ExecutionState &state,
   Executor::ExactResolutionList rl;
   executor.resolveExact(state, arguments[0], rl, "klee_undefine_fixed_object");
 
-  for (Executor::ExactResolutionList::iterator it = rl.begin(),
-          ie = rl.end(); it != ie; ++it) {
+  for (Executor::ExactResolutionList::iterator it = rl.begin(), ie = rl.end(); 
+          it != ie; ++it) {
+    const MemoryObject *mo = it->first.first;
+    if (state.persistentObjects.count(mo)) {
+      state.persistentObjects.erase(mo);
+    }
+
     it->second->addressSpace.unbindObject(it->first.first);
   }
 }

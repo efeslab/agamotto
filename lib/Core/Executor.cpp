@@ -1459,7 +1459,7 @@ void Executor::executeCall(ExecutionState &state,
       v = v->stripPointerCasts();
       KInstruction *kv = kmodule->getKInstruction(dyn_cast<Instruction>(v));
       ref<Expr> address = getDestCell(state, kv).value;
-      executePersistentMemoryFlush(state, cast<ConstantExpr>(address));
+      executePersistentMemoryFlush(state, address);
       executePersistentMemoryFence(state);
       break;
     }
