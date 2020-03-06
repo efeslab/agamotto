@@ -349,7 +349,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
     for (unsigned i=0; i<mo->size; i++) {
       ref<Expr> av = wos->read8(i);
       ref<Expr> bv = otherOS->read8(i);
-      wos->write(prevPC, i, SelectExpr::create(inA, av, bv));
+      wos->write(*this, i, SelectExpr::create(inA, av, bv));
     }
   }
 

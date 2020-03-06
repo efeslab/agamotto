@@ -17,8 +17,10 @@
 
 #include "llvm/ADT/StringExtras.h"
 
+#include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace llvm {
@@ -218,13 +220,13 @@ public:
   virtual ref<Expr> read8(unsigned offset) const;
 
   // return bytes written.
-  virtual void write(KInstruction *src, unsigned offset, ref<Expr> value);
-  virtual void write(KInstruction *src, ref<Expr> offset, ref<Expr> value);
+  virtual void write(const ExecutionState &state, unsigned offset, ref<Expr> value);
+  virtual void write(const ExecutionState &state, ref<Expr> offset, ref<Expr> value);
 
-  virtual void write8(KInstruction *src, unsigned offset, uint8_t value);
-  virtual void write16(KInstruction *src, unsigned offset, uint16_t value);
-  virtual void write32(KInstruction *src, unsigned offset, uint32_t value);
-  virtual void write64(KInstruction *src, unsigned offset, uint64_t value);
+  virtual void write8(const ExecutionState &state, unsigned offset, uint8_t value);
+  virtual void write16(const ExecutionState &state, unsigned offset, uint16_t value);
+  virtual void write32(const ExecutionState &state, unsigned offset, uint32_t value);
+  virtual void write64(const ExecutionState &state, unsigned offset, uint64_t value);
   virtual void print() const;
 
   /*
@@ -242,8 +244,8 @@ protected:
   void makeSymbolic();
 
   virtual ref<Expr> read8(ref<Expr> offset) const;
-  virtual void write8(KInstruction *src, unsigned offset, ref<Expr> value);
-  virtual void write8(KInstruction *src, ref<Expr> offset, ref<Expr> value);
+  virtual void write8(const ExecutionState &state, unsigned offset, ref<Expr> value);
+  virtual void write8(const ExecutionState &state, ref<Expr> offset, ref<Expr> value);
 
   void fastRangeCheckOffset(ref<Expr> offset, unsigned *base_r, 
                             unsigned *size_r) const;
@@ -334,7 +336,7 @@ class PersistentState : public ObjectState {
      * set.
      */
     UpdateList rootCauseLocations;
-    std::unordered_set<KInstruction*> allRootLocations;
+    std::unordered_map<std::string, std::shared_ptr<std::string>> allRootLocations;
 
     /// DO NOT USE. Use clone() instead.
     PersistentState(const PersistentState &ps);
@@ -354,12 +356,12 @@ class PersistentState : public ObjectState {
       return os->getKind() == Persistent;
     }
 
-    void write8(KInstruction *src, unsigned offset, uint8_t value) override;
-    void write8(KInstruction *src, unsigned offset, ref<Expr> value) override;
-    void write8(KInstruction *src, ref<Expr> offset, ref<Expr> value) override;
+    void write8(const ExecutionState &state, unsigned offset, uint8_t value) override;
+    void write8(const ExecutionState &state, unsigned offset, ref<Expr> value) override;
+    void write8(const ExecutionState &state, ref<Expr> offset, ref<Expr> value) override;
 
-    void dirtyCacheLineAtOffset(KInstruction *src, unsigned offset);
-    void dirtyCacheLineAtOffset(KInstruction *src, ref<Expr> offset);
+    void dirtyCacheLineAtOffset(const ExecutionState &state, unsigned offset);
+    void dirtyCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset);
 
     // Make a *pending* persist of the cache line containing offset.
     void persistCacheLineAtOffset(unsigned offset);
@@ -374,7 +376,7 @@ class PersistentState : public ObjectState {
     // If we are known to per persistent, do this to optimize.
     void clearRootCauses();
 
-    std::unordered_set<KInstruction*> getRootCauses(TimingSolver *solver, const ExecutionState &state) const;
+    std::unordered_set<std::string> getRootCauses(TimingSolver *solver, const ExecutionState &state) const;
 
     static ref<ConstantExpr> getPersistedExpr();
     static ref<ConstantExpr> getDirtyExpr();
@@ -384,14 +386,16 @@ class PersistentState : public ObjectState {
     ref<Expr> isCacheLinePersisted(unsigned offset) const;
     ref<Expr> isCacheLinePersisted(ref<Expr> offset) const;
 
-    std::unordered_set<KInstruction*> getRootCause(TimingSolver *solver, const ExecutionState &state, unsigned offset) const;
-    std::unordered_set<KInstruction*> getRootCause(TimingSolver *solver, const ExecutionState &state, ref<Expr> offset) const;
+    std::unordered_set<std::string> getRootCause(TimingSolver *solver, const ExecutionState &state, unsigned offset) const;
+    std::unordered_set<std::string> getRootCause(TimingSolver *solver, const ExecutionState &state, ref<Expr> offset) const;
 
-    static ref<Expr> ptrAsExpr(KInstruction *kinst);
+    static ref<Expr> ptrAsExpr(void *kinst);
 
     ref<Expr> getCacheLine(ref<Expr> offset) const;
     unsigned numCacheLines() const;
     unsigned cacheLineSize() const;
+
+    static std::string getLocationInfo(const ExecutionState &state);
 };
   
 } // End klee namespace

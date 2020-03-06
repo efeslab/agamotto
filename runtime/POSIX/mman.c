@@ -52,11 +52,6 @@ static exe_file_t *__get_file(int fd) {
   return 0;
 }
 
-// FIXME: better way of importing
-extern exe_file_t *__get_file(int fd);
-
-#include "klee/klee.h"
-
 /**
  * Helpers.
  */
@@ -91,24 +86,26 @@ void *mmap_sym(exe_file_t* f, size_t length, off_t offset) {
   }
 
   size_t pgsz = getpagesize();
+
   if (offset % pgsz != 0) {
     klee_error("mmap invoked without a page-aligned offset");
     return MAP_FAILED;
   }
 
-  size_t actual_length = (length % pgsz == 0 ? length : length + 4096 - length % 4096);
+  size_t actual_length = (length % pgsz == 0) ? length : (length + pgsz) - (length % pgsz);
   if (offset + actual_length > df->size) {
     klee_error("trying to map beyond the file size!");
     return MAP_FAILED;
   }
 
   // finally, good to actual perform the mapping
-  size_t page_start = offset / 4096;
-  size_t page_end = page_start + actual_length / 4096;
+  size_t page_start = offset / pgsz;
+  size_t page_end = page_start + actual_length / pgsz;
   // want to increment page_refs in interval: [page_start, page_end)
   for (; page_start < page_end; page_start++) {
     df->page_refs[page_start]++;
   }
+
   return (void*) (df->contents + offset);
 }
 
@@ -116,7 +113,7 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) {
   //FIXME: ref count
   char msg[4096];
-  memset(msg, 0, 4096);
+  // memset(msg, 0, 4096);
 
   int actual_fd = fd;
   size_t actual_size = __concretize_size(length);
@@ -125,29 +122,18 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
     exe_file_t *f = __get_file(fd);
     if (!f) {
       errno = EBADF;
-      return (void*)-1;
+      return MAP_FAILED;
     }
 
     if (f->dfile) {
       return mmap_sym(f, actual_size, offset);
     }
 
-    actual_fd = f->fd;
-
-    // struct stat64 stat;
-    // int err = __fd_fstat(fd, &stat);
-    // if (err) {
-    //   snprintf(msg, 4096, "mmap fstat failed! ret=%d, errno=%d (%s)", err, errno, strerror(errno));
-    //   klee_error(msg);
-    //   return (void*)-1;
-    // }
-
-    //actual_size = stat.st_size;
-    
+    actual_fd = f->fd; 
   }
 
   void* ret = (void*)syscall(__NR_mmap, start, actual_size, prot, flags, actual_fd, offset);
-  snprintf(msg, 4096, "(start=%p, length=%lu/%lu, prot=%d, flags=%d, fd=%d, offset=%ld) => %p (%lu)",
+  snprintf(msg, 4096, "real mmap path! (start=%p, length=%lu/%lu, prot=%d, flags=%d, fd=%d, offset=%ld) => %p (%lu)",
            start, length, actual_size, prot, flags, fd, offset, ret, (unsigned long)ret);
   klee_warning(msg);
 
@@ -222,11 +208,14 @@ int munmap(void *start, size_t length) {
 
   size_t pgsz = (size_t)getpagesize();
   for (void *addr = start; addr < start + actual_size; addr += pgsz) {
-    if (addr == start) {
-      snprintf(msg, 4096, "\tundef(addr=%p, length=%lu)", addr, pgsz);
-      klee_warning(msg);
-    }
+    // snprintf(msg, 4096, "\tundef(addr=%p, length=%lu)", addr, pgsz);
+    // klee_warning(msg);
 
+    // if (addr > start + 2*pgsz) {
+      // snprintf(msg, 4096, "\tcheck_persisted(addr=%p, length=%lu)", addr, pgsz);
+      // klee_warning(msg);
+      // klee_pmem_check_persisted(addr, pgsz);
+    // }
     klee_pmem_check_persisted(addr, pgsz);
     klee_undefine_fixed_object(addr);
   }
