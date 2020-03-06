@@ -44,6 +44,14 @@ int main(int argc, const char *argv[]) {
     
     assert(!TOID_IS_NULL(root) && "Root is null!");
 
+    // {
+    //     // Hack
+    //     for (void *addr = (void*)pop; addr < ((void*)pop + PMEMOBJ_MIN_POOL); addr+=64) {
+    //         _mm_clflush(addr);
+    //     }
+    //     _mm_sfence();
+    // }
+
     printf("Checking persistent state...\n");
 
     TX_BEGIN(pop) {

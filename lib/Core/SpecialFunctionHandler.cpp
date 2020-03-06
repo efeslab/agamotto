@@ -799,7 +799,7 @@ void SpecialFunctionHandler::handleDefineFixedObjectFromExisting(
   assert(os);
   char *data = (char*)address;
   for (uint64_t i = 0; i < size; ++i) {
-    os->write8(i, data[i]);
+    os->write8(target, i, data[i]);
   }
 }
 

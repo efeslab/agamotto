@@ -149,16 +149,18 @@ static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
   for (sp=name; *sp; ++sp)
     sname[sp-name] = *sp;
   memcpy(&sname[sp-name], "-stat", 6);
+  // snprintf(sname, 64, "%s-stat", name);
 
   assert(size);
-  if (size % 4096 != 0) {
+  size_t pgsz = getpagesize();
+  if (size % pgsz != 0) {
     klee_error("pmem file size must be multiple of page size (4096)");
     return -1;
   }
 
   dfile->size = size;
   // FIXME: page aligned vs. cache aligned
-  dfile->contents = memalign(4096, dfile->size);
+  dfile->contents = memalign(pgsz, dfile->size);
   // FIXME: proper name, not just "data"
   klee_pmem_mark_persistent(dfile->contents, dfile->size, "data");
   
@@ -166,9 +168,10 @@ static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
   klee_make_symbolic(s, sizeof(*s), sname);
 
   /* For broken tests */
-  if (!klee_is_symbolic(s->st_ino) && (s->st_ino & 0x7FFFFFFF) == 0)
-	s->st_ino = defaults->st_ino;
-  
+  if (!klee_is_symbolic(s->st_ino) && (s->st_ino & 0x7FFFFFFF) == 0) {
+    s->st_ino = defaults->st_ino;
+  }
+	
   /* Important since we copy this out through getdents, and readdir
      will otherwise skip this entry. For same reason need to make sure
      it fits in low bits. */
@@ -188,7 +191,7 @@ static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
   klee_prefer_cex(s, s->st_nlink == 1);
   klee_prefer_cex(s, s->st_uid == defaults->st_uid);
   klee_prefer_cex(s, s->st_gid == defaults->st_gid);
-  klee_prefer_cex(s, s->st_blksize == 4096);
+  klee_prefer_cex(s, s->st_blksize == pgsz);
   klee_prefer_cex(s, s->st_atime == defaults->st_atime);
   klee_prefer_cex(s, s->st_mtime == defaults->st_mtime);
   klee_prefer_cex(s, s->st_ctime == defaults->st_ctime);
@@ -208,12 +211,13 @@ static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
   s->st_blocks = 8;
   dfile->stat = s;
 
-  unsigned num_pages = dfile->size / 4096;
+  unsigned num_pages = dfile->size / pgsz;
   unsigned total_size = sizeof(unsigned)*num_pages;
   dfile->page_refs = malloc(total_size);
   for (unsigned i = 0; i < num_pages; i++) {
     dfile->page_refs[i] = 0;
   }
+
   return 0;
 }
 

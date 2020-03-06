@@ -78,25 +78,28 @@ static size_t __concretize_size(size_t s) {
  */
 
 void *mmap_sym(exe_file_t* f, size_t length, off_t offset) {
-  void* err_ret = (void*) -1;
+
   if (!f || !__exe_fs.sym_pmem || !(f->dfile == __exe_fs.sym_pmem)) {
     klee_error("mmap only supports symbolic files that are persistent files");
-    return err_ret;
+    return MAP_FAILED;
   }
+
   exe_disk_file_t* df = f->dfile;
   if (!df || !df->contents || !df->size) {
     klee_error("pmem file not opened prior to mapping");
-    return err_ret;
+    return MAP_FAILED;
   }
-  // FIXME: don't assume page size of 4096 in the future
-  if (offset % 4096 != 0) {
+
+  size_t pgsz = getpagesize();
+  if (offset % pgsz != 0) {
     klee_error("mmap invoked without a page-aligned offset");
-    return err_ret;
+    return MAP_FAILED;
   }
-  size_t actual_length = (length % 4096 == 0 ? length : length + 4096 - length % 4096);
+
+  size_t actual_length = (length % pgsz == 0 ? length : length + 4096 - length % 4096);
   if (offset + actual_length > df->size) {
     klee_error("trying to map beyond the file size!");
-    return err_ret;
+    return MAP_FAILED;
   }
 
   // finally, good to actual perform the mapping
@@ -158,6 +161,7 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
         // snprintf(msg, 4096, "pmem-%d_page-%lu (%p)", fd, ((size_t)(addr - ret)) / pgsz, addr);
         // klee_warning(msg);
         klee_pmem_mark_persistent(addr, pgsz, msg);
+        klee_pmem_check_persisted(addr, pgsz);
       }
     }
   }
@@ -173,15 +177,16 @@ void *mmap64(void *start, size_t length, int prot, int flags, int fd, off64_t of
 
 int munmap_sym(char* start, size_t length, exe_disk_file_t* df) {
   // check for complete enclosure
-  if (!(df->contents <= start && start+length <=df->contents + df->size)) {
+  if (!(df->contents <= start && start+length <= df->contents + df->size)) {
     klee_error("munmap invoked on [start, start+length) that's not fully included in pmem file");
     return -1;
   }
+  size_t pgsz = getpagesize();
   unsigned offset = start - df->contents;
-  if (offset % 4096 != 0 || length % 4096 != 0) {
+  if (offset % pgsz || length % pgsz) {
     klee_warning("arguments passed to munmap are not page aligned; will round to enclosing pages");
   }
-  unsigned page_start = offset / 4096;
+  unsigned page_start = offset / pgsz;
   unsigned page_end = page_start + ceil(length / 4096.0);
   // decrement page_refs in interval [page_start, page_end)
   // if ref count goes to zero, check that the page is persisted

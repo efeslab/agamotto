@@ -19,6 +19,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 namespace llvm {
   class Value;
@@ -30,6 +31,7 @@ class BitArray;
 class MemoryManager;
 class Solver;
 class ArrayCache;
+struct KInstruction;
 
 class MemoryObject {
   friend class STPBuilder;
@@ -216,13 +218,13 @@ public:
   virtual ref<Expr> read8(unsigned offset) const;
 
   // return bytes written.
-  virtual void write(unsigned offset, ref<Expr> value);
-  virtual void write(ref<Expr> offset, ref<Expr> value);
+  virtual void write(KInstruction *src, unsigned offset, ref<Expr> value);
+  virtual void write(KInstruction *src, ref<Expr> offset, ref<Expr> value);
 
-  virtual void write8(unsigned offset, uint8_t value);
-  virtual void write16(unsigned offset, uint16_t value);
-  virtual void write32(unsigned offset, uint32_t value);
-  virtual void write64(unsigned offset, uint64_t value);
+  virtual void write8(KInstruction *src, unsigned offset, uint8_t value);
+  virtual void write16(KInstruction *src, unsigned offset, uint16_t value);
+  virtual void write32(KInstruction *src, unsigned offset, uint32_t value);
+  virtual void write64(KInstruction *src, unsigned offset, uint64_t value);
   virtual void print() const;
 
   /*
@@ -240,8 +242,8 @@ protected:
   void makeSymbolic();
 
   virtual ref<Expr> read8(ref<Expr> offset) const;
-  virtual void write8(unsigned offset, ref<Expr> value);
-  virtual void write8(ref<Expr> offset, ref<Expr> value);
+  virtual void write8(KInstruction *src, unsigned offset, ref<Expr> value);
+  virtual void write8(KInstruction *src, ref<Expr> offset, ref<Expr> value);
 
   void fastRangeCheckOffset(ref<Expr> offset, unsigned *base_r, 
                             unsigned *size_r) const;
@@ -317,13 +319,33 @@ class PersistentState : public ObjectState {
     UpdateList cacheLineUpdates;
     UpdateList pendingCacheLineUpdates;
 
+    /**
+     * (iangneal): We want symbolic root-cause detection. This is how:
+     * 
+     * Every time we dirty a cacheline, we create an update to those same 
+     * cachelines with a pointer value. This pointer will point to a program
+     * location. We will also track a set with all possible locations, as we
+     * need to resolve a root cause by checking against each value in the
+     * list.
+     * 
+     * On a flush, we write nullptr.
+     * 
+     * At any given point, if all cache lines are persisted, we can reset the 
+     * set.
+     */
+    UpdateList rootCauseLocations;
+    std::unordered_set<KInstruction*> allRootLocations;
+
     /// DO NOT USE. Use clone() instead.
     PersistentState(const PersistentState &ps);
 
   public:
     /// Create a new persistent object state from the given non-persistent
-    /// object state and symbolic bool array of cache lines.
-    PersistentState(const ObjectState *os, const Array *cacheLines);
+    /// object state and symbolic bool array of cache lines. Also requires
+    /// a symbolic void* array (int64) for root cause.
+    PersistentState(const ObjectState *os, 
+                    const Array *cacheLines,
+                    const Array *rootCauses);
 
     ObjectState *clone() const override;
 
@@ -332,12 +354,12 @@ class PersistentState : public ObjectState {
       return os->getKind() == Persistent;
     }
 
-    void write8(unsigned offset, uint8_t value) override;
-    void write8(unsigned offset, ref<Expr> value) override;
-    void write8(ref<Expr> offset, ref<Expr> value) override;
+    void write8(KInstruction *src, unsigned offset, uint8_t value) override;
+    void write8(KInstruction *src, unsigned offset, ref<Expr> value) override;
+    void write8(KInstruction *src, ref<Expr> offset, ref<Expr> value) override;
 
-    void dirtyCacheLineAtOffset(unsigned offset);
-    void dirtyCacheLineAtOffset(ref<Expr> offset);
+    void dirtyCacheLineAtOffset(KInstruction *src, unsigned offset);
+    void dirtyCacheLineAtOffset(KInstruction *src, ref<Expr> offset);
 
     // Make a *pending* persist of the cache line containing offset.
     void persistCacheLineAtOffset(unsigned offset);
@@ -349,12 +371,23 @@ class PersistentState : public ObjectState {
     // are guaranteed to be persisted.
     ref<Expr> isPersisted() const;
 
+    // If we are known to per persistent, do this to optimize.
+    void clearRootCauses();
+
+    std::unordered_set<KInstruction*> getRootCauses(TimingSolver *solver, const ExecutionState &state) const;
+
     static ref<ConstantExpr> getPersistedExpr();
     static ref<ConstantExpr> getDirtyExpr();
+    static ref<ConstantExpr> getNullptr();
 
   private:
     ref<Expr> isCacheLinePersisted(unsigned offset) const;
     ref<Expr> isCacheLinePersisted(ref<Expr> offset) const;
+
+    std::unordered_set<KInstruction*> getRootCause(TimingSolver *solver, const ExecutionState &state, unsigned offset) const;
+    std::unordered_set<KInstruction*> getRootCause(TimingSolver *solver, const ExecutionState &state, ref<Expr> offset) const;
+
+    static ref<Expr> ptrAsExpr(KInstruction *kinst);
 
     ref<Expr> getCacheLine(ref<Expr> offset) const;
     unsigned numCacheLines() const;
