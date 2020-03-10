@@ -43,6 +43,8 @@
 
 #include "NvmAnalysisUtils.h"
 
+#include "Andersen.h"
+
 /**
  *
  */
@@ -72,7 +74,7 @@ namespace klee {
       // static_assert(std::is_base_of<Hashable, X>::value, "Stored class must be hashable!");
 
       typedef std::unordered_map<X, std::shared_ptr<X>, Hashable::HashFn<X>> object_map_t;
-      typedef std::shared_ptr<object_map_t> shared_map_t;
+      // typedef std::shared_ptr<object_map_t> shared_map_t;
 
       /**
        * This way, we don't end up with a ton of duplicates.
@@ -148,6 +150,10 @@ namespace klee {
    */
   class NvmValueDesc : public Hashable, public StaticStorage<NvmValueDesc> {
     private:
+      // Here we track the number of mmap calls which point to NVM. We will 
+      // remove them as we resolve calls to mmap.
+      std::unordered_set<llvm::Value*> nvmMmaps_;
+      //
       std::unordered_map<llvm::Value*, NvmValueState> state_;
 
       NvmValueDesc() {}
@@ -173,13 +179,16 @@ namespace klee {
        */
       std::shared_ptr<NvmValueDesc> updateState(llvm::Value *val, NvmValueState vs) const;
 
+      std::shared_ptr<NvmValueDesc> removeMmapCall(llvm::Value *site) const;
+
       /**
        * Compute a state change if we need it, otherwise returns this same value.
        */
       std::shared_ptr<NvmValueDesc> speculateOnNext(
         std::shared_ptr<NvmStackFrameDesc> sf, KInstruction *pc) const;
 
-      static std::shared_ptr<NvmValueDesc> empty(void) { return getShared(NvmValueDesc()); }
+      // Populate with all the calls to mmap.
+      static std::shared_ptr<NvmValueDesc> staticState(llvm::Module *m);
 
       std::string str(void) const;
 
@@ -190,6 +199,7 @@ namespace klee {
     private:
 
       // The utility state.
+      std::shared_ptr<Andersen> apa_; // Andersen's whole program pointer analysis
       KModule *mod_;
       // The real state.
       KInstruction *curr_;
@@ -214,17 +224,20 @@ namespace klee {
        * 
        * We will not speculate about the return values of mmap.
        */
-      uint64_t weight_;
+      uint64_t weight_ = 0;
 
       NvmInstructionDesc() = delete;
-      NvmInstructionDesc(KModule *mod, KInstruction *location, 
+      NvmInstructionDesc(std::shared_ptr<Andersen> apa, 
+                         KModule *mod,
+                         KInstruction *location, 
                          std::shared_ptr<NvmValueDesc> values, 
                          std::shared_ptr<NvmStackFrameDesc> stackframe) 
-        : mod_(mod), curr_(location), values_(values), stackframe_(stackframe) {}
+        : apa_(apa), mod_(mod), curr_(location), values_(values), stackframe_(stackframe) {}
 
-      NvmInstructionDesc(KModule *mod, KInstruction *location) 
-        : mod_(mod), curr_(location), 
-          values_(NvmValueDesc::empty()), 
+      NvmInstructionDesc(std::shared_ptr<Andersen> apa, 
+                         KModule *mod, KInstruction *location) 
+        : apa_(apa), mod_(mod), curr_(location), 
+          values_(NvmValueDesc::staticState(mod->module.get())), 
           stackframe_(NvmStackFrameDesc::empty()) {}
 
       /* Methods for creating successor states. */
@@ -255,6 +268,8 @@ namespace klee {
 
       bool isTerminator(void) const { return isTerminal; } 
 
+      bool isValid(void) const { return !!curr_; }
+
       /**
        * Essentially, the successors are speculative. They assume that:
        * (1) Only the current set of values that point to NVM do so.
@@ -263,6 +278,10 @@ namespace klee {
        */
       std::list<std::shared_ptr<NvmInstructionDesc>> getSuccessors(
         const std::unordered_set<std::shared_ptr<NvmInstructionDesc>> &traversed);
+
+      std::list<std::shared_ptr<NvmInstructionDesc>> getSuccessors(void) {
+        return successors_;
+      }
 
       /**
        * This allows the process to be forward and backward. After we find all
@@ -282,19 +301,17 @@ namespace klee {
 
       KInstruction *kinst(void) const { return curr_; }
 
+      void setPC(KInstruction *pc) {
+        assert(!isValid() && "Trying to modify a valid instruction!");
+        curr_ = pc;
+      }
+
       /**
        */
-      static std::shared_ptr<NvmInstructionDesc> createEntry(KModule *m, KFunction *mainFn) {
-        llvm::Instruction *inst = &(mainFn->function->getEntryBlock().front());
-        KInstruction *start = mainFn->getKInstruction(inst);
-        NvmInstructionDesc entryInst = NvmInstructionDesc(m, start);
-
-        return getShared(entryInst);
-      }
 
       std::shared_ptr<NvmInstructionDesc> update(KInstruction *pc, NvmValueState state) {
         std::shared_ptr<NvmValueDesc> updated = values_->updateState(pc->inst, state);
-        NvmInstructionDesc desc(mod_, curr_, updated, stackframe_);
+        NvmInstructionDesc desc(apa_, mod_, curr_, updated, stackframe_);
         return getShared(desc);
       }
 
@@ -302,6 +319,13 @@ namespace klee {
           getMatchingSuccessors(KInstruction *nextPC);
 
       std::string str(void) const;
+
+      static std::shared_ptr<NvmInstructionDesc> createEntry(KModule *m, KFunction *mainFn);
+
+      /**
+       * When we have runtime knowledge.
+       */
+      // static void attach(std::shared_ptr<NvmInstructionDesc> current, std::shared_ptr<NvmInstructionDesc> successor);
 
       friend bool operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &rhs);
   };
@@ -318,6 +342,11 @@ namespace klee {
 
       std::shared_ptr<NvmInstructionDesc> current_state;
 
+      /**
+       * The nice part about the down and up traversal is that, in theory, if 
+       * we change the weights in a subtree, the overall change in priority 
+       * will be appropriately propagated up the tree.
+       */
       void computeCurrentPriority(void);
 
     public:
@@ -335,6 +364,9 @@ namespace klee {
        * It's fine if the current PC was a jump, branch, etc. We already computed
        * the possible successor states for ourself (without symbolic values of course).
        * If we did our job correctly, this should work fine. Otherwise, we error.
+       * 
+       * The only case we currently don't handle well is interprocedurally 
+       * generated function pointers. We will resolve them at runtime.
        */
       void stepState(KInstruction *nextPC);
 
