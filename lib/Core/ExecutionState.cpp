@@ -74,6 +74,8 @@ ExecutionState::ExecutionState(KModule *km, KFunction *kf, bool enableNvmHeurist
     pc(kf->instructions),
     prevPC(pc),
 
+    nvmInfo(nullptr),
+
     depth(0),
 
     instsSinceCovNew(0),

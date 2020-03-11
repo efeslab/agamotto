@@ -1486,7 +1486,7 @@ void Executor::executeCall(ExecutionState &state,
       // The first operand to the annotation is a pointer, the second
       // is which annotation is being applied.
       auto annotationStr = getAnnotationStringFromAnnotationCall(ki);
-      if (annotationStr == "nvmvar") {
+      if (false && annotationStr == "nvmvar") {
         llvm::Instruction *bitcastInst =
           dyn_cast<Instruction>(ki->inst->getOperand(0));
         KInstruction *bitcastKInst = kmodule->getKInstruction(bitcastInst);
@@ -3851,6 +3851,7 @@ void Executor::executeMarkPersistent(ExecutionState &state,
 
 void Executor::executeMarkPersistent(ExecutionState &state,
                                      const MemoryObject *mo) {
+  // klee_warning("Executor: Marking %p persistent!", (void*)mo->address);
   state.persistentObjects.insert(mo);
 
   const ObjectState *os = state.addressSpace.findObject(mo);
@@ -3888,6 +3889,7 @@ void Executor::executeMarkPersistent(ExecutionState &state,
 bool Executor::isPersistentMemory(ExecutionState &state, const MemoryObject *mo) {
   if (state.persistentObjects.count(mo)) {
     const ObjectState *os = state.addressSpace.findObject(mo);
+    klee_warning("Checking if %p is persistent memory", (void*)mo->address);
     assert(dyn_cast<PersistentState>(os) != nullptr &&
            "MemoryObject marked persistent but not bound to any PersistentState");
     return true;
@@ -3997,11 +3999,11 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
               ((!(AllowSeedExtension || ZeroSeedExtension)
                 && obj->numBytes < mo->size) ||
                (!AllowSeedTruncation && obj->numBytes > mo->size))) {
-	    std::stringstream msg;
-	    msg << "replace size mismatch: "
-		<< mo->name << "[" << mo->size << "]"
-		<< " vs " << obj->name << "[" << obj->numBytes << "]"
-		<< " in test\n";
+                std::stringstream msg;
+                msg << "replace size mismatch: "
+              << mo->name << "[" << mo->size << "]"
+              << " vs " << obj->name << "[" << obj->numBytes << "]"
+              << " in test\n";
 
             terminateStateOnError(state, msg.str(), User);
             break;

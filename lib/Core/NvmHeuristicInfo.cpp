@@ -110,22 +110,48 @@ void NvmValueDesc::mutateState(Value *val, NvmValueState vs) {
 }
 
 // TODO: policies for speculating on MMAP
-NvmValueState NvmValueDesc::getOutput(Instruction *i) const {
-  bool contains = false;
-  for (auto iter = i->op_begin(); iter != i->op_end(); iter++) {
-    Use *u = &(*iter);
-    NvmValueState nvs = state_.find(u->get()) != state_.end() 
-        ? state_.at(u->get()) : DoesNotContain;
-    if (nvs != DoesNotContain) {
-      contains = true;
-      break;
-    }
-  }
+NvmValueState NvmValueDesc::getOutput(std::shared_ptr<Andersen> apa, Instruction *i) const {
+  // bool contains = false;
+  // for (auto iter = i->op_begin(); iter != i->op_end(); iter++) {
+  //   Use *u = &(*iter);
+  //   NvmValueState nvs = state_.find(u->get()) != state_.end() 
+  //       ? state_.at(u->get()) : DoesNotContain;
+  //   if (nvs != DoesNotContain) {
+  //     contains = true;
+  //     break;
+  //   }
+  // }
 
-  if (!contains) return DoesNotContain;
-  return ContainsPointer;
+  // if (!contains) return DoesNotContain;
+  // return ContainsPointer;
   // if (i->getType()->isPtrOrPtrVectorTy()) return ContainsPointer;
   // return ContainsDerivative;
+
+  // Do the alias analysis
+  Value *ptr = nullptr;
+  if (StoreInst *si = dyn_cast<StoreInst>(i)) {
+    ptr = si->getPointerOperand();
+  } else if (CallInst *ci = dyn_cast<CallInst>(i)) {
+    Function *f = ci->getCalledFunction();
+    if (f && f->isDeclaration()) {
+      switch(f->getIntrinsicID()) {
+        case Intrinsic::x86_sse2_clflush:
+        case Intrinsic::x86_clflushopt:
+          llvm::Value *v = ki->inst->getOperand(0);
+          ptr = v->stripPointerCasts();
+        default:
+          break;
+      }
+    }
+  }
+  if (!ptr) return DoesNotContain;
+
+  std::vector<const Value*> ptsSet;
+  bool ret = apa->getPointsToSet(ptr, ptsSet);
+
+  for (Value *v : ptsSet) {
+    if (nvmMmaps_.count(v)) return ContainsPointer;
+  }
 }
 
 std::shared_ptr<NvmValueDesc> NvmValueDesc::updateState(Value *val, NvmValueState vs) const {
@@ -135,6 +161,7 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::updateState(Value *val, NvmValueStat
 }
 
 std::shared_ptr<NvmValueDesc> NvmValueDesc::speculateOnNext(
+  std::shared_ptr<Andersen> apa,
   std::shared_ptr<NvmStackFrameDesc> sf, KInstruction *pc) const 
 {
   std::shared_ptr<NvmValueDesc> retDesc = getShared(*this);
@@ -264,6 +291,38 @@ bool klee::operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs) {
 /**
  * NvmInstructionDesc
  */
+
+void NvmInstructionDesc::updateWeight(void) {
+  Instruction *i = curr_->inst;
+  // First, we check if the instruction is inherently important.
+  if (CallInst *ci = dyn_cast<CallInst>(curr_->inst)) {}
+
+  // Second
+  Value *ptr = nullptr;
+  if (StoreInst *si = dyn_cast<StoreInst>(i)) {
+    ptr = si->getPointerOperand();
+  } else if (CallInst *ci = dyn_cast<CallInst>(i)) {
+    Function *f = ci->getCalledFunction();
+    if (f && f->isDeclaration()) {
+      switch(f->getIntrinsicID()) {
+        case Intrinsic::x86_sse2_clflush:
+        case Intrinsic::x86_clflushopt:
+          llvm::Value *v = ki->inst->getOperand(0);
+          ptr = v->stripPointerCasts();
+        default:
+          break;
+      }
+    }
+  }
+  if (!ptr) return DoesNotContain;
+
+  std::vector<const Value*> ptsSet;
+  bool ret = apa->getPointsToSet(ptr, ptsSet);
+
+  for (Value *v : ptsSet) {
+    if (nvmMmaps_.count(v)) return ContainsPointer;
+  }
+}
 
 std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
   std::list<NvmInstructionDesc> ret;

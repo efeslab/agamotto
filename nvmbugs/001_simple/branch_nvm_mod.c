@@ -41,24 +41,24 @@ int loop_extra(char *addr, int count) {
 }
 
 int main(int argc, char *argv[]) {
-    // if (argc < 2) {
-    //     fprintf(stderr, "usage: %s PMEM_FILE_NAME\n", argv[0]);
-    //     return -1;
-    // }
+    if (argc < 2) {
+        fprintf(stderr, "usage: %s PMEM_FILE_NAME\n", argv[0]);
+        return -1;
+    }
 
-    // int fd = open(argv[1], O_RDWR);
-    // if (fd < 0) {
-    //     perror("file open");
-    //     return -1;
-    // }
+    int fd = open(argv[1], O_RDWR);
+    if (fd < 0) {
+        perror("file open");
+        return -1;
+    }
 
-	// char *pmemaddr = (char*)mmap(NULL, getpagesize(), PROT_READ | PROT_WRITE, 
-    //                              MAP_PRIVATE, fd, 0);
-    // if (pmemaddr == MAP_FAILED) {
-    //     perror("mmap");
-    //     return -1;
-    // }
-    char pmemaddr[BUF_LEN];
+	char *pmemaddr = (char*)mmap(NULL, getpagesize(), PROT_READ | PROT_WRITE, 
+                                 MAP_PRIVATE, fd, 0);
+    if (pmemaddr == MAP_FAILED) {
+        perror("mmap");
+        return -1;
+    }
+    // char pmemaddr[BUF_LEN];
 
     mod_function(pmemaddr, true);
     mod_function(pmemaddr, false);
