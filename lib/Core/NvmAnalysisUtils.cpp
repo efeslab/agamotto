@@ -148,12 +148,15 @@ void utils::getModifiers(const Value* ptr, unordered_set<const Value*> &s) {
     }
 }
 
-const CallInst* utils::getNestedFunctionCallInst(const Instruction* i) {
-  const CallInst *ci = dyn_cast<CallInst>(i);
+Function *utils::getCallInstFunction(CallInst *ci) {
   if (ci && !ci->isInlineAsm()) {
-    const Function *cfn = ci->getCalledFunction();
+    Function *cfn = ci->getCalledFunction();
+    if (!cfn) {
+      cfn = dyn_cast<Function>(ci->getCalledValue()->stripPointerCasts());
+    }
+
     if (cfn && !cfn->isIntrinsic()) {
-      return ci;
+      return cfn;
     }
   }
 
@@ -162,14 +165,16 @@ const CallInst* utils::getNestedFunctionCallInst(const Instruction* i) {
 
 CallInst* utils::getNestedFunctionCallInst(Instruction* i) {
   CallInst *ci = dyn_cast<CallInst>(i);
-  if (ci && !ci->isInlineAsm()) {
-    Function *cfn = ci->getCalledFunction();
-    if (cfn && !cfn->isIntrinsic()) {
+  if (ci && utils::getCallInstFunction(ci)) {
       return ci;
-    }
   }
 
   return nullptr;
+}
+
+const CallInst* utils::getNestedFunctionCallInst(const Instruction* i) {
+  return const_cast<const CallInst*>(
+      utils::getNestedFunctionCallInst(const_cast<Instruction*>(i)));
 }
 
 list<const Function*> utils::getNestedFunctionCalls(const BasicBlock *bb) {

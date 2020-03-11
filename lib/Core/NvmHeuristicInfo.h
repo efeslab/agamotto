@@ -153,10 +153,9 @@ namespace klee {
    */
   class NvmValueDesc : public Hashable, public StaticStorage<NvmValueDesc> {
     private:
-      // Here we track the number of mmap calls which point to NVM. We will 
-      // remove them as we resolve calls to mmap.
-      std::unordered_set<llvm::Value*> nvmMmaps_;
-      std::unordered_set<llvm::Value*> volMmaps_; // Volatile memory maps
+      // Here we track mmap locations to make weight calculation easier. Whether
+      // or not 
+      std::unordered_set<llvm::Value*> mmap_calls_;
 
       /**
        * We need three sets of values for a context-sensitive history:
@@ -203,11 +202,11 @@ namespace klee {
       std::shared_ptr<NvmValueDesc> updateState(llvm::Value *val, bool nvm) const;
 
       bool isMmapCall(llvm::CallInst *ci) const {
-        return !!nvmMmaps_.count(ci) || !!volMmaps_.count(ci);
+        return !!mmap_calls_.count(ci);
       }
 
       bool isNvm(llvm::Value *ptr) const {
-        if (!local_nvm_.count(ptr) && !global_nvm_.count(ptr) && !nvmMmaps_.count(ptr)) {
+        if (!local_nvm_.count(ptr) && !global_nvm_.count(ptr)) {
           return false;
         }
 
@@ -346,8 +345,8 @@ namespace klee {
       /**
        */
 
-      std::shared_ptr<NvmInstructionDesc> update(KInstruction *pc, NvmValueState state) {
-        std::shared_ptr<NvmValueDesc> updated = values_->updateState(pc->inst, state);
+      std::shared_ptr<NvmInstructionDesc> update(KInstruction *pc, bool isNvm) {
+        std::shared_ptr<NvmValueDesc> updated = values_->updateState(pc->inst, isNvm);
         NvmInstructionDesc desc(apa_, mod_, curr_, updated, stackframe_);
         return getShared(desc);
       }
@@ -393,7 +392,7 @@ namespace klee {
       /**
        * May change the current_state, or may not.
        */
-      void updateCurrentState(KInstruction *pc, NvmValueState state=DoesNotContain);
+      void updateCurrentState(KInstruction *pc, bool isNvm);
 
       /**
        * Advance the current state.

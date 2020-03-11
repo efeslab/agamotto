@@ -40,7 +40,9 @@ int loop_extra(char *addr, int count) {
     return 0;
 }
 
+#define USE_MMAP 0
 int main(int argc, char *argv[]) {
+    #if USE_MMAP
     if (argc < 2) {
         fprintf(stderr, "usage: %s PMEM_FILE_NAME\n", argv[0]);
         return -1;
@@ -58,7 +60,9 @@ int main(int argc, char *argv[]) {
         perror("mmap");
         return -1;
     }
-    // char pmemaddr[BUF_LEN];
+    #else
+    char pmemaddr[BUF_LEN];
+    #endif 
 
     mod_function(pmemaddr, true);
     mod_function(pmemaddr, false);
@@ -66,7 +70,9 @@ int main(int argc, char *argv[]) {
     loop_function(pmemaddr, 10);
     loop_extra(pmemaddr, 10);
 
-    // close(fd);
+    #if USE_MMAP
+    close(fd);
+    #endif
 
 	return 0;
 }

@@ -95,10 +95,7 @@ bool klee::operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs
 uint64_t NvmValueDesc::hash(void) const {
   uint64_t hash_value = 0;
 
-  for (Value *v : nvmMmaps_) {
-    hash_value ^= std::hash<void*>{}((void*)v);
-  }
-  for (Value *v : volMmaps_) {
+  for (Value *v : mmap_calls_) {
     hash_value ^= std::hash<void*>{}((void*)v);
   }
   for (Value *v : global_nvm_) {
@@ -108,7 +105,7 @@ uint64_t NvmValueDesc::hash(void) const {
     hash_value ^= std::hash<void*>{}((void*)v);
   }
 
-  hash_value ^= caller_values_->hash();
+  hash_value ^= caller_values_ ? caller_values_->hash() : 0;
   hash_value ^= std::hash<void*>{}(call_site_);
 
   return hash_value;
@@ -120,7 +117,7 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(llvm::CallInst *ci) const {
   newDesc.call_site_ = ci;
   newDesc.global_nvm_ = global_nvm_;
 
-  Function *f = ci->getCalledFunction();
+  Function *f = utils::getCallInstFunction(ci); //->getCalledFunction();
   assert(f && "Don't know what do with a null function!");
 
   for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
@@ -147,17 +144,6 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doReturn(llvm::ReturnInst *i) const 
 
 std::shared_ptr<NvmValueDesc> NvmValueDesc::updateState(Value *val, bool isNvm) const {
   NvmValueDesc vd = *this;
-
-  // For NVM mmaps, change our assumptions.
-  // -- Swap an nvm mmap to a volatile mmap
-  if (nvmMmaps_.count(val) && !isNvm) {
-    vd.nvmMmaps_.erase(val);
-    vd.volMmaps_.insert(val);
-  } else if (volMmaps_.count(val) && isNvm) {
-    vd.volMmaps_.erase(val);
-    vd.nvmMmaps_.insert(val);
-  }
-
   // Since the set is sparse, they're only contained if isNvm.
   if (isNvm) {
     if (isa<GlobalValue>(val)) {
@@ -177,18 +163,23 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::staticState(llvm::Module *m) {
   mmaps[0] = m->getFunction("mmap");
   mmaps[1] = m->getFunction("mmap64");
   for (Function *mmap : mmaps) {
-    assert(mmap && "Function is null!");
+    if (!mmap) {
+      klee_warning("mmap function was null! No calls to mmap!");
+      continue;
+    }
 
     for (User *u : mmap->users()) {
-      desc.nvmMmaps_.insert(u);
+      desc.mmap_calls_.insert(u);
     }
   }
 
-  assert(desc.nvmMmaps_.size() && "No mmap calls?");
+  // assert(desc.mmap_calls_.size() && "No mmap calls?");
 
-  for (Value *v : desc.nvmMmaps_) {
-    errs() << *v << "\n";
-  }
+  // for (Value *v : desc.mmap_calls_) {
+  //   errs() << *v << "\n";
+  // }
+
+  return getShared(desc);
 }
 
 std::string NvmValueDesc::str(void) const {
@@ -199,8 +190,9 @@ std::string NvmValueDesc::str(void) const {
 }
 
 bool klee::operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs) {
-  return lhs.nvmMmaps_ == rhs.nvmMmaps_ &&
-         lhs.volMmaps_ == rhs.volMmaps_ &&
+  return lhs.mmap_calls_ == rhs.mmap_calls_ &&
+        //  lhs.nvmMmaps_ == rhs.nvmMmaps_ &&
+        //  lhs.volMmaps_ == rhs.volMmaps_ &&
          lhs.global_nvm_ == rhs.global_nvm_ &&
          lhs.local_nvm_ == rhs.local_nvm_ &&
          lhs.caller_values_ == rhs.caller_values_ &&
@@ -212,12 +204,17 @@ bool klee::operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs) {
  */
 
 uint64_t NvmInstructionDesc::calculateWeight(void) {
+  // We use this as an incentive to resolve unresolved function pointers.
+  if (!curr_) {
+    return 1u;
+  }
+
   Instruction *i = curr_->inst;
   // First, we check if the instruction is inherently important.
   if (CallInst *ci = dyn_cast<CallInst>(curr_->inst)) {
     // Case 1: Contains an mmap call.
     if (values_->isMmapCall(ci)) {
-      return 1u;
+      return 2u;
     }
 
     // Case 4: Is a memory fence.
@@ -248,6 +245,8 @@ uint64_t NvmInstructionDesc::calculateWeight(void) {
     }
   }
 
+  if (!ptr) return 0u;
+
   std::vector<const Value*> ptsSet;
   bool ret = apa_->getPointsToSet(ptr, ptsSet);
   assert(ret && "could not get points-to set!");
@@ -268,6 +267,21 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
 
   Instruction *ip = curr_->inst;
   BasicBlock *bb = ip->getParent();
+
+  if (str().find("exit") != string::npos) {
+    errs() << "exit!\n";
+  }
+
+  errs() << str();
+
+  if (CallInst *ci = dyn_cast<CallInst>(ip)) {
+    errs() << *ci << "\n";
+    Function *f = utils::getCallInstFunction(ci);
+    if ((f && f->getName() == mod_->module->getFunction("exit")->getName())
+        || str().find("exit") != string::npos) {
+      errs() << "exit!\n";
+    }
+  }
 
   // if (isa<ReturnInst>(ip)) {
   //   errs() << "return " << (ip == bb->getTerminator() ? "is terminator\n" : "is not terminator\n");
@@ -307,22 +321,20 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       return ret;
 
     } else if (isa<UnreachableInst>(ip)) {
+      assert(ret.empty() && "Unreachable has no successors!");
       return ret;
     } else {
       errs() << *ip << "\n";
       assert(false && "Assumption violated -- terminator instruction is not a return or branch!");
+      return ret;
     }
 
   } else if (CallInst *ci = utils::getNestedFunctionCallInst(ip)) {
-    Function *nf = ci->getCalledFunction();
+    Function *nf = utils::getCallInstFunction(ci);
     if (!nf) {
       errs() << *ci << "\n";
       klee_error("Could not get the called function!");
-    } else {
-      errs() << "call\n";
-      errs() << *nf << "\n";
-      errs() << "end call\n";
-    }
+    } 
 
     if (mod_->functionMap.find(nf) != mod_->functionMap.end()) {
       // Successor is the entry to the next function.
@@ -349,10 +361,7 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
     // We can't immediately find the function. So, let's see if we can find it indirectly.
     // -- Inline assembly is skipped over.
     // -- Debug calls and other intrinsics
-    if (!ci->isInlineAsm() && !isa<IntrinsicInst>(ci)){
-      errs() << "dooop\n";
-      errs() << *ci << "\n";
-      assert(ci->isIndirectCall() && "call assumption is violated!");
+    if (ci->isIndirectCall()){
       // go up the use-def chain to find the function.
       // std::list<Value*> chain;
       // chain.push_back(ci->getCalledOperand());
@@ -383,11 +392,19 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
        * TODO: At some point, we may want to check a static-only heuristic. We
        * will require some sort of alias analysis for this.
        */
-      this->weight_ += 1;
-      NvmInstructionDesc desc(apa_, mod_, nullptr, values_, stackframe_);
+      // this->weight_ += 1;
+      Instruction *retLoc = ip->getNextNode();
+      // errs() << "ret loc is " << *retLoc << "\n";
+      assert(retLoc && "Assumption violated -- call instruction is the last instruction in a basic block!");
+      std::shared_ptr<NvmStackFrameDesc> newStack = stackframe_->doCall(ci, retLoc);
+
+      NvmInstructionDesc desc(apa_, mod_, nullptr, values_, newStack);
       ret.push_back(desc);
+      return ret;
     } else {
       // Fallthrough to the default case.
+      // errs() << "Fallthrough call: " << *ci << "\n";
+      assert((ci->isInlineAsm() || isa<IntrinsicInst>(ci)) && "assumptions violated!");
     }
   }
 
@@ -466,7 +483,7 @@ std::string NvmInstructionDesc::str(void) const {
   s << stackframe_->str();
   s << "\n" << values_->str();
   s << "\n"; 
-  {
+  if (curr_) {
     std::string tmp;
     llvm::raw_string_ostream rs(tmp);
     curr_->inst->print(rs);
@@ -627,22 +644,32 @@ void NvmHeuristicInfo::computeCurrentPriority(void) {
   // assert(priority.count(current_state) && "can't find our work!");
 }
 
-void NvmHeuristicInfo::updateCurrentState(KInstruction *pc, NvmValueState state) {
-  current_state = current_state->update(pc, state);
+void NvmHeuristicInfo::updateCurrentState(KInstruction *pc, bool isNvm) {
+  current_state = current_state->update(pc, isNvm);
   computeCurrentPriority();
 }
 
 void NvmHeuristicInfo::stepState(KInstruction *nextPC) {
+  errs() << *nextPC->inst << "\n\t=> " << *current_state->kinst()->inst << "\n";
   if (current_state->isTerminator()) {
     assert(nextPC == current_state->kinst() && "assumption violated");
     return;
   }
 
+  errs() << "CURRENT " << current_state->str(); 
+  if (current_state->str().find("exit") != string::npos) {
+    errs() << "succs\n";
+    for (auto s : current_state->getSuccessors()) {
+      errs() << s->str() << "\n";
+    }
+  }
+
   auto candidates = current_state->getMatchingSuccessors(nextPC);
+
   if (candidates.size() > 1) {
     klee_error("too many candidates!");
     return;
-  } else if (!candidates.size()) {
+  } else if (!candidates.size() && current_state->getSuccessors().size() > 1) {
     errs() << nextPC->inst->getFunction()->getName() << "@" << *nextPC->inst << "\n";
     errs() << "Does not match any of: \n";
     for (const auto &s : current_state->getSuccessors()) {
@@ -652,6 +679,8 @@ void NvmHeuristicInfo::stepState(KInstruction *nextPC) {
     // This can happen with function pointers, if they aren't handled carefully.
     klee_error("no candidates! we need to recalculate");
     return;
+  } else if (!candidates.size() && current_state->getSuccessors().size() == 1) {
+    candidates = current_state->getSuccessors();
   }
 
   std::shared_ptr<NvmInstructionDesc> next = candidates.front();

@@ -2884,9 +2884,9 @@ void Executor::updateStates(ExecutionState *current) {
           op.second->getKind() == ObjectState::Persistent) 
       {
         // This value is a pointer into nvm.
-        current->nvmInfo->updateCurrentState(current->prevPC, ContainsPointer);
+        current->nvmInfo->updateCurrentState(current->prevPC, true);
       } else {
-        current->nvmInfo->updateCurrentState(current->prevPC, DoesNotContain);
+        current->nvmInfo->updateCurrentState(current->prevPC, false);
       }
       solver->setTimeout(time::Span());
     }
