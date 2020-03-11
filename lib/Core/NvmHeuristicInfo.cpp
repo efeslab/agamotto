@@ -94,167 +94,82 @@ bool klee::operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs
 
 uint64_t NvmValueDesc::hash(void) const {
   uint64_t hash_value = 0;
-  uint64_t count = 0;
-  for (const auto &p : state_) {
-    uint64_t val = (uint64_t)p.second;
-    hash_value ^= (val << count) | (val >> (64llu - count));
-    count++;
+
+  for (Value *v : nvmMmaps_) {
+    hash_value ^= std::hash<void*>{}((void*)v);
   }
+  for (Value *v : volMmaps_) {
+    hash_value ^= std::hash<void*>{}((void*)v);
+  }
+  for (Value *v : global_nvm_) {
+    hash_value ^= std::hash<void*>{}((void*)v);
+  }
+  for (Value *v : local_nvm_) {
+    hash_value ^= std::hash<void*>{}((void*)v);
+  }
+
+  hash_value ^= caller_values_->hash();
+  hash_value ^= std::hash<void*>{}(call_site_);
 
   return hash_value;
 }
 
-void NvmValueDesc::mutateState(Value *val, NvmValueState vs) {
-  if (vs == DoesNotContain) return; // Make sparse
-  state_[val] = vs;
-}
+std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(llvm::CallInst *ci) const {
+  NvmValueDesc newDesc;
+  newDesc.caller_values_ = getShared(*this);
+  newDesc.call_site_ = ci;
+  newDesc.global_nvm_ = global_nvm_;
 
-// TODO: policies for speculating on MMAP
-NvmValueState NvmValueDesc::getOutput(std::shared_ptr<Andersen> apa, Instruction *i) const {
-  // bool contains = false;
-  // for (auto iter = i->op_begin(); iter != i->op_end(); iter++) {
-  //   Use *u = &(*iter);
-  //   NvmValueState nvs = state_.find(u->get()) != state_.end() 
-  //       ? state_.at(u->get()) : DoesNotContain;
-  //   if (nvs != DoesNotContain) {
-  //     contains = true;
-  //     break;
-  //   }
-  // }
+  Function *f = ci->getCalledFunction();
+  assert(f && "Don't know what do with a null function!");
 
-  // if (!contains) return DoesNotContain;
-  // return ContainsPointer;
-  // if (i->getType()->isPtrOrPtrVectorTy()) return ContainsPointer;
-  // return ContainsDerivative;
-
-  // Do the alias analysis
-  Value *ptr = nullptr;
-  if (StoreInst *si = dyn_cast<StoreInst>(i)) {
-    ptr = si->getPointerOperand();
-  } else if (CallInst *ci = dyn_cast<CallInst>(i)) {
-    Function *f = ci->getCalledFunction();
-    if (f && f->isDeclaration()) {
-      switch(f->getIntrinsicID()) {
-        case Intrinsic::x86_sse2_clflush:
-        case Intrinsic::x86_clflushopt:
-          llvm::Value *v = ki->inst->getOperand(0);
-          ptr = v->stripPointerCasts();
-        default:
-          break;
-      }
+  for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
+    Value *op = ci->getArgOperand(i);
+    Argument *arg = (f->arg_begin() + i);
+    assert(op && arg && "Unsure what to do!");
+    if (isNvm(op)) {
+      newDesc.local_nvm_.insert(arg);
     }
   }
-  if (!ptr) return DoesNotContain;
 
-  std::vector<const Value*> ptsSet;
-  bool ret = apa->getPointsToSet(ptr, ptsSet);
-
-  for (Value *v : ptsSet) {
-    if (nvmMmaps_.count(v)) return ContainsPointer;
-  }
+  return getShared(newDesc);
 }
 
-std::shared_ptr<NvmValueDesc> NvmValueDesc::updateState(Value *val, NvmValueState vs) const {
+std::shared_ptr<NvmValueDesc> NvmValueDesc::doReturn(llvm::ReturnInst *i) const {
+  std::shared_ptr<NvmValueDesc> retDesc = caller_values_;
+  
+  if (Value *retVal = i->getReturnValue()) {
+    retDesc = retDesc->updateState(call_site_, isNvm(retVal));
+  }
+
+  return retDesc;
+}
+
+std::shared_ptr<NvmValueDesc> NvmValueDesc::updateState(Value *val, bool isNvm) const {
   NvmValueDesc vd = *this;
-  vd.mutateState(val, vs);
+
+  // For NVM mmaps, change our assumptions.
+  // -- Swap an nvm mmap to a volatile mmap
+  if (nvmMmaps_.count(val) && !isNvm) {
+    vd.nvmMmaps_.erase(val);
+    vd.volMmaps_.insert(val);
+  } else if (volMmaps_.count(val) && isNvm) {
+    vd.volMmaps_.erase(val);
+    vd.nvmMmaps_.insert(val);
+  }
+
+  // Since the set is sparse, they're only contained if isNvm.
+  if (isNvm) {
+    if (isa<GlobalValue>(val)) {
+      vd.global_nvm_.insert(val);
+    } else {
+      vd.local_nvm_.insert(val);
+    }
+  }
+
   return getShared(vd);
 }
 
-std::shared_ptr<NvmValueDesc> NvmValueDesc::speculateOnNext(
-  std::shared_ptr<Andersen> apa,
-  std::shared_ptr<NvmStackFrameDesc> sf, KInstruction *pc) const 
-{
-  std::shared_ptr<NvmValueDesc> retDesc = getShared(*this);
-  NvmValueState outState = getOutput(pc->inst);
-
-  switch (pc->inst->getOpcode()) {
-    
-    // Return instructions should mutate the call location's value.
-    case Instruction::Ret:
-      return retDesc->updateState(sf->getCaller(), outState);
-    // Control flow -- doesn't mutate values.
-    case Instruction::Br:
-    case Instruction::IndirectBr:
-    case Instruction::Switch:
-    case Instruction::Invoke:
-    case Instruction::Call:
-    // Compare -- not modifying 
-    case Instruction::ICmp:
-      return retDesc->updateState(pc->inst, DoesNotContain);
-
-    // Value assignments
-    case Instruction::PHI:
-    case Instruction::Select:
-    // Arithmetic / logical
-    case Instruction::Add:
-    case Instruction::Sub:
-    case Instruction::Mul:
-    case Instruction::UDiv:
-    case Instruction::SDiv:
-    case Instruction::URem:
-    case Instruction::SRem:
-    case Instruction::And:
-    case Instruction::Or:
-    case Instruction::Xor:
-    case Instruction::Shl:
-    case Instruction::LShr:
-    case Instruction::AShr:
-      return retDesc->updateState(pc->inst, outState);
-
-    // Memory Instructions -- potentially modifying
-    case Instruction::Alloca:
-      return retDesc->updateState(pc->inst, DoesNotContain);
-    case Instruction::Load:
-    case Instruction::Store:
-    case Instruction::GetElementPtr:
-    case Instruction::Trunc:
-    case Instruction::ZExt:
-    case Instruction::SExt:
-    case Instruction::IntToPtr:
-    case Instruction::PtrToInt:
-    case Instruction::BitCast:
-      return retDesc->updateState(pc->inst, outState);
-
-    // Floating point instructions...
-    case Instruction::FAdd:
-    case Instruction::FSub:
-    case Instruction::FMul:
-    case Instruction::FDiv:
-    case Instruction::FRem:
-    case Instruction::FPTrunc:
-    case Instruction::FPExt:
-    case Instruction::FPToUI:
-    case Instruction::FPToSI:
-    case Instruction::UIToFP:
-    case Instruction::SIToFP:
-    case Instruction::FCmp:
-      return retDesc->updateState(pc->inst, outState);
-
-    // ???
-    case Instruction::InsertValue:
-    case Instruction::ExtractValue:
-    case Instruction::Fence:
-    case Instruction::InsertElement:
-    case Instruction::ExtractElement:
-      return retDesc->updateState(pc->inst, outState);
-
-    // Error states -- also don't mutate
-    case Instruction::ShuffleVector:
-    case Instruction::AtomicRMW:
-    case Instruction::AtomicCmpXchg:
-    case Instruction::VAArg:
-    case Instruction::Unreachable:
-    // Unimplemented
-    default: {
-      klee_error("%s is unimplemented for opcode %u!\n", 
-          __PRETTY_FUNCTION__, pc->inst->getOpcode());
-      return std::shared_ptr<NvmValueDesc>();
-    } 
-  }
-
-  klee_error("Reached end of function!\n");
-  return std::shared_ptr<NvmValueDesc>();
-}
 
 std::shared_ptr<NvmValueDesc> NvmValueDesc::staticState(llvm::Module *m) {
   NvmValueDesc desc;
@@ -271,57 +186,79 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::staticState(llvm::Module *m) {
 
   assert(desc.nvmMmaps_.size() && "No mmap calls?");
 
-  klee_warning("begin");
   for (Value *v : desc.nvmMmaps_) {
     errs() << *v << "\n";
   }
-  klee_error("check");
 }
 
 std::string NvmValueDesc::str(void) const {
   std::stringstream s;
-  s << "Number of values: " << state_.size();
+  s << "Number of runtime global nvm values: " << global_nvm_.size();
+  s << "Number of runtime local nvm values: " << local_nvm_.size();
   return s.str();
 }
 
 bool klee::operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs) {
-  return lhs.state_ == rhs.state_;
+  return lhs.nvmMmaps_ == rhs.nvmMmaps_ &&
+         lhs.volMmaps_ == rhs.volMmaps_ &&
+         lhs.global_nvm_ == rhs.global_nvm_ &&
+         lhs.local_nvm_ == rhs.local_nvm_ &&
+         lhs.caller_values_ == rhs.caller_values_ &&
+         lhs.call_site_ == rhs.call_site_;
 }
 
 /**
  * NvmInstructionDesc
  */
 
-void NvmInstructionDesc::updateWeight(void) {
+uint64_t NvmInstructionDesc::calculateWeight(void) {
   Instruction *i = curr_->inst;
   // First, we check if the instruction is inherently important.
-  if (CallInst *ci = dyn_cast<CallInst>(curr_->inst)) {}
+  if (CallInst *ci = dyn_cast<CallInst>(curr_->inst)) {
+    // Case 1: Contains an mmap call.
+    if (values_->isMmapCall(ci)) {
+      return 1u;
+    }
 
-  // Second
+    // Case 4: Is a memory fence.
+    // TODO: also should cover mfences, in theory.
+    Function *f = ci->getCalledFunction();
+    if (f && f->isDeclaration() && f->getIntrinsicID() == Intrinsic::x86_sse_sfence) {
+      return 1u;
+    }
+  }
+
+  // Second, we see if a memory store/flush points to NVM.
+  // TODO: clwb
   Value *ptr = nullptr;
   if (StoreInst *si = dyn_cast<StoreInst>(i)) {
+    // Case 2: store
     ptr = si->getPointerOperand();
   } else if (CallInst *ci = dyn_cast<CallInst>(i)) {
+    // Case 3: flush
     Function *f = ci->getCalledFunction();
     if (f && f->isDeclaration()) {
       switch(f->getIntrinsicID()) {
         case Intrinsic::x86_sse2_clflush:
         case Intrinsic::x86_clflushopt:
-          llvm::Value *v = ki->inst->getOperand(0);
-          ptr = v->stripPointerCasts();
+          ptr = ci->getOperand(0)->stripPointerCasts();
         default:
           break;
       }
     }
   }
-  if (!ptr) return DoesNotContain;
 
   std::vector<const Value*> ptsSet;
-  bool ret = apa->getPointsToSet(ptr, ptsSet);
+  bool ret = apa_->getPointsToSet(ptr, ptsSet);
+  assert(ret && "could not get points-to set!");
 
-  for (Value *v : ptsSet) {
-    if (nvmMmaps_.count(v)) return ContainsPointer;
+  for (const Value *v : ptsSet) {
+    if (values_->isNvm(const_cast<Value*>(v))) {
+      return 1u;
+    }
   }
+
+  return 0u;
 }
 
 std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
@@ -346,7 +283,7 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       }
 
       Instruction *ni = stackframe_->getReturnLocation();
-      std::shared_ptr<NvmValueDesc> new_values = values_->speculateOnNext(stackframe_, curr_);
+      std::shared_ptr<NvmValueDesc> new_values = values_->doReturn(ri);
       std::shared_ptr<NvmStackFrameDesc> ns = stackframe_->doReturn();
 
       NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), new_values, ns);
@@ -396,14 +333,14 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       assert(retLoc && "Assumption violated -- call instruction is the last instruction in a basic block!");
 
       std::shared_ptr<NvmStackFrameDesc> newStack = stackframe_->doCall(ci, retLoc);
+      std::shared_ptr<NvmValueDesc> newValues = values_->doCall(ci);
 
-      NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(nextInst), values_, newStack);
+      NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(nextInst), newValues, newStack);
       ret.push_back(desc);
     } else {
       // Instruction *ni = ip->getNextNonDebugInstruction();
       Instruction *ni = ip->getNextNode();
-      std::shared_ptr<NvmValueDesc> new_values = values_->speculateOnNext(stackframe_, curr_);
-      NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), new_values, stackframe_);
+      NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), values_, stackframe_);
       ret.push_back(desc);
     }
     return ret;
@@ -458,8 +395,7 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
 
   // Instruction *ni = ip->getNextNonDebugInstruction();
   Instruction *ni = ip->getNextNode();
-  std::shared_ptr<NvmValueDesc> new_values = values_->speculateOnNext(stackframe_, curr_);
-  NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), new_values, stackframe_);
+  NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), values_, stackframe_);
   ret.push_back(desc);
 
   return ret;

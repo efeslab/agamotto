@@ -147,75 +147,72 @@ namespace klee {
    * added as they are modified.
    * 
    * This also has global variables, why not?
+   * 
+   * ---
+   * This is the runtime state.
    */
   class NvmValueDesc : public Hashable, public StaticStorage<NvmValueDesc> {
     private:
       // Here we track the number of mmap calls which point to NVM. We will 
       // remove them as we resolve calls to mmap.
       std::unordered_set<llvm::Value*> nvmMmaps_;
+      std::unordered_set<llvm::Value*> volMmaps_; // Volatile memory maps
 
       /**
        * We need three sets of values for a context-sensitive history:
        * 1) Global Variable State
        *  - We need this as they are accessable to all function contexts.
-       * 2) Function Argument State
-       *  - This is dependent on the calling context. We're only interested in
-       *    this part of the caller context, as it is the only accessable part.
-       * 3) Local Context State
-       *  - The local context is likely to be the most influential.
+       * 2) Local Context State
+       *  - The local context is likely to be the most influential. Also 
+       *    includes the arguments to the function.
        */
-      std::unordered_map<llvm::Value*, NvmValueState> global_state_;
-      std::unordered_map<llvm::Value*, NvmValueState> arg_state_;
-      std::unordered_map<llvm::Value*, NvmValueState> local_state_;
+      // std::unordered_map<llvm::Value*, NvmValueState> global_state_;
+      // std::unordered_map<llvm::Value*, NvmValueState> arg_state_;
+      // std::unordered_map<llvm::Value*, NvmValueState> local_state_;
+      std::unordered_set<llvm::Value*> global_nvm_;
+      std::unordered_set<llvm::Value*> local_nvm_;
 
       // Storing the caller values makes it easier to update when "executing"
       // a return instruction.
       std::shared_ptr<NvmValueDesc> caller_values_;
+      llvm::CallInst *call_site_;
 
       NvmValueDesc() {}
-
-      /**
-       * Do an in-place modification of the values. Used internally.
-       */
-      void mutateState(llvm::Value *val, NvmValueState vs);
-
-      /**
-       * Speculate on the type of value that will be returned by the instruction
-       * based on the values we currently have.
-       */
-      NvmValueState getOutput(std::shared_ptr<Andersen> apa, llvm::Instruction *i) const;
-
-      /**
-       * Set up the value state when performing a function call.
-       * This involves clearing local state and creating the argument state.
-       */
-      NvmValueDesc doCall(llvm::Instruction *i) const;
-
-      /** 
-       * Set up the value state when doing a return.
-       * This involves setting the value of the return site to the value 
-       * returned by this function, if any.
-       */
-      NvmValueDesc doReturn(llvm::Instruction *i) const;
 
     public:
 
       uint64_t hash(void) const override;
 
       /**
+       * Set up the value state when performing a function call.
+       * We just return an instance with the global variables and the 
+       * propagated state due to the function call arguments.
+       */
+      std::shared_ptr<NvmValueDesc> doCall(llvm::CallInst *ci) const;
+
+      /** 
+       * Set up the value state when doing a return.
+       * This essentially just pops the "stack" and propagates the return val.
+       */
+      std::shared_ptr<NvmValueDesc> doReturn(llvm::ReturnInst *i) const;
+
+      /**
        * Directly create a new description. This is generally for when we actually
        * execute and want to update our assumptions.
        */
-      std::shared_ptr<NvmValueDesc> updateState(llvm::Value *val, NvmValueState vs) const;
+      std::shared_ptr<NvmValueDesc> updateState(llvm::Value *val, bool nvm) const;
 
-      std::shared_ptr<NvmValueDesc> removeMmapCall(llvm::Value *site) const;
+      bool isMmapCall(llvm::CallInst *ci) const {
+        return !!nvmMmaps_.count(ci) || !!volMmaps_.count(ci);
+      }
 
-      /**
-       * Compute a state change if we need it, otherwise returns this same value.
-       */
-      std::shared_ptr<NvmValueDesc> speculateOnNext(
-        std::shared_ptr<Andersen> apa,
-        std::shared_ptr<NvmStackFrameDesc> sf, KInstruction *pc) const;
+      bool isNvm(llvm::Value *ptr) const {
+        if (!local_nvm_.count(ptr) && !global_nvm_.count(ptr) && !nvmMmaps_.count(ptr)) {
+          return false;
+        }
+
+        return true;
+      }
 
       // Populate with all the calls to mmap.
       static std::shared_ptr<NvmValueDesc> staticState(llvm::Module *m);
@@ -256,7 +253,7 @@ namespace klee {
        */
       uint64_t weight_ = 0;
 
-      void updateWeight(void);
+      uint64_t calculateWeight(void);
 
       NvmInstructionDesc() = delete;
       NvmInstructionDesc(std::shared_ptr<Andersen> apa, 
@@ -269,7 +266,7 @@ namespace klee {
           curr_(location), 
           values_(values), 
           stackframe_(stackframe) {
-        updateWeight();
+        weight_ = calculateWeight();
       }
 
       NvmInstructionDesc(std::shared_ptr<Andersen> apa, 
@@ -277,7 +274,7 @@ namespace klee {
         : apa_(apa), mod_(mod), curr_(location), 
           values_(NvmValueDesc::staticState(mod->module.get())), 
           stackframe_(NvmStackFrameDesc::empty()) {
-        updateWeight();
+        weight_ = calculateWeight();
       }
 
       /* Methods for creating successor states. */
