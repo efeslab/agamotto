@@ -8,6 +8,8 @@
 #include <libpmem.h>
 #include <stdbool.h>
 
+#include <klee/klee.h>
+
 #define BUF_LEN 4096
 
 int mod_function(char *addr, bool mod) {
@@ -22,16 +24,16 @@ int mod_function(char *addr, bool mod) {
 }
 
 int main(int argc, char *argv[]) {
-	char __attribute__((annotate("nvmptr"))) *pmemaddr;
+    char pmemaddr[BUF_LEN];
 
-    char data[BUF_LEN];
+    klee_pmem_mark_persistent(pmemaddr, BUF_LEN, "pmem_stack_buffer");
 
-    pmemaddr = data;
+    bool isMod = true;
+    klee_make_symbolic(&isMod, sizeof(isMod), "choice");
 
-    mod_function(pmemaddr, true);
-    mod_function(pmemaddr, false);
-    mod_function(pmemaddr, true);
-    mod_function(pmemaddr, false);
+    mod_function(pmemaddr, isMod);
 
-	return 0;
+    klee_pmem_check_persisted(pmemaddr, BUF_LEN);
+
+    return 0;
 }

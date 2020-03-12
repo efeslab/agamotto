@@ -16,3 +16,7 @@ klee_add_test_executable(001_BranchMod
 klee_add_test_object(001_SimpleMod
   simple_nvm_mod.c
 )
+
+klee_add_test_object(001_SimpleBranchMod
+  branch_paths.c
+) 

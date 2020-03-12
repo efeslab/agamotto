@@ -942,7 +942,7 @@ void SpecialFunctionHandler::handleMarkPersistent(ExecutionState &state,
 
   if (name.length() == 0) {
     name = "unnamed";
-    klee_warning("klee_pmem_mark_persistent: renamed empty name to \"unnamed\"");
+    klee_warning("klee_pmem_mark_persistent: name parameter empty, using \"unnamed\"");
   }
 
   Executor::ExactResolutionList rl;

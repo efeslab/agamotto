@@ -178,8 +178,12 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {
 void ExecutionState::popFrame() {
   StackFrame &sf = stack.back();
   for (std::vector<const MemoryObject*>::iterator it = sf.allocas.begin(),
-         ie = sf.allocas.end(); it != ie; ++it)
+         ie = sf.allocas.end(); it != ie; ++it) {
+    if (persistentObjects.count(*it)) {
+      persistentObjects.erase(*it);
+    }
     addressSpace.unbindObject(*it);
+  }
   stack.pop_back();
 }
 
