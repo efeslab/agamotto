@@ -7,6 +7,8 @@
 #include <string.h>
 #include <libpmem.h>
 
+#include <klee/klee.h>
+
 /* copying 4k at a time to pmem for this example */
 #define BUF_LEN 4096
 
@@ -23,14 +25,14 @@ int no_mod_function(char *addr) {
 int
 main(int argc, char *argv[])
 {
-	char __attribute__((annotate("nvmptr"))) *pmemaddr;
+    char pmemaddr[BUF_LEN];
 
-    char data[BUF_LEN];
-
-    pmemaddr = data;
+    klee_pmem_mark_persistent(pmemaddr, BUF_LEN, "pmem_stack_buffer");
 
     mod_function(pmemaddr);
     no_mod_function(pmemaddr);
+
+    klee_pmem_check_persisted(pmemaddr, BUF_LEN);
 
 	return 0;
 }
