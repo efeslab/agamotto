@@ -43,8 +43,8 @@ int loop_extra(char *addr, int count) {
 #define USE_MMAP 1
 int main(int argc, char *argv[]) {
     #if USE_MMAP
-    if (argc < 2) {
-        fprintf(stderr, "usage: %s PMEM_FILE_NAME\n", argv[0]);
+    if (argc < 3) {
+        fprintf(stderr, "usage: %s PMEM_FILE_NAME <0/1 for DoMod>\n", argv[0]);
         return -1;
     }
 
@@ -62,15 +62,22 @@ int main(int argc, char *argv[]) {
     }
     #else
     char pmemaddr[BUF_LEN];
-    #endif 
+    #endif
 
-    mod_function(pmemaddr, true);
-    mod_function(pmemaddr, false);
+    bool doMod = !!atoi(argv[2]);
 
-    loop_function(pmemaddr, 10);
-    loop_extra(pmemaddr, 10);
+    mod_function(pmemaddr, doMod);
+    // mod_function(pmemaddr, false);
+
+    // loop_function(pmemaddr, 10);
+    // loop_extra(pmemaddr, 10);
 
     #if USE_MMAP
+    int ret = munmap(pmemaddr, getpagesize());
+    if (ret) {
+        perror("unmap!");
+        return -1;
+    }
     close(fd);
     #endif
 

@@ -90,6 +90,8 @@ namespace klee {
 
     public:
       virtual ~StaticStorage() {}
+
+      static size_t getNumSharedObjs(void) { return objects_.size(); }
   };
 
   /**

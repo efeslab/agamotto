@@ -52,17 +52,17 @@ Searcher::~Searcher() {}
 
 ExecutionState &Searcher::selectStateAndUpdateInfo() {
   ExecutionState &ref = selectState();
-  // if (nvmInfo) {
-  //   const NvmFunctionCallDesc &desc = ref.stack.back().nvmDesc;
-  //   const BasicBlock *bb = ref.pc->inst->getParent();
-  //   const NvmFunctionCallInfo *callInfo = nvmInfo->findInfo(desc);
-  //   size_t importance = callInfo->getImportanceFactor(bb);
+  if (ref.nvmInfo) {
+    // const NvmFunctionCallDesc &desc = ref.stack.back().nvmDesc;
+    const BasicBlock *bb = ref.pc->inst->getParent();
+    // const NvmFunctionCallInfo *callInfo = nvmInfo->findInfo(desc);
+    size_t importance = ref.nvmInfo->getCurrentPriority();
 
-  //   if (importance) {
-  //     errs() << *bb << "\n";
-  //     executor.statsTracker->markNvmBasicBlockVisited(bb);
-  //   }
-  // }
+    if (importance) {
+      // errs() << *bb << "\n";
+      executor.statsTracker->markNvmBasicBlockVisited(bb);
+    }
+  }
 
   return ref;
 }
@@ -371,7 +371,7 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *ex
   //}
   //nvm_info_.findInfo(desc)->dumpInfo();
   // const NvmFunctionCallInfo *callInfo = nvmInfo->findInfo(desc);
-  // size_t importance = callInfo->getImportanceFactor(bb);
+  // size_t importance = execState->nvmInfo->getCurrentPriority();
   size_t importance = 1;
   if (importance) {
     generateTest[execState] = true;
@@ -383,7 +383,7 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *ex
   }
 
   // size_t priority = nvmInfo->findInfo(desc)->getSuccessorFactor(bb);
-  size_t priority = 1;
+  size_t priority = execState->nvmInfo->getCurrentPriority();
   if (!priority && generateTest[execState]) {
     //errs() << "\tKilling state with test!!\n";
     stats::nvmStatesKilledEndTrace++;

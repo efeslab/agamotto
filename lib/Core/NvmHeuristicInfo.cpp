@@ -303,6 +303,12 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
         NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), values_, stackframe_);
         ret.push_back(desc);
       }
+      // The default isn't in the cases list, as it's a different parameter in
+      // the IR: https://llvm.org/docs/LangRef.html#switch-instruction
+      Instruction *ni = si->getDefaultDest()->getFirstNonPHIOrDbg();
+      NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), values_, stackframe_);
+      ret.push_back(desc);
+
       return ret;
 
     } else if (isa<UnreachableInst>(ip)) {
@@ -570,7 +576,9 @@ void NvmHeuristicInfo::computeCurrentPriority(void) {
     // Instructions can be invalid if we don't have enough information to 
     // figure out their successors statically. In this case, we just need to
     // skip them.
-    if (!instDesc->isValid()) continue;
+    // -- We actually don't need to do this, as an invalid instruction is 
+    //    considered a terminator.
+    // if (!instDesc->isValid()) continue;
 
     // errs() << instDesc->str();
     // errs() << toTraverse.size() << " " << traversed.size() << "\n";
@@ -625,8 +633,10 @@ void NvmHeuristicInfo::computeCurrentPriority(void) {
   //   errs() << p.first->str();
   //   if (*p.first == *current_state) errs() << "+++HEY+++ " << (p.first.get() == current_state.get())  <<"\n";
   // }
-  // errs() << "computeCurrentPriority done!\n";
-  // assert(priority.count(current_state) && "can't find our work!");
+  // errs() << priority.size() << " =?= " << NvmInstructionDesc::getNumSharedObjs() << "\n";
+  // priority.at(current_state);
+  // assert(priority.size() == NvmInstructionDesc::getNumSharedObjs() && "too few!");
+  assert(priority.count(current_state) && "can't find our work!");
 }
 
 void NvmHeuristicInfo::updateCurrentState(KInstruction *pc, bool isNvm) {
@@ -635,8 +645,8 @@ void NvmHeuristicInfo::updateCurrentState(KInstruction *pc, bool isNvm) {
 }
 
 void NvmHeuristicInfo::stepState(KInstruction *nextPC) {
-  errs() << this << " ";
-  errs() << *current_state->kinst()->inst << "\n\t=> " << *nextPC->inst << "\n";
+  // errs() << this << " ";
+  // errs() << *current_state->kinst()->inst << "\n\t=> " << *nextPC->inst << "\n";
   if (current_state->isTerminator()) {
     assert(nextPC == current_state->kinst() && "assumption violated");
     return;
