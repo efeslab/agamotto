@@ -184,8 +184,9 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::staticState(llvm::Module *m) {
 
 std::string NvmValueDesc::str(void) const {
   std::stringstream s;
-  s << "Number of runtime global nvm values: " << global_nvm_.size();
-  s << "Number of runtime local nvm values: " << local_nvm_.size();
+  s << "Value State:\n";
+  s << "\tNumber of runtime global nvm values: " << global_nvm_.size();
+  s << "\n\tNumber of runtime local nvm values: " << local_nvm_.size();
   return s.str();
 }
 
@@ -298,16 +299,21 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       return ret;
 
     } else if (SwitchInst *si = dyn_cast<SwitchInst>(ip)) {
-      for (auto &c : si->cases()) {
-        Instruction *ni = &(c.getCaseSuccessor()->front());
-        NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), values_, stackframe_);
-        ret.push_back(desc);
-      }
+      std::unordered_set<Instruction*> uniqueTargets;
+
       // The default isn't in the cases list, as it's a different parameter in
       // the IR: https://llvm.org/docs/LangRef.html#switch-instruction
       Instruction *ni = si->getDefaultDest()->getFirstNonPHIOrDbg();
-      NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), values_, stackframe_);
-      ret.push_back(desc);
+      uniqueTargets.insert(ni);
+      for (auto &c : si->cases()) {
+        Instruction *ni = &(c.getCaseSuccessor()->front());
+        uniqueTargets.insert(ni);
+      }
+      
+      for (Instruction *ni : uniqueTargets) {
+        NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), values_, stackframe_);
+        ret.push_back(desc);
+      }
 
       return ret;
 
@@ -352,29 +358,7 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
     // We can't immediately find the function. So, let's see if we can find it indirectly.
     // -- Inline assembly is skipped over.
     // -- Debug calls and other intrinsics
-    if (ci->isIndirectCall()){
-      // go up the use-def chain to find the function.
-      // std::list<Value*> chain;
-      // chain.push_back(ci->getCalledOperand());
-      // Function *indirect = nullptr;
-
-      // while(chain.size()) {
-      //   Value *v = chain.front();
-      //   chain.pop_front();
-      //   errs() << "\t inspecting: " << *v << "\n";
-      //   if ((indirect = dyn_cast<Function>(v))) {
-      //     break;
-      //   } else if (User *usr = dyn_cast<User>(v)) {
-      //     for (auto it = usr->op_begin(); it != usr->op_end(); it++) {
-      //       chain.push_back(it->get());
-      //     }
-      //   }
-      // }
-
-      // if (!indirect) {
-      //   // Further tracking would be quite tedious
-      // }
-      
+    if (ci->isIndirectCall()){   
       /**
        * Further analysis would be tedious and potentially unwanted. Since this
        * is potentially highly runtime dependent, we will defer and increase the weight
@@ -417,6 +401,16 @@ void NvmInstructionDesc::setSuccessors() {
     successors_.push_back(sptr);
     sptr->addPredecessor(*this);
   }
+
+  std::unordered_set<shared_ptr<NvmInstructionDesc>> uniq(successors_.begin(), successors_.end());
+
+  if (uniq.size() != successors_.size()) {
+    errs() << str() << "\nSuccessors:\n";
+    for (const auto &s : uniq) {
+      errs() << s->str() << "\n";
+    }
+  }
+  assert(uniq.size() == successors_.size() && "Duplicate successors generated!");
 
   isTerminal = successors_.size() == 0;
 }
@@ -663,6 +657,11 @@ void NvmHeuristicInfo::stepState(KInstruction *nextPC) {
   auto candidates = current_state->getMatchingSuccessors(nextPC);
 
   if (candidates.size() > 1) {
+    klee_warning("Too many candidates! Wanted 1, got %zu", candidates.size());
+    errs() << nextPC->inst->getFunction()->getName() << "@" << *nextPC->inst << "\n";
+    for (auto &c : candidates) {
+      errs() << c->str() << "\n";
+    }
     klee_error("too many candidates!");
     return;
   } else if (!candidates.size() && current_state->getSuccessors().size() > 1) {

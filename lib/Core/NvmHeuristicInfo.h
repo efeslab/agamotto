@@ -412,7 +412,9 @@ namespace klee {
         return current_state->inst();
       }
 
-      uint64_t getCurrentPriority(void) const { return priority.at(current_state); };
+      uint64_t getCurrentPriority(void) const {
+        return priority.at(current_state); 
+      };
   };
 }
 #endif //__NVM_HEURISTIC_INFO_H__
