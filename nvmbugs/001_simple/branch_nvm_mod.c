@@ -40,7 +40,7 @@ int loop_extra(char *addr, int count) {
     return 0;
 }
 
-#define USE_MMAP 0
+#define USE_MMAP 1
 int main(int argc, char *argv[]) {
     #if USE_MMAP
     if (argc < 2) {

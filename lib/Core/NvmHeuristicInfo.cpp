@@ -268,21 +268,6 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
   Instruction *ip = curr_->inst;
   BasicBlock *bb = ip->getParent();
 
-  if (str().find("exit") != string::npos) {
-    errs() << "exit!\n";
-  }
-
-  errs() << str();
-
-  if (CallInst *ci = dyn_cast<CallInst>(ip)) {
-    errs() << *ci << "\n";
-    Function *f = utils::getCallInstFunction(ci);
-    if ((f && f->getName() == mod_->module->getFunction("exit")->getName())
-        || str().find("exit") != string::npos) {
-      errs() << "exit!\n";
-    }
-  }
-
   // if (isa<ReturnInst>(ip)) {
   //   errs() << "return " << (ip == bb->getTerminator() ? "is terminator\n" : "is not terminator\n");
   // }
@@ -650,19 +635,20 @@ void NvmHeuristicInfo::updateCurrentState(KInstruction *pc, bool isNvm) {
 }
 
 void NvmHeuristicInfo::stepState(KInstruction *nextPC) {
-  errs() << *nextPC->inst << "\n\t=> " << *current_state->kinst()->inst << "\n";
+  errs() << this << " ";
+  errs() << *current_state->kinst()->inst << "\n\t=> " << *nextPC->inst << "\n";
   if (current_state->isTerminator()) {
     assert(nextPC == current_state->kinst() && "assumption violated");
     return;
   }
 
-  errs() << "CURRENT " << current_state->str(); 
-  if (current_state->str().find("exit") != string::npos) {
-    errs() << "succs\n";
-    for (auto s : current_state->getSuccessors()) {
-      errs() << s->str() << "\n";
-    }
-  }
+  // errs() << "CURRENT " << current_state->str(); 
+  // if (current_state->str().find("exit") != string::npos) {
+  //   errs() << "succs\n";
+  //   for (auto s : current_state->getSuccessors()) {
+  //     errs() << s->str() << "\n";
+  //   }
+  // }
 
   auto candidates = current_state->getMatchingSuccessors(nextPC);
 
@@ -677,7 +663,7 @@ void NvmHeuristicInfo::stepState(KInstruction *nextPC) {
     }
 
     // This can happen with function pointers, if they aren't handled carefully.
-    klee_error("no candidates! we need to recalculate");
+    assert(false && "no candidates! we need to recalculate");
     return;
   } else if (!candidates.size() && current_state->getSuccessors().size() == 1) {
     candidates = current_state->getSuccessors();
@@ -688,8 +674,10 @@ void NvmHeuristicInfo::stepState(KInstruction *nextPC) {
   if (!next->isValid()) {
     // We now know what the next instruction is, thanks to the symbolic execution
     // state.
+    // errs() << "uniqstr\n";
     next->setPC(nextPC);
     computeCurrentPriority();
+    // errs() << "doneo\n";
   }
 
   current_state = next;
