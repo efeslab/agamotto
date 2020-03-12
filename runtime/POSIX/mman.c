@@ -183,8 +183,10 @@ int munmap_sym(char* start, size_t length, exe_disk_file_t* df) {
     }
     df->page_refs[page_start]--;
     if (df->page_refs[page_start] == 0) {
-      // for now, don't actually perform persistence check
-      //klee_pmem_check_persisted(df->contents + 4096*page_start, 4096);
+      // Force a persistent check on unmap to ensure we check. We can check
+      // on sfences, but if a program also omits those, this will be our only
+      // check.
+      klee_pmem_check_persisted(df->contents + 4096*page_start, 4096);
     }
   }
   return 0;
