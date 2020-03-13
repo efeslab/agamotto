@@ -9,7 +9,7 @@ include_directories(${PMDK_INCLUDE_DIR})
 
 # add_executable(001_BranchMod branch_nvm_mod.c)
 # add_executable(001_SymMmap sym_mmap.c)
-klee_add_test_executable(001_BranchMod
+klee_add_test_executable(TARGET 001_BranchMod SOURCES
   branch_nvm_mod.c
 )
 

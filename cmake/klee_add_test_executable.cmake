@@ -7,26 +7,24 @@
 #
 #===------------------------------------------------------------------------===#
 
-function(klee_add_test_executable target_name)
+function(klee_add_test_executable)
+  set(options)
+  set(oneValueArgs TARGET)
+  set(multiValueArgs SOURCES EXTRA_LIBS)
+  cmake_parse_arguments(KE_ARGS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+
   set(KLEE_EXE_FLAGS "-g;-O0;-Xclang;-disable-llvm-passes")
   # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -Xclang -disable-llvm-passes")
-  add_executable(${target_name} ${ARGN})
-  # Use of `PUBLIC` means these will propagate to targets that use this component.
-  # if (("${CMAKE_VERSION}" VERSION_EQUAL "3.3") OR ("${CMAKE_VERSION}" VERSION_GREATER "3.3"))
-  #   # In newer CMakes we can make sure that the flags are only used when compiling C++
-  #   target_compile_options(${target_name} PUBLIC
-  #     $<$<COMPILE_LANGUAGE:CXX>:${KLEE_COMPONENT_CXX_FLAGS}>)
-  # else()
-  #   # For older CMakes just live with the warnings we get for passing C++ only flags
-  #   # to the C compiler.
-  target_compile_options(${target_name} PUBLIC ${KLEE_EXE_FLAGS})
-  # endif()
-  target_include_directories(${target_name} PUBLIC ${KLEE_COMPONENT_EXTRA_INCLUDE_DIRS})
+  add_executable(${KE_ARGS_TARGET} ${KE_ARGS_SOURCES})
+  
+  target_compile_options(${KE_ARGS_TARGET} PUBLIC ${KLEE_EXE_FLAGS})
+
+  target_include_directories(${KE_ARGS_TARGET} PUBLIC ${KLEE_COMPONENT_EXTRA_INCLUDE_DIRS})
   # target_compile_definitions(${target_name} PUBLIC ${KLEE_COMPONENT_CXX_DEFINES})
-  target_link_libraries(${target_name} PUBLIC ${KLEE_COMPONENT_EXTRA_LIBRARIES})
+  target_link_libraries(${KE_ARGS_TARGET} PUBLIC ${KLEE_COMPONENT_EXTRA_LIBRARIES} ${KE_ARGS_EXTRA_LIBS})
 
   # Now we auto extract
-  add_custom_command(TARGET ${target_name} 
+  add_custom_command(TARGET ${KE_ARGS_TARGET} 
                      POST_BUILD
-                     COMMAND extract-bc $<TARGET_FILE:${target_name}>)
+                     COMMAND extract-bc $<TARGET_FILE:${KE_ARGS_TARGET}>)
 endfunction()
