@@ -14,21 +14,10 @@ template<class X>
 typename StaticStorage<X>::object_map_t StaticStorage<X>::objects_;
 
 template<class X>
-std::shared_ptr<X> StaticStorage<X>::getShared(const X &x) {
-  
+std::shared_ptr<X> StaticStorage<X>::getShared(const X &x) { 
   if (objects_.count(x)) {
-    // errs() << "getShared hit!\n";
     return objects_[x];
   }
-
-  // errs() << "getShared, not found\n";
-  // for (const auto &p : objects_) {
-  //   errs() << "-------\n";
-  //   errs() << x.str() << "\n";
-  //   errs() << "items eq: " << (p.first == x) << " hash eq: " << (p.first.hash() == x.hash()) << "\n";
-  //   errs() << "-------\n";
-  // }
-  // errs() << "getShared, end print\n"; 
 
   objects_[x] = std::make_shared<X>(x);
   return objects_[x];
@@ -111,7 +100,9 @@ uint64_t NvmValueDesc::hash(void) const {
   return hash_value;
 }
 
-std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(llvm::CallInst *ci) const {
+std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(
+  andersen_sptr_t apa, llvm::CallInst *ci) const 
+{
   NvmValueDesc newDesc;
   newDesc.caller_values_ = getShared(*this);
   newDesc.call_site_ = ci;
@@ -124,19 +115,41 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(llvm::CallInst *ci) const {
     Value *op = ci->getArgOperand(i);
     Argument *arg = (f->arg_begin() + i);
     assert(op && arg && "Unsure what to do!");
-    if (isNvm(op)) {
-      newDesc.local_nvm_.insert(arg);
+
+    // Scalars don't necessarily point to anything.
+    if (!arg->getType()->isPtrOrPtrVectorTy()) continue; 
+    
+    // We actually want the points-to set for this
+    std::vector<const Value*> ptsSet;
+    errs() << "doing call instruction stuff\n";
+    errs() << *op << "\n";
+    bool ret = apa->getResult().getPointsToSet(op, ptsSet);
+    assert(ret && "could not get points-to set!");
+    for (const Value *ptsTo : ptsSet) {
+      errs() << "\tpoints to " << *ptsTo << "\n";
+      if (isNvm(apa, ptsTo)) {
+        errs() << "\t\twhich is nvm!\n";
+        newDesc.local_nvm_.insert(arg);
+      }
     }
+
   }
 
   return getShared(newDesc);
 }
 
-std::shared_ptr<NvmValueDesc> NvmValueDesc::doReturn(llvm::ReturnInst *i) const {
+std::shared_ptr<NvmValueDesc> NvmValueDesc::doReturn(andersen_sptr_t apa, ReturnInst *i) const {
   std::shared_ptr<NvmValueDesc> retDesc = caller_values_;
   
   if (Value *retVal = i->getReturnValue()) {
-    retDesc = retDesc->updateState(call_site_, isNvm(retVal));
+    std::vector<const Value*> ptsTo;
+    bool success = apa->getResult().getPointsToSet(retVal, ptsTo);
+    if (success && ptsTo.size()) {
+      errs() << "doRet " << *retVal << "\n";
+      retDesc = retDesc->updateState(call_site_, isNvm(apa, retVal));
+    } else {
+       errs() << "doRet doesn't point to a memory object! " << success << " " << ptsTo.size() << "\n";
+    }
   }
 
   return retDesc;
@@ -159,12 +172,18 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::updateState(Value *val, bool isNvm) 
 
 std::shared_ptr<NvmValueDesc> NvmValueDesc::staticState(llvm::Module *m) {
   NvmValueDesc desc;
-  Function* mmaps[2];
-  mmaps[0] = m->getFunction("mmap");
-  mmaps[1] = m->getFunction("mmap64");
+  #define N_FN 3
+  static const char *fn_names[N_FN] = {"mmap", "mmap64", "klee_pmem_mark_persistent"};
+  static Function* mmaps[N_FN];
+  for (uint64_t i = 0; i < N_FN; ++i) {
+    mmaps[i] = m->getFunction(fn_names[i]);
+    if (!mmaps[i]) {
+      klee_warning("Could not find function %s! (no calls)", fn_names[i]);
+    }
+  }
+  
   for (Function *mmap : mmaps) {
     if (!mmap) {
-      klee_warning("mmap function was null! No calls to mmap!");
       continue;
     }
 
@@ -244,16 +263,31 @@ uint64_t NvmInstructionDesc::calculateWeight(void) {
           break;
       }
     }
+    // Case 5: When we check for persistence.
+    Function *unmap = mod_->module->getFunction("munmap");
+    Function *check = mod_->module->getFunction("klee_pmem_check_persisted");
+    if (f == unmap || f == check) {
+      ptr = ci->getOperand(0)->stripPointerCasts();
+    }
   }
 
-  if (!ptr) return 0u;
+  if (!ptr) {
+    errs() << str() << " has weight 0u cuz no pointer!\n";
+    return 0u;
+  }
 
   std::vector<const Value*> ptsSet;
-  bool ret = apa_->getPointsToSet(ptr, ptsSet);
+  bool ret = apa_->getResult().getPointsToSet(ptr, ptsSet);
   assert(ret && "could not get points-to set!");
+  errs() << "(weight stuff)\n";
+  errs() << *ptr << "\n";
+  // assert(ptsSet.size() && "this pointer points to nothing?!");
 
   for (const Value *v : ptsSet) {
-    if (values_->isNvm(const_cast<Value*>(v))) {
+    errs() << "\tpoints to " << *v << "\n";
+    if (values_->isNvm(apa_, v)) {
+      // errs() << "1u\n";
+      errs() << str() << " has weight 1u cuz cache-state modifying!\n";
       return 1u;
     }
   }
@@ -283,7 +317,7 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       }
 
       Instruction *ni = stackframe_->getReturnLocation();
-      std::shared_ptr<NvmValueDesc> new_values = values_->doReturn(ri);
+      std::shared_ptr<NvmValueDesc> new_values = values_->doReturn(apa_, ri);
       std::shared_ptr<NvmStackFrameDesc> ns = stackframe_->doReturn();
 
       NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), new_values, ns);
@@ -342,7 +376,7 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       assert(retLoc && "Assumption violated -- call instruction is the last instruction in a basic block!");
 
       std::shared_ptr<NvmStackFrameDesc> newStack = stackframe_->doCall(ci, retLoc);
-      std::shared_ptr<NvmValueDesc> newValues = values_->doCall(ci);
+      std::shared_ptr<NvmValueDesc> newValues = values_->doCall(apa_, ci);
 
       NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(nextInst), newValues, newStack);
       ret.push_back(desc);
@@ -479,7 +513,37 @@ std::string NvmInstructionDesc::str(void) const {
 }
 
 std::shared_ptr<NvmInstructionDesc> NvmInstructionDesc::createEntry(KModule *m, KFunction *mainFn) {
-  std::shared_ptr<Andersen> anders = std::make_shared<Andersen>(*m->module);
+  andersen_sptr_t anders = std::make_shared<AndersenAAWrapperPass>();
+  assert(!anders->runOnModule(*m->module) && "Analysis pass should return false!");
+  errs() << "creatEntry begin\n";
+  for (const auto &BB : *mainFn->function) {
+    for (const auto &I : BB) {
+      const Value *toChk;
+      switch(I.getOpcode()) {
+        case Instruction::Store:
+          assert(isa<StoreInst>(&I));
+          toChk = dyn_cast<StoreInst>(&I)->getPointerOperand();
+          break;
+        default:
+          toChk = &I;
+          break;
+      }
+      std::vector<const Value*> ptsTo;
+      bool ret = anders->getResult().getPointsToSet(toChk, ptsTo);
+
+      if (!ret) {
+        errs() << I << " (" << *toChk << ")\n\treturned false!\n";
+      } else if (ptsTo.empty()) {
+        errs() << I << " (" << *toChk << ") points to nothing!\n";
+      } else {
+        errs() << I << " (" << *toChk << ") points to\n";
+        for (const Value *v : ptsTo) {
+          errs() << "\t" << *v << "\n";
+        }
+      }
+    }
+  }
+  errs() << "creatEntry end\n";
   
   llvm::Instruction *inst = &(mainFn->function->getEntryBlock().front());
   KInstruction *start = mainFn->getKInstruction(inst);
@@ -627,9 +691,10 @@ void NvmHeuristicInfo::computeCurrentPriority(void) {
   //   errs() << p.first->str();
   //   if (*p.first == *current_state) errs() << "+++HEY+++ " << (p.first.get() == current_state.get())  <<"\n";
   // }
-  // errs() << priority.size() << " =?= " << NvmInstructionDesc::getNumSharedObjs() << "\n";
+  errs() << priority.size() << " =?= " << NvmInstructionDesc::getNumSharedObjs() << "\n";
   // priority.at(current_state);
-  // assert(priority.size() == NvmInstructionDesc::getNumSharedObjs() && "too few!");
+  // dumpState();
+  assert(priority.size() == NvmInstructionDesc::getNumSharedObjs() && "too few!");
   assert(priority.count(current_state) && "can't find our work!");
 }
 

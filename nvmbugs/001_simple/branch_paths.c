@@ -26,14 +26,14 @@ int mod_function(char *addr, bool mod) {
 int main(int argc, char *argv[]) {
     char pmemaddr[BUF_LEN];
 
-    klee_pmem_mark_persistent(pmemaddr, BUF_LEN, "pmem_stack_buffer");
+    char *real_pmem = klee_pmem_mark_persistent(pmemaddr, BUF_LEN, "pmem_stack_buffer");
 
     bool isMod = true;
     klee_make_symbolic(&isMod, sizeof(isMod), "choice");
 
-    mod_function(pmemaddr, isMod);
+    mod_function(real_pmem, isMod);
 
-    klee_pmem_check_persisted(pmemaddr, BUF_LEN);
+    klee_pmem_check_persisted(real_pmem, BUF_LEN);
 
     return 0;
 }

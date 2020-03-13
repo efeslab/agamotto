@@ -140,7 +140,7 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("__ubsan_handle_mul_overflow", handleMulOverflow, false),
   add("__ubsan_handle_divrem_overflow", handleDivRemOverflow, false),
 
-  add("klee_pmem_mark_persistent", handleMarkPersistent, false),
+  add("klee_pmem_mark_persistent", handleMarkPersistent, true),
   add("klee_pmem_check_persisted", handleIsPersisted, false),
   add("klee_pmem_check_ordered_before", handleIsOrderedBefore, false),
 
@@ -967,6 +967,8 @@ void SpecialFunctionHandler::handleMarkPersistent(ExecutionState &state,
     
     if (res) {
       executor.executeMarkPersistent(*s, mo);
+      // Just return the same address as what we received.
+      executor.bindLocal(target, *s, arguments[0]);
     } else {      
       executor.terminateStateOnError(*s, 
                                      "wrong size given to klee_pmem_mark_persistent[_name]", 

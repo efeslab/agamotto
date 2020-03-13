@@ -372,8 +372,9 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *ex
   //nvm_info_.findInfo(desc)->dumpInfo();
   // const NvmFunctionCallInfo *callInfo = nvmInfo->findInfo(desc);
   // size_t importance = execState->nvmInfo->getCurrentPriority();
-  size_t importance = 1;
+  size_t importance = execState->nvmInfo->getCurrentWeight();
   if (importance) {
+    errs() << *execState->nvmInfo->currentInst() << " has weight " << importance << "\n";
     generateTest[execState] = true;
     //errs() << format("Previous coverage: %d\n", (int)(nvm_info_.computeCoverageRatio(covered) * 100.0));
     covered.insert(bb);
@@ -384,6 +385,8 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *ex
 
   // size_t priority = nvmInfo->findInfo(desc)->getSuccessorFactor(bb);
   size_t priority = execState->nvmInfo->getCurrentPriority();
+  // bool canKillEarly = execState->nvmInfo->isCurrentTerminator();
+  errs() << *execState->nvmInfo->currentInst() << " has priority " << priority << "\n";
   if (!priority && generateTest[execState]) {
     //errs() << "\tKilling state with test!!\n";
     stats::nvmStatesKilledEndTrace++;
@@ -408,8 +411,14 @@ NvmPathSearcher::update(ExecutionState *current,
 {
   //errs() << "Update start: " << states.size() << "\n";
   bool addedCurrent = false;
+  bool currentIsRemoved = false;
   // Re-insert the current state with a new priority.
   if (current) {
+    auto it = std::find(removedStates.begin(), removedStates.end(), current);
+    currentIsRemoved = it != removedStates.end();
+  }
+
+  if (current && !currentIsRemoved) {
     addedCurrent = addOrKillState(nullptr, current);
   }
 

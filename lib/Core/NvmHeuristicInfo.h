@@ -43,19 +43,15 @@
 
 #include "NvmAnalysisUtils.h"
 
-#include "Andersen.h"
+#include "AndersenAA.h"
 
 /**
  *
  */
 
 namespace klee {
-  
-  enum NvmValueState {
-    DoesNotContain = 0b1,
-    ContainsDerivative = 0b11,
-    ContainsPointer = 0b111,
-  };
+
+  typedef std::shared_ptr<AndersenAAWrapperPass> andersen_sptr_t;
 
   struct Hashable {
     virtual uint64_t hash(void) const = 0;
@@ -189,13 +185,13 @@ namespace klee {
        * We just return an instance with the global variables and the 
        * propagated state due to the function call arguments.
        */
-      std::shared_ptr<NvmValueDesc> doCall(llvm::CallInst *ci) const;
+      std::shared_ptr<NvmValueDesc> doCall(andersen_sptr_t apa, llvm::CallInst *ci) const;
 
       /** 
        * Set up the value state when doing a return.
        * This essentially just pops the "stack" and propagates the return val.
        */
-      std::shared_ptr<NvmValueDesc> doReturn(llvm::ReturnInst *i) const;
+      std::shared_ptr<NvmValueDesc> doReturn(andersen_sptr_t apa, llvm::ReturnInst *i) const;
 
       /**
        * Directly create a new description. This is generally for when we actually
@@ -207,12 +203,23 @@ namespace klee {
         return !!mmap_calls_.count(ci);
       }
 
-      bool isNvm(llvm::Value *ptr) const {
-        if (!local_nvm_.count(ptr) && !global_nvm_.count(ptr)) {
-          return false;
+      /**
+       * The "points-to" set points to allocation sites.
+       */
+      bool isNvm(andersen_sptr_t apa, const llvm::Value *ptr) const {
+        for (const llvm::Value *v : local_nvm_) {
+          if (llvm::AliasResult::MustAlias == apa->getResult().andersenAlias(v, ptr)) {
+            return true;
+          }
         }
 
-        return true;
+        for (const llvm::Value *v : global_nvm_) {
+          if (llvm::AliasResult::MustAlias == apa->getResult().andersenAlias(v, ptr)) {
+            return true;
+          }
+        }
+
+        return false;
       }
 
       // Populate with all the calls to mmap.
@@ -227,7 +234,7 @@ namespace klee {
     private:
 
       // The utility state.
-      std::shared_ptr<Andersen> apa_; // Andersen's whole program pointer analysis
+      andersen_sptr_t apa_; // Andersen's whole program pointer analysis
       KModule *mod_;
       // The real state.
       KInstruction *curr_;
@@ -257,7 +264,7 @@ namespace klee {
       uint64_t calculateWeight(void);
 
       NvmInstructionDesc() = delete;
-      NvmInstructionDesc(std::shared_ptr<Andersen> apa, 
+      NvmInstructionDesc(andersen_sptr_t apa, 
                          KModule *mod,
                          KInstruction *location, 
                          std::shared_ptr<NvmValueDesc> values, 
@@ -270,7 +277,7 @@ namespace klee {
         weight_ = calculateWeight();
       }
 
-      NvmInstructionDesc(std::shared_ptr<Andersen> apa, 
+      NvmInstructionDesc(andersen_sptr_t apa, 
                          KModule *mod, KInstruction *location) 
         : apa_(apa), mod_(mod), curr_(location), 
           values_(NvmValueDesc::staticState(mod->module.get())), 
@@ -342,6 +349,7 @@ namespace klee {
       void setPC(KInstruction *pc) {
         assert(!isValid() && "Trying to modify a valid instruction!");
         curr_ = pc;
+        weight_ = calculateWeight();
       }
 
       /**
@@ -415,6 +423,24 @@ namespace klee {
       uint64_t getCurrentPriority(void) const {
         return priority.at(current_state); 
       };
+
+      uint64_t getCurrentWeight(void) const {
+        return current_state->getWeight();
+      }
+
+      bool isCurrentTerminator(void) const {
+        return current_state->isTerminator();
+      }
+
+      void dumpState(void) const {
+        llvm::errs() << "##################################################\n";
+        for (const auto &pair : priority) {
+          llvm::errs() << "Instruction:\n" << pair.first->str();
+          llvm::errs() << "\nWeight: " << pair.first->getWeight();
+          llvm::errs() << "\nPriority: " << pair.second << "\n";
+        }
+        llvm::errs() << "##################################################\n";
+      }
   };
 }
 #endif //__NVM_HEURISTIC_INFO_H__

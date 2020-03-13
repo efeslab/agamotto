@@ -170,8 +170,11 @@ extern "C" {
    * \arg size - The number of bytes in the memory range.
    * \arg name - A name used for identifying the object in messages, output
    * files, etc. If NULL, object is called "unnamed".
+   * 
+   * \return The persistent pointer. This is a hack to make this work better
+   * for the NVM heuristic, which expects mmap calls.
    */
-  void klee_pmem_mark_persistent(void *addr, size_t size, const char *name);
+  void *klee_pmem_mark_persistent(void *addr, size_t size, const char *name);
 
   /* Assert that the entire memory range [addr, addr+size) is guaranteed
    * to be persisted to main memory at the time of calling.
