@@ -93,6 +93,8 @@ class Executor : public Interpreter {
   // (iangneal): Needed so that we can access the root module for analysis.
   friend class Searcher;
   friend class NvmPathSearcher;
+  friend class NvmHeuristicInfo;
+  friend class NvmInstructionDesc;
 
 public:
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;

@@ -2889,15 +2889,15 @@ void Executor::updateStates(ExecutionState *current) {
             op.second->getKind() == ObjectState::Persistent) 
         {
           // This value is a pointer into nvm.
-          s->nvmInfo->updateCurrentState(s->prevPC, true);
+          s->nvmInfo->updateCurrentState(s, s->prevPC, true);
         } else {
-          s->nvmInfo->updateCurrentState(s->prevPC, false);
+          s->nvmInfo->updateCurrentState(s, s->prevPC, false);
         }
         solver->setTimeout(time::Span());
       }
 
       // Now go to the next
-      s->nvmInfo->stepState(s->pc);
+      s->nvmInfo->stepState(s, s->pc);
     }
   }
 
@@ -4091,7 +4091,7 @@ void Executor::runFunctionAsMain(Function *f,
     }
   }
 
-  ExecutionState *state = new ExecutionState(kmodule.get(), kmodule->functionMap[f], modOpts.EnableNvmInfo);
+  ExecutionState *state = new ExecutionState(this, kmodule->functionMap[f], modOpts.EnableNvmInfo);
   // (iangneal): I want to start my stack frame with the main function
   if (false && modOpts.EnableNvmInfo) {
     state->stack.back().nvmDesc = NvmFunctionCallDesc(

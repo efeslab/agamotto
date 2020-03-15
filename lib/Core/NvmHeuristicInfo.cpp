@@ -6,6 +6,9 @@ using namespace klee;
 
 #include <sstream>
 
+#include "Executor.h"
+#include "klee/ExecutionState.h"
+
 /**
  * StaticStorage
  */
@@ -223,10 +226,81 @@ bool klee::operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs) {
  * NvmInstructionDesc
  */
 
-uint64_t NvmInstructionDesc::calculateWeight(void) {
+NvmInstructionDesc::NvmInstructionDesc(Executor *executor,
+                         andersen_sptr_t apa,
+                         KInstruction *location, 
+                         std::shared_ptr<NvmValueDesc> values, 
+                         std::shared_ptr<NvmStackFrameDesc> stackframe) 
+        : executor_(executor),
+          apa_(apa), 
+          mod_(executor->kmodule.get()), 
+          curr_(location), 
+          values_(values), 
+          stackframe_(stackframe) {
+        // weight_ = calculateWeight();
+      }
+
+NvmInstructionDesc::NvmInstructionDesc(Executor *executor,
+                         andersen_sptr_t apa, 
+                         KInstruction *location) 
+        : executor_(executor),
+          apa_(apa), 
+          mod_(executor->kmodule.get()), 
+          curr_(location), 
+          values_(NvmValueDesc::staticState(mod_->module.get())), 
+          stackframe_(NvmStackFrameDesc::empty()) {}
+
+bool NvmInstructionDesc::isCachelineModifier(ExecutionState *es) {
+  Instruction *i = curr_->inst;
+
+  Value *ptr = nullptr;
+  if (StoreInst *si = dyn_cast<StoreInst>(i)) {
+    // Case 2: store
+    ptr = si->getPointerOperand();
+  } else if (CallInst *ci = dyn_cast<CallInst>(i)) {
+    // Case 3: flush
+    Function *f = ci->getCalledFunction();
+    if (f && f->isDeclaration()) {
+      switch(f->getIntrinsicID()) {
+        case Intrinsic::x86_sse2_clflush:
+        case Intrinsic::x86_clflushopt:
+          ptr = ci->getOperand(0)->stripPointerCasts();
+        default:
+          break;
+      }
+    }
+  }
+
+  if (!ptr) return false;
+
+  KInstruction *target = mod_->getKInstruction(dyn_cast<Instruction>(ptr));
+  ref<Expr> addr = es->stack.back().locals[target->dest].value;
+  if (addr.isNull()) {
+    klee_error("null?");
+  }
+
+  Executor::ExactResolutionList rl;
+  executor_->resolveExact(*es, addr, rl, "isModifier");
+
+  // This logic also makes sure that if it isn't persistent memory, we always skip it.
+  for (Executor::ExactResolutionList::iterator it = rl.begin(), ie = rl.end(); it != ie; ++it) {
+    const ObjectState *os = it->first.second;
+    
+    if (isa<PersistentState>(os)) {
+      return true;
+    }
+  }
+     
+  return false;
+}
+
+uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) {
   // We use this as an incentive to resolve unresolved function pointers.
   if (!curr_) {
-    return 1u;
+    errs() << str() << " has weight 1u cuz unknown!\n";
+    // errs() << "1u\n";
+    weight_ = 1u;
+    return weight_;
   }
 
   Instruction *i = curr_->inst;
@@ -234,18 +308,23 @@ uint64_t NvmInstructionDesc::calculateWeight(void) {
   if (CallInst *ci = dyn_cast<CallInst>(curr_->inst)) {
     // Case 1: Contains an mmap call.
     if (values_->isMmapCall(ci)) {
-      return 2u;
+      errs() << str() << " has weight 2u cuz mmap-class!\n";
+      weight_ = 2u;
+      return weight_;
     }
 
     // Case 4: Is a memory fence.
     // TODO: also should cover mfences, in theory.
     Function *f = ci->getCalledFunction();
     if (f && f->isDeclaration() && f->getIntrinsicID() == Intrinsic::x86_sse_sfence) {
-      return 1u;
+      errs() << str() << " has weight 1u cuz sfence!\n";
+      weight_ = 1u;
+      return weight_;
     }
   }
 
   // Second, we see if a memory store/flush points to NVM.
+  bool mustBeDirty = false;
   // TODO: clwb
   Value *ptr = nullptr;
   if (StoreInst *si = dyn_cast<StoreInst>(i)) {
@@ -268,12 +347,14 @@ uint64_t NvmInstructionDesc::calculateWeight(void) {
     Function *check = mod_->module->getFunction("klee_pmem_check_persisted");
     if (f == unmap || f == check) {
       ptr = ci->getOperand(0)->stripPointerCasts();
+      mustBeDirty = true;
     }
   }
 
   if (!ptr) {
     errs() << str() << " has weight 0u cuz no pointer!\n";
-    return 0u;
+    weight_ = 0u;
+    return weight_;
   }
 
   std::vector<const Value*> ptsSet;
@@ -285,14 +366,97 @@ uint64_t NvmInstructionDesc::calculateWeight(void) {
 
   for (const Value *v : ptsSet) {
     errs() << "\tpoints to " << *v << "\n";
+
     if (values_->isNvm(apa_, v)) {
+      if (mustBeDirty) {
+        errs() << "\t\tmust be dirty...\n";
+        assert(isa<Instruction>(v));
+        // Use the execution state to resolve this address.
+        KInstruction *target = mod_->getKInstruction(dyn_cast<Instruction>(const_cast<Value*>(v)));
+
+        // The target for the points-to set should always be some allocation site.
+        // Need to make sure it's from the right stack as well.
+
+        // returns if it found a memory object. (succes)
+        const auto checkAllocas = [&] (bool &persisted) -> bool {
+          for (StackFrame &sf : es->stack) {
+            for (const MemoryObject *mo : sf.allocas) {
+              if (mo->allocSite != v) continue;
+              if (!es->addressSpace.findObject(mo)) continue;
+              
+              if (const PersistentState *ps = dyn_cast<PersistentState>(es->addressSpace.findObject(mo))) {
+                persisted = ps->mustBePersisted(executor_->solver, *es);
+              }
+
+              return true;
+            }
+          }
+
+          return false;
+        };
+
+        const auto findAddr = [&] () -> ref<Expr> {
+          ref<Expr> null;
+          for (StackFrame &sf : es->stack) {
+            if (sf.kf->function != target->inst->getFunction()) continue;
+           
+            // This is for if the allocation was a function call location, like malloc or mmap
+            ref<Expr> addr = sf.locals[target->dest].value;
+            if (!addr.isNull()) return addr;
+          }
+
+          return null;
+        };
+
+        bool allocaPersisted;
+        bool ret = checkAllocas(allocaPersisted);
+        if (ret) {
+          if (!allocaPersisted) {
+            errs() << "weight 1 cuz dirty!\n";
+            weight_ = 1u;
+            return weight_;
+          } else {
+            errs() << "weight 0 cuz clean!\n";
+            weight_ = 0u;
+            return weight_;
+          }
+        }
+
+        ref<Expr> addr = findAddr();
+
+        if (addr.isNull()) {
+          errs() << *target->inst << "\n";
+          errs() << "\t NULL\n";
+          continue;
+        }
+
+        Executor::ExactResolutionList rl;
+        executor_->resolveExact(*es, addr, rl, "calculateWeight");
+
+        // This logic also makes sure that if it isn't persistent memory, we always skip it.
+        bool isPersisted = true;
+        for (Executor::ExactResolutionList::iterator it = rl.begin(), 
+              ie = rl.end(); it != ie; ++it) {
+          const ObjectState *os = it->first.second;
+          
+          if (const PersistentState *ps = dyn_cast<PersistentState>(os)) {
+            isPersisted = isPersisted && ps->mustBePersisted(executor_->solver, *es);
+          }
+        }
+
+        if (isPersisted) continue;
+        
+      }
       // errs() << "1u\n";
       errs() << str() << " has weight 1u cuz cache-state modifying!\n";
-      return 1u;
+      weight_ = 1u;
+      return weight_;
     }
   }
 
-  return 0u;
+  errs() << str() << " has weight 0u cuz default!\n";
+  weight_ = 0u;
+  return weight_;
 }
 
 std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
@@ -320,14 +484,14 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       std::shared_ptr<NvmValueDesc> new_values = values_->doReturn(apa_, ri);
       std::shared_ptr<NvmStackFrameDesc> ns = stackframe_->doReturn();
 
-      NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), new_values, ns);
+      NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), new_values, ns);
       ret.push_back(desc);
       return ret;
 
     } else if (BranchInst *bi = dyn_cast<BranchInst>(ip)) {
       for (auto *sbb : bi->successors()) {
         Instruction *ni = &(sbb->front());
-        NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), values_, stackframe_);
+        NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), values_, stackframe_);
         ret.push_back(desc);
       }
       return ret;
@@ -345,7 +509,7 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       }
       
       for (Instruction *ni : uniqueTargets) {
-        NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), values_, stackframe_);
+        NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), values_, stackframe_);
         ret.push_back(desc);
       }
 
@@ -378,12 +542,12 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       std::shared_ptr<NvmStackFrameDesc> newStack = stackframe_->doCall(ci, retLoc);
       std::shared_ptr<NvmValueDesc> newValues = values_->doCall(apa_, ci);
 
-      NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(nextInst), newValues, newStack);
+      NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(nextInst), newValues, newStack);
       ret.push_back(desc);
     } else {
       // Instruction *ni = ip->getNextNonDebugInstruction();
       Instruction *ni = ip->getNextNode();
-      NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), values_, stackframe_);
+      NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), values_, stackframe_);
       ret.push_back(desc);
     }
     return ret;
@@ -407,7 +571,7 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       assert(retLoc && "Assumption violated -- call instruction is the last instruction in a basic block!");
       std::shared_ptr<NvmStackFrameDesc> newStack = stackframe_->doCall(ci, retLoc);
 
-      NvmInstructionDesc desc(apa_, mod_, nullptr, values_, newStack);
+      NvmInstructionDesc desc(executor_, apa_, nullptr, values_, newStack);
       ret.push_back(desc);
       return ret;
     } else {
@@ -421,17 +585,17 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
 
   // Instruction *ni = ip->getNextNonDebugInstruction();
   Instruction *ni = ip->getNextNode();
-  NvmInstructionDesc desc(apa_, mod_, mod_->getKInstruction(ni), values_, stackframe_);
+  NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), values_, stackframe_);
   ret.push_back(desc);
 
   return ret;
 }
 
 void NvmInstructionDesc::setSuccessors() {
-  // errs() << "setting successors for" << *curr_->inst << "\n";
+  errs() << "setting successors for" << *curr_->inst << "\n";
   for (const NvmInstructionDesc &succ : constructSuccessors()) {
     std::shared_ptr<NvmInstructionDesc> sptr = getShared(succ);
-    // errs() << "\t" << *sptr->curr_->inst << "\n";
+    errs() << "\t" << *sptr->curr_->inst << "\n";
     successors_.push_back(sptr);
     sptr->addPredecessor(*this);
   }
@@ -508,13 +672,31 @@ std::string NvmInstructionDesc::str(void) const {
     curr_->inst->print(rs);
     s << tmp;
   }
+  if (predecessors_.size()) {
+    s << "\npred:";
+    for (auto psp : predecessors_) {
+      std::string tmp;
+      llvm::raw_string_ostream rs(tmp);
+      psp->inst()->print(rs);
+      s << "\n\t" << tmp;
+    }
+  }
+  if (successors_.size()) {
+    s << "\nsucc:";
+    for (auto psp : successors_) {
+      std::string tmp;
+      llvm::raw_string_ostream rs(tmp);
+      psp->inst()->print(rs);
+      s << "\n\t" << tmp;
+    }
+  }
   s << "\n----****----\n";
   return s.str();
 }
 
-std::shared_ptr<NvmInstructionDesc> NvmInstructionDesc::createEntry(KModule *m, KFunction *mainFn) {
+std::shared_ptr<NvmInstructionDesc> NvmInstructionDesc::createEntry(Executor *executor, KFunction *mainFn) {
   andersen_sptr_t anders = std::make_shared<AndersenAAWrapperPass>();
-  assert(!anders->runOnModule(*m->module) && "Analysis pass should return false!");
+  assert(!anders->runOnModule(*executor->kmodule->module) && "Analysis pass should return false!");
   errs() << "creatEntry begin\n";
   for (const auto &BB : *mainFn->function) {
     for (const auto &I : BB) {
@@ -548,19 +730,9 @@ std::shared_ptr<NvmInstructionDesc> NvmInstructionDesc::createEntry(KModule *m, 
   llvm::Instruction *inst = &(mainFn->function->getEntryBlock().front());
   KInstruction *start = mainFn->getKInstruction(inst);
 
-  NvmInstructionDesc entryInst = NvmInstructionDesc(anders, m, start);
+  NvmInstructionDesc entryInst = NvmInstructionDesc(executor, anders, start);
   return getShared(entryInst);
 }
-
-// NvmInstructionDesc::attach(std::shared_ptr<NvmInstructionDesc> current, 
-//                            std::shared_ptr<NvmInstructionDesc> successor) {
-  
-//   current_->successors_.push_back(successor);
-//   current_->isTerminal = false;
-
-//   successor_->predecessors_->push_back(current);
-//   successor_->isEntry = false;
-// }
 
 bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &rhs) {
   bool instEq = lhs.curr_ == rhs.curr_;
@@ -568,7 +740,7 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
   bool stkEq  = lhs.stackframe_ == rhs.stackframe_;
   // bool succEq = lhs.successors_ == rhs.successors_;
   // bool predEq = lhs.predecessors_ == rhs.predecessors_;
-  bool wEq    = lhs.weight_ == rhs.weight_;
+  // bool wEq    = lhs.weight_ == rhs.weight_;
   // if (lhs.curr_->inst == rhs.curr_->inst) {
     // errs() << *lhs.curr_->inst << " == " << *rhs.curr_->inst <<
     //     ": " << instEq << " " << valEq << " " << stkEq << " " << succEq
@@ -578,10 +750,12 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
   // }
   return instEq &&
          valEq &&
-         stkEq &&
+         stkEq;
+        //  stkEq &&
         //  succEq &&
         //  predEq &&
-         wEq;
+        //  wEq;
+
 }
 
 /**
@@ -590,13 +764,14 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
 
 std::unordered_map<std::shared_ptr<NvmInstructionDesc>, uint64_t> NvmHeuristicInfo::priority;
 
-NvmHeuristicInfo::NvmHeuristicInfo(KModule *m, KFunction *mainFn) {
-  current_state = NvmInstructionDesc::createEntry(m, mainFn);
+NvmHeuristicInfo::NvmHeuristicInfo(Executor *executor, KFunction *mainFn, ExecutionState *es) {
+  current_state = NvmInstructionDesc::createEntry(executor, mainFn);
+  current_state->calculateWeight(es);
   errs() << "init: " << current_state->str() << "\n";
-  computeCurrentPriority();
+  computeCurrentPriority(es);
 }
 
-void NvmHeuristicInfo::computeCurrentPriority(void) {
+void NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
   // errs() << "Looking for " << current_state->str();
   if (priority.count(current_state)) {
     // errs() << "Found!\n";
@@ -607,14 +782,6 @@ void NvmHeuristicInfo::computeCurrentPriority(void) {
   // fprintf(stderr, "pointer of current state: %p\n", current_state.get());
   // priority[current_state] = 0;
   // assert(priority.count(current_state) && "what now");
-
-  // errs() << "loop start\n";
-  // for (const auto &p : priority) {
-  //   errs() << p.first->str() << "\n";
-  //   errs() << "\t" << (*p.first == *current_state) << "\n";
-  //   errs() << "\t- " << (p.first == current_state) << "\n";
-  // }
-  // errs() << "loop end\n";
 
   std::list<std::shared_ptr<NvmInstructionDesc>> toTraverse;
   toTraverse.push_back(current_state);
@@ -630,6 +797,8 @@ void NvmHeuristicInfo::computeCurrentPriority(void) {
     // used to be unique is no longer. So, we need to check the traversed
     // set on every iteration.
     if (traversed.find(instDesc) != traversed.end()) continue;
+
+    instDesc->calculateWeight(es);
 
     // Instructions can be invalid if we don't have enough information to 
     // figure out their successors statically. In this case, we just need to
@@ -649,15 +818,23 @@ void NvmHeuristicInfo::computeCurrentPriority(void) {
     
     const auto &succ = instDesc->getSuccessors(traversed);
     if (succ.size()) {
-      for (auto sptr : succ) toTraverse.push_back(sptr);
+      for (auto sptr : succ) {
+        toTraverse.push_back(sptr);
+      }
     } else if (instDesc->isTerminator()) {
+      errs() << "TERMINATOR: " << *instDesc->inst() << "\n";
       terminators.insert(instDesc);
+    } else {
+      // Convergence branches and loops.
+      // errs() << "OOPS\n";
+      // errs() << instDesc->str();
+      // assert(false && "what?");
     }
   }
   
   // Base state:
   for (auto sptr : terminators) {
-    priority[sptr] = sptr->getWeight();
+    priority[sptr] = sptr->calculateWeight(es);
   }
 
   // Now, we propagate up.
@@ -674,14 +851,21 @@ void NvmHeuristicInfo::computeCurrentPriority(void) {
     for (auto sptr : level) {
       // errs() << "\t" << "n preds: " << sptr->getPredecessors().size() << "\n";
       for (auto pred : sptr->getPredecessors()) {
-        if (propagated.find(pred) != propagated.end()) continue;
+        if (propagated.find(pred) != propagated.end()) {
+          errs() << "||| skipping " << *pred->inst() << "\n"; 
+          continue;
+        }
 
         uint64_t current_priority = priority[pred];
-        priority[pred] = max(current_priority, pred->getWeight() + priority[sptr]);
+        priority[pred] = max(current_priority, pred->calculateWeight(es) + priority[sptr]);
 
-        propagated.insert(pred);
+        errs() << "^Updating " << *pred->inst() << " from " << *sptr->inst() << "\n";
+        errs() << "^\tfrom " << current_priority << " to " << priority[pred] << "\n";
+
         nextLevel.insert(pred);
       }
+
+      propagated.insert(sptr);
     }
 
     level = nextLevel;
@@ -694,17 +878,19 @@ void NvmHeuristicInfo::computeCurrentPriority(void) {
   errs() << priority.size() << " =?= " << NvmInstructionDesc::getNumSharedObjs() << "\n";
   // priority.at(current_state);
   // dumpState();
-  assert(priority.size() == NvmInstructionDesc::getNumSharedObjs() && "too few!");
+  // assert(priority.size() == NvmInstructionDesc::getNumSharedObjs() && "too few!");
   assert(priority.count(current_state) && "can't find our work!");
+  dumpState();
 }
 
-void NvmHeuristicInfo::updateCurrentState(KInstruction *pc, bool isNvm) {
+void NvmHeuristicInfo::updateCurrentState(ExecutionState *es, KInstruction *pc, bool isNvm) {
   current_state = current_state->update(pc, isNvm);
-  computeCurrentPriority();
+  computeCurrentPriority(es);
 }
 
-void NvmHeuristicInfo::stepState(KInstruction *nextPC) {
-  // errs() << this << " ";
+void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *nextPC) {
+  klee_warning("dumping");
+  dumpState();
   // errs() << *current_state->kinst()->inst << "\n\t=> " << *nextPC->inst << "\n";
   if (current_state->isTerminator()) {
     assert(nextPC == current_state->kinst() && "assumption violated");
@@ -748,15 +934,19 @@ void NvmHeuristicInfo::stepState(KInstruction *nextPC) {
   if (!next->isValid()) {
     // We now know what the next instruction is, thanks to the symbolic execution
     // state.
-    // errs() << "uniqstr\n";
-    next->setPC(nextPC);
-    computeCurrentPriority();
-    // errs() << "doneo\n";
+    next->setPC(es, nextPC);
+    computeCurrentPriority(es);
+  } else if (current_state->isCachelineModifier(es)) {
+    // Update the weight if this instruction is known to modify NVM.
+    errs() << "thing\n";
+    // -- this is probably pretty inefficient.
+    // This IS inefficient.
+    priority.clear();
+    computeCurrentPriority(es);
   }
 
   current_state = next;
   // klee_warning("tick.\n%s", current_state->str().c_str());
 }
-
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2: */

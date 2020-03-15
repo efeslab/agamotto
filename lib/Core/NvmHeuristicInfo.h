@@ -42,6 +42,7 @@
 #include "klee/Internal/Support/ErrorHandling.h"
 
 #include "NvmAnalysisUtils.h"
+#include "Memory.h"
 
 #include "AndersenAA.h"
 
@@ -50,6 +51,8 @@
  */
 
 namespace klee {
+  class Executor;
+  class ExecutionState;
 
   typedef std::shared_ptr<AndersenAAWrapperPass> andersen_sptr_t;
 
@@ -99,7 +102,7 @@ namespace klee {
    */
   class NvmStackFrameDesc : public Hashable, public StaticStorage<NvmStackFrameDesc> {
     private:
-      typedef std::list<llvm::Instruction*> stack_t;
+      typedef std::vector<llvm::Instruction*> stack_t;
       stack_t caller_stack;
       stack_t return_stack;
 
@@ -108,6 +111,12 @@ namespace klee {
     public:
 
       uint64_t hash(void) const override;
+
+      size_t size(void) const { return caller_stack.size(); };
+
+      llvm::Function *at(unsigned idx) const {
+        return caller_stack[idx]->getFunction();
+      }
 
       bool isEmpty(void) const {
         return !caller_stack.size();
@@ -234,6 +243,7 @@ namespace klee {
     private:
 
       // The utility state.
+      Executor *executor_;
       andersen_sptr_t apa_; // Andersen's whole program pointer analysis
       KModule *mod_;
       // The real state.
@@ -261,29 +271,16 @@ namespace klee {
        */
       uint64_t weight_ = 0;
 
-      uint64_t calculateWeight(void);
-
       NvmInstructionDesc() = delete;
-      NvmInstructionDesc(andersen_sptr_t apa, 
-                         KModule *mod,
+      NvmInstructionDesc(Executor *executor,
+                         andersen_sptr_t apa,
                          KInstruction *location, 
                          std::shared_ptr<NvmValueDesc> values, 
-                         std::shared_ptr<NvmStackFrameDesc> stackframe) 
-        : apa_(apa), 
-          mod_(mod), 
-          curr_(location), 
-          values_(values), 
-          stackframe_(stackframe) {
-        weight_ = calculateWeight();
-      }
+                         std::shared_ptr<NvmStackFrameDesc> stackframe);
 
-      NvmInstructionDesc(andersen_sptr_t apa, 
-                         KModule *mod, KInstruction *location) 
-        : apa_(apa), mod_(mod), curr_(location), 
-          values_(NvmValueDesc::staticState(mod->module.get())), 
-          stackframe_(NvmStackFrameDesc::empty()) {
-        weight_ = calculateWeight();
-      }
+      NvmInstructionDesc(Executor *executor,
+                         andersen_sptr_t apa, 
+                         KInstruction *location);
 
       /* Methods for creating successor states. */
 
@@ -315,6 +312,10 @@ namespace klee {
 
       bool isValid(void) const { return !!curr_; }
 
+      bool isCachelineModifier(ExecutionState *es);
+
+      uint64_t calculateWeight(ExecutionState *es);
+
       /**
        * Essentially, the successors are speculative. They assume that:
        * (1) Only the current set of values that point to NVM do so.
@@ -340,16 +341,18 @@ namespace klee {
         return predecessors_;
       }
 
+      const std::list<std::shared_ptr<NvmInsturctionDesc>>
+
       uint64_t getWeight(void) const { return weight_; };
 
       llvm::Instruction *inst(void) const { return curr_->inst; }
 
       KInstruction *kinst(void) const { return curr_; }
 
-      void setPC(KInstruction *pc) {
+      void setPC(ExecutionState *es, KInstruction *pc) {
         assert(!isValid() && "Trying to modify a valid instruction!");
         curr_ = pc;
-        weight_ = calculateWeight();
+        weight_ = calculateWeight(es);
       }
 
       /**
@@ -357,7 +360,7 @@ namespace klee {
 
       std::shared_ptr<NvmInstructionDesc> update(KInstruction *pc, bool isNvm) {
         std::shared_ptr<NvmValueDesc> updated = values_->updateState(pc->inst, isNvm);
-        NvmInstructionDesc desc(apa_, mod_, curr_, updated, stackframe_);
+        NvmInstructionDesc desc(executor_, apa_, curr_, updated, stackframe_);
         return getShared(desc);
       }
 
@@ -366,7 +369,7 @@ namespace klee {
 
       std::string str(void) const;
 
-      static std::shared_ptr<NvmInstructionDesc> createEntry(KModule *m, KFunction *mainFn);
+      static std::shared_ptr<NvmInstructionDesc> createEntry(Executor *executor, KFunction *mainFn);
 
       /**
        * When we have runtime knowledge.
@@ -393,16 +396,16 @@ namespace klee {
        * we change the weights in a subtree, the overall change in priority 
        * will be appropriately propagated up the tree.
        */
-      void computeCurrentPriority(void);
+      void computeCurrentPriority(ExecutionState *es);
 
     public:
-      NvmHeuristicInfo(KModule *m, KFunction *mainFn);
+      NvmHeuristicInfo(Executor *executor, KFunction *mainFn, ExecutionState *es);
       NvmHeuristicInfo(const NvmHeuristicInfo&) = default;
       
       /**
        * May change the current_state, or may not.
        */
-      void updateCurrentState(KInstruction *pc, bool isNvm);
+      void updateCurrentState(ExecutionState *es, KInstruction *pc, bool isNvm);
 
       /**
        * Advance the current state.
@@ -413,8 +416,10 @@ namespace klee {
        * 
        * The only case we currently don't handle well is interprocedurally 
        * generated function pointers. We will resolve them at runtime.
+       * 
+       * In stepState, we also want check if we modified any persistent state.
        */
-      void stepState(KInstruction *nextPC);
+      void stepState(ExecutionState *es, KInstruction *nextPC);
 
       llvm::Instruction *currentInst(void) const {
         return current_state->inst();

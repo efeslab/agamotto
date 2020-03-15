@@ -378,6 +378,8 @@ class PersistentState : public ObjectState {
 
     std::unordered_set<std::string> getRootCauses(TimingSolver *solver, const ExecutionState &state) const;
 
+    bool mustBePersisted(TimingSolver *solver, const ExecutionState &state) const;
+
     static ref<ConstantExpr> getPersistedExpr();
     static ref<ConstantExpr> getDirtyExpr();
     static ref<ConstantExpr> getNullptr();

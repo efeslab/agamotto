@@ -776,6 +776,15 @@ std::unordered_set<std::string> PersistentState::getRootCause(
   return possible;
 }
 
+bool PersistentState::mustBePersisted(TimingSolver *solver, const ExecutionState &state) const {
+  ref<Expr> result = isPersisted();
+  bool mustBe;
+  bool success = solver->mustBeTrue(state, result, mustBe);
+  assert(success && "Could not solve!");
+
+  return mustBe;
+}
+
 ref<Expr> PersistentState::getCacheLine(ref<Expr> offset) const {
   return ZExtExpr::create(UDivExpr::create(offset,
                                            klee::ConstantExpr::create(cacheLineSize(),

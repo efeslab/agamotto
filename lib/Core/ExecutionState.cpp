@@ -24,6 +24,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "../Core/UserSearcher.h"
+#include "Executor.h"
 
 #include <cassert>
 #include <iomanip>
@@ -70,7 +71,7 @@ StackFrame::~StackFrame() {
 
 /***/
 
-ExecutionState::ExecutionState(KModule *km, KFunction *kf, bool enableNvmHeuristic) :
+ExecutionState::ExecutionState(Executor *executor, KFunction *kf, bool enableNvmHeuristic) :
     pc(kf->instructions),
     prevPC(pc),
 
@@ -85,7 +86,7 @@ ExecutionState::ExecutionState(KModule *km, KFunction *kf, bool enableNvmHeurist
     steppedInstructions(0) {
   pushFrame(0, kf);
   if (enableNvmHeuristic) {
-    nvmInfo = std::make_unique<NvmHeuristicInfo>(km, kf);
+    nvmInfo = std::make_unique<NvmHeuristicInfo>(executor, kf, this);
   }
 }
 

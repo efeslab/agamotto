@@ -37,6 +37,7 @@ struct KInstruction;
 class MemoryObject;
 class PTreeNode;
 struct InstructionInfo;
+class Executor;
 
 llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const MemoryMap &mm);
 
@@ -161,7 +162,7 @@ private:
   ExecutionState() : ptreeNode(0) {}
 
 public:
-  ExecutionState(KModule *km, KFunction *kf, bool enableNvmHeuristic=false);
+  ExecutionState(Executor *executor, KFunction *kf, bool enableNvmHeuristic=false);
 
   // XXX total hack, just used to make a state so solver can
   // use on structure
