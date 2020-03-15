@@ -341,7 +341,7 @@ namespace klee {
         return predecessors_;
       }
 
-      const std::list<std::shared_ptr<NvmInsturctionDesc>>
+      // const std::list<std::shared_ptr<NvmInsturctionDesc>>
 
       uint64_t getWeight(void) const { return weight_; };
 
