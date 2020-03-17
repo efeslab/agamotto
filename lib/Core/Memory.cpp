@@ -69,8 +69,10 @@ ObjectHolder &ObjectHolder::operator=(const ObjectHolder &b) {
 int MemoryObject::counter = 0;
 
 MemoryObject::~MemoryObject() {
-  if (parent)
+  if (parent) {
+    // klee_warning("Memory object %p pointing to %p is destructing!", this, (void*)this->address);
     parent->markFreed(this);
+  }
 }
 
 void MemoryObject::getAllocInfo(std::string &result) const {

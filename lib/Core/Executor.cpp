@@ -2032,18 +2032,24 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           unsigned leaf = cast<ConstantExpr>(leafExpr)->getZExtValue();
           unsigned subleaf = cast<ConstantExpr>(subleafExpr)->getZExtValue();
           __get_cpuid_count(leaf, subleaf, &regs[0], &regs[1], &regs[2], &regs[3]);
-          klee_warning("cpuid(leaf=%u, subleaf=%u) returned {%u, %u, %u, %u}",
-            leaf, subleaf, regs[0], regs[1], regs[2], regs[3]);
-          
+          // klee_warning("cpuid(leaf=%u, subleaf=%u) returned {%u, %u, %u, %u}",
+          //   leaf, subleaf, regs[0], regs[1], regs[2], regs[3]);
 
+          // Now we remove the features we don't like, hehe.
+          // Regs are EAX=0, EBX=1, ECX=2, EDX=3
+          // AVX
+          if (leaf == 0x1) {
+            regs[2] = regs[2] & ~(bit_AVX);
+          }
+          if (leaf == 0x7) {
+            regs[1] = regs[1] & ~(bit_AVX512F);
+          }
         } else {
           terminateStateOnExecError(state, "unsupported number of arguments for cpuid");
         }
 
-        // Now we remove the features we don't like, hehe.
-        // We could remove features, but I currently don't see the need.
 
-        llvm::APInt output = llvm::APInt(outWidth, 0); // 4inital value
+        llvm::APInt output = llvm::APInt(outWidth, 0); // initial value
         // shift in the values
         for (int i = 0; i < 4; i++) {
           llvm::APInt field = llvm::APInt(outWidth, regs[i]);
@@ -3767,9 +3773,9 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           terminateStateOnError(state, "memory error: object read only",
                                 ReadOnly);
         } else {
-          if (isPersistentMemory(state, mo)) {
-            klee_message("Modifying non-volatile MemoryObject");
-          }
+          // if (isPersistentMemory(state, mo)) {
+          //   klee_message("Modifying non-volatile MemoryObject");
+          // }
           ObjectState *wos = state.addressSpace.getWriteable(mo, os);
           wos->write(state, offset, value);
         }
@@ -3815,7 +3821,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                                 ReadOnly);
         } else {
           if (isPersistentMemory(state, mo)) {
-            klee_message("Modifying non-volatile MemoryObject");
+            // klee_message("Modifying non-volatile MemoryObject");
             // klee_message("Modifying non-volatile MemoryObject (%p)", 
             //     (void*)dyn_cast<ConstantExpr>(address)->getZExtValue());
           }
@@ -3859,6 +3865,9 @@ void Executor::executeMarkPersistent(ExecutionState &state,
                                      const MemoryObject *mo) {
   // klee_warning("Executor: Marking %p persistent!", (void*)mo->address);
   state.persistentObjects.insert(mo);
+  // for (const MemoryObject* m : state.persistentObjects) {
+  //   klee_warning("MemoryObject %p points to %p", m, (void*)m->address);
+  // }
 
   const ObjectState *os = state.addressSpace.findObject(mo);
   assert(os && "Cannot mark unbound MemoryObject persistent");
@@ -3893,9 +3902,12 @@ void Executor::executeMarkPersistent(ExecutionState &state,
 }
 
 bool Executor::isPersistentMemory(ExecutionState &state, const MemoryObject *mo) {
+  // for (const MemoryObject* m : state.persistentObjects) {
+  //   klee_warning("(isPersistentMemory) MemoryObject %p points to %p", m, (void*)m->address);
+  // }
   if (state.persistentObjects.count(mo)) {
     const ObjectState *os = state.addressSpace.findObject(mo);
-    klee_warning("Checking if %p is persistent memory", (void*)mo->address);
+    // klee_warning("Checking if %p is persistent memory", (void*)mo->address);
     assert(dyn_cast<PersistentState>(os) != nullptr &&
            "MemoryObject marked persistent but not bound to any PersistentState");
     return true;

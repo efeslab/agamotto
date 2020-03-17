@@ -790,6 +790,7 @@ void NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
   std::unordered_set<std::shared_ptr<NvmInstructionDesc>> terminators;
 
   // Downward traversal.
+  // TODO: Recursion check
   while (toTraverse.size()) {
     std::shared_ptr<NvmInstructionDesc> instDesc = toTraverse.front();
     toTraverse.pop_front();

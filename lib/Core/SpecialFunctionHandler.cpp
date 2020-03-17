@@ -986,6 +986,7 @@ void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,
   ref<Expr> addr = arguments[0];
   ref<Expr> size = arguments[1];
   for (const MemoryObject *mo : state.persistentObjects) {
+    // klee_warning("Doing handleIsPersisted for %p", (void*)mo->address);
     executor.executeCheckPersistence(state, mo);
   }
 }

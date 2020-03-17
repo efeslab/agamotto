@@ -100,6 +100,7 @@ namespace klee {
    * All we need to do is to store the return instruction, as we will inherit
    * the value state from the return instruction.
    */
+  class NvmStackFrameDesc;
   class NvmStackFrameDesc : public Hashable, public StaticStorage<NvmStackFrameDesc> {
     private:
       typedef std::vector<llvm::Instruction*> stack_t;
@@ -341,7 +342,15 @@ namespace klee {
         return predecessors_;
       }
 
-      // const std::list<std::shared_ptr<NvmInsturctionDesc>>
+      /**
+       * Loopless.
+       * 
+       * If the current node dominates one of it's predecessors, 
+       */
+      std::list<std::shared_ptr<NvmInstructionDesc>> getStrictPredecessors() {
+        auto preds = predecessors_;
+        return preds;
+      }
 
       uint64_t getWeight(void) const { return weight_; };
 

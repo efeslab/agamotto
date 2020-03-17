@@ -41,7 +41,7 @@ if(WLLVM STREQUAL "WLLVM-NOTFOUND")
 endif()
 
 # Doing CC.... make doesn't work. Need to have the command first, then the variables
-set(KLEE_FLAGS "-g -O1 -Xclang -disable-llvm-passes -D__NO_STRING_INLINES")
+set(KLEE_FLAGS "-g -O1 -Xclang -disable-llvm-passes -D__NO_STRING_INLINES -DVALGRIND_ENABLED=0")
 # set(KLEE_FLAGS "-g -O0 -Xclang -disable-O0-optnone -D__NO_STRING_INLINES")
 execute_process(COMMAND make 
                         DEBUG=1
