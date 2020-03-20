@@ -128,11 +128,17 @@ static int has_permission(int flags, struct stat64 *s) {
   gid_t egid = getegid();
 #endif  
 
-  if (read_access && ((mode & S_IRUSR) | (mode & S_IRGRP) | (mode & S_IROTH)))
+  if (read_access && !((mode & S_IRUSR) | (mode & S_IRGRP) | (mode & S_IROTH))) {
+    // klee_warning("No permission for read");
+    fprintf(stderr, "read access: %d, %o, %o\n", read_access, mode, S_IRUSR| S_IRGRP | S_IROTH);
     return 0;
+  }
 
-  if (write_access && !((mode & S_IWUSR) | (mode & S_IWGRP) | (mode & S_IWOTH)))
+  if (write_access && !((mode & S_IWUSR) | (mode & S_IWGRP) | (mode & S_IWOTH))) {
+    // klee_warning("No permission for write");
+    fprintf(stderr, "read access: %d, %o, %o\n", read_access, mode, S_IWUSR| S_IWGRP | S_IWOTH);
     return 0;
+  }
 
   return 1;
 }
@@ -161,8 +167,23 @@ static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
   dfile->size = size;
   // FIXME: page aligned vs. cache aligned
   dfile->contents = memalign(pgsz, dfile->size);
+  if (__exe_fs.sym_pmem_init_concrete) {
+    if (__exe_fs.sym_pmem_init_to_zero) {
+      // memset(dfile->contents, 0, dfile->size);
+      klee_init_concrete_zero(dfile->contents, dfile->size);
+    } else {
+      int fd = __fd_open(__exe_fs.sym_pmem_init_from, O_RDONLY, 0);
+      assert(fd != -1);
+      size_t total_read = 0;
+      while (total_read < (size_t)dfile->size) {
+        ssize_t ret = read(fd, dfile->contents + total_read, dfile->size - total_read);
+        assert(ret > 0);
+        total_read += ret;
+      }
+    }
+  }
   // FIXME: proper name, not just "data"
-  klee_pmem_mark_persistent(dfile->contents, dfile->size, "data");
+  klee_pmem_mark_persistent(dfile->contents, dfile->size, "pmem_file_data");
   
   // FIXME: what should stat64 actually be?
   klee_make_symbolic(s, sizeof(*s), sname);
@@ -196,18 +217,25 @@ static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
   klee_prefer_cex(s, s->st_mtime == defaults->st_mtime);
   klee_prefer_cex(s, s->st_ctime == defaults->st_ctime);
 
-  /* s->st_dev == defaults->st_dev; */
-  /* s->st_rdev = defaults->st_rdev; */
-  /* s->st_mode = defaults->st_mode; */
-  /* s->st_nlink = 1; */
-  /* s->st_uid = defaults->st_uid; */
-  /* s->st_gid = defaults->st_gid; */
-  /* s->st_blksize=4096; */
-  /* s->st_atime = defaults->st_atime; */
-  /* s->st_mtime = defaults->st_mtime; */
-  /* s->st_ctime = defaults->st_ctime; */
+  if (__exe_fs.sym_pmem_delay_create) {
+    s->st_dev     = defaults->st_dev;
+    s->st_rdev    = defaults->st_rdev;
+    s->st_mode    = S_IFREG | 0644;
+    s->st_nlink   = 1;
+    s->st_uid     = defaults->st_uid;
+    s->st_gid     = defaults->st_gid;
+    s->st_blksize = pgsz;
+    s->st_atime   = defaults->st_atime;
+    s->st_mtime   = defaults->st_mtime;
+    s->st_ctime   = defaults->st_ctime;
+  }
 
-  s->st_size = dfile->size;
+  // We pretend that the file is of size 0.
+  if (__exe_fs.sym_pmem_delay_create) {
+    s->st_size = 0;
+  } else {
+    s->st_size = dfile->size;
+  }
   s->st_blocks = 8;
   dfile->stat = s;
 
@@ -239,9 +267,10 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
     }
   }
 
-  for (fd = 0; fd < MAX_FDS; ++fd)
-    if (!(__exe_env.fds[fd].flags & eOpen))
-      break;
+  for (fd = 0; fd < MAX_FDS; ++fd) {
+    if (!(__exe_env.fds[fd].flags & eOpen)) break;
+  }
+    
   if (fd == MAX_FDS) {
     errno = EMFILE;
     return -1;
@@ -262,15 +291,26 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
     /* XXX Should check access against mode / stat / possible
        deletion. */
     f->dfile = df;
+
+    if (isPmemFile && !(flags & O_CREAT) && !__exe_fs.sym_pmem_created) {
+      errno = ENOENT;
+      return -1;
+    }
     
     if ((flags & O_CREAT) && (flags & O_EXCL)) {
-      errno = EEXIST;
-      return -1;
+      if (isPmemFile && __exe_fs.sym_pmem_delay_create && !__exe_fs.sym_pmem_created) {
+        __exe_fs.sym_pmem_created = true;
+      } else {
+        errno = EEXIST;
+        return -1;
+      }
+    } else if (isPmemFile && (flags & O_CREAT)) {
+      __exe_fs.sym_pmem_created = true;
     }
     
     if ((flags & O_TRUNC) && (flags & O_RDONLY)) {
       /* The result of using O_TRUNC with O_RDONLY is undefined, so we
-	 return error */
+	       return error */
       klee_warning("Undefined call to open(): O_TRUNC | O_RDONLY\n");
       errno = EACCES;
       return -1;
@@ -278,19 +318,21 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
 
     if ((flags & O_EXCL) && !(flags & O_CREAT)) {
       /* The result of using O_EXCL without O_CREAT is undefined, so
-	 we return error */
+	       we return error */
       klee_warning("Undefined call to open(): O_EXCL w/o O_RDONLY\n");
       errno = EACCES;
       return -1;
     }
 
     if (!has_permission(flags, df->stat)) {
-	errno = EACCES;
-	return -1;
-    }
-    else
+      klee_warning("!has_permission");
+      errno = EACCES;
+      return -1;
+    } else {
       f->dfile->stat->st_mode = ((f->dfile->stat->st_mode & ~0777) |
 				 (mode & ~__exe_env.umask));
+    }
+      
   } else {    
     int os_fd = syscall(__NR_open, __concretize_string(pathname), flags, mode);
     if (os_fd == -1)
@@ -573,10 +615,10 @@ ssize_t write(int fd, const void *buf, size_t count) {
       actual_count = count;
     else {
       if (__exe_env.save_all_writes)
-	assert(0);
+	      assert(0);
       else {
-	if (f->off < (off64_t) f->dfile->size)
-	  actual_count = f->dfile->size - f->off;	
+        if (f->off < (off64_t) f->dfile->size)
+          actual_count = f->dfile->size - f->off;	
       }
     }
 
@@ -879,9 +921,15 @@ int __fd_ftruncate(int fd, off64_t length) {
   }
   
   if (f->dfile) {
-    klee_warning("symbolic file, ignoring (EIO)");
-    errno = EIO;
-    return -1;
+    if (length > (off64_t)f->dfile->size) {
+      klee_warning("cannot dynamically resize memory (EIO");
+      errno = EIO;
+      return -1;
+    }
+
+    klee_warning("symbolic file, only changing stat64 struct");
+    f->dfile->stat->st_size = length;
+    return 0;
   }
 #if __WORDSIZE == 64
   return syscall(__NR_ftruncate, f->fd, length);
@@ -1546,9 +1594,17 @@ int fallocate(int fd, int mode, off_t offset, off_t len) {
   }
 
   if (f->dfile) {
-    klee_error("iangneal: mmap not supported for symbolic files!");
-    errno = ENOTSUP;
-    return -1;
+    // klee_error("iangneal: mmap not supported for symbolic files!");
+    // errno = ENOTSUP;
+    // return -1;
+    if (offset + len > f->dfile->size) {
+      errno = EIO;
+      return -1;
+    } else {
+      f->dfile->stat->st_size = offset + len;
+    }
+
+    return 0;
   }
 
   return syscall(__NR_fallocate, f->fd, mode, offset, len);

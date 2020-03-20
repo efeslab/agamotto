@@ -7,27 +7,31 @@
 #
 #===------------------------------------------------------------------------===#
 
-function(klee_add_test_object target_name)
-  set(KLEE_EXE_FLAGS "-g;-O0;-Xclang;-disable-llvm-passes")
-  # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -Xclang -disable-llvm-passes")
-  add_library(${target_name} SHARED ${ARGN})
-  # Use of `PUBLIC` means these will propagate to targets that use this component.
-  # if (("${CMAKE_VERSION}" VERSION_EQUAL "3.3") OR ("${CMAKE_VERSION}" VERSION_GREATER "3.3"))
-  #   # In newer CMakes we can make sure that the flags are only used when compiling C++
-  #   target_compile_options(${target_name} PUBLIC
-  #     $<$<COMPILE_LANGUAGE:CXX>:${KLEE_COMPONENT_CXX_FLAGS}>)
-  # else()
-  #   # For older CMakes just live with the warnings we get for passing C++ only flags
-  #   # to the C compiler.
-  target_compile_options(${target_name} PUBLIC ${KLEE_EXE_FLAGS})
-  # endif()
-  target_include_directories(${target_name} PUBLIC ${KLEE_COMPONENT_EXTRA_INCLUDE_DIRS})
-  # target_compile_definitions(${target_name} PUBLIC ${KLEE_COMPONENT_CXX_DEFINES})
-  # target_link_libraries(${target_name} PUBLIC ${KLEE_COMPONENT_EXTRA_LIBRARIES})
+function(klee_add_test_object)
+  set(options)
+  set(oneValueArgs TARGET)
+  set(multiValueArgs SOURCES EXTRA_OPTIONS)
+  cmake_parse_arguments(KO "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
-  set(BITCODE_LOC ${RUNTIME_OUTPUT_DIRECTORY}/${target_name}.bc)
+  set(KLEE_EXE_FLAGS "-g;-O0;-Xclang;-disable-llvm-passes")
+
+  message("KO_TARGET ${KO_TARGET}")
+  message("KO_SOURCES ${KO_SOURCES}")
+  message("KO_EXTRA_OPTIONS ${KO_EXTRA_OPTIONS}")
+
+  foreach(opt IN LISTS KO_EXTRA_OPTIONS)
+    string(APPEND KLEE_EXE_FLAGS ";${opt}")
+  endforeach()
+
+  add_library(${KO_TARGET} SHARED ${KO_SOURCES})
+  
+  target_compile_options(${KO_TARGET} PUBLIC ${KLEE_EXE_FLAGS})
+  
+  target_include_directories(${KO_TARGET} PUBLIC ${KLEE_COMPONENT_EXTRA_INCLUDE_DIRS})
+
+  set(BITCODE_LOC ${RUNTIME_OUTPUT_DIRECTORY}/${KO_TARGET}.bc)
   # # Now we auto extract
-  add_custom_command(TARGET ${target_name} 
+  add_custom_command(TARGET ${KO_TARGET} 
                      POST_BUILD
-                     COMMAND extract-bc $<TARGET_FILE:${target_name}> -o $<TARGET_FILE_DIR:klee>/${target_name}.bc)
+                     COMMAND extract-bc $<TARGET_FILE:${KO_TARGET}> -o $<TARGET_FILE_DIR:klee>/${KO_TARGET}.bc)
 endfunction()

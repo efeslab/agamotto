@@ -18,6 +18,7 @@
 
 #include <dirent.h>
 #include <sys/types.h>
+#include <stdbool.h>
 
 #ifdef HAVE_SYSSTATFS_H
 #include <sys/statfs.h>
@@ -37,21 +38,21 @@
 #endif
 #endif
 
-typedef struct {
+typedef struct exe_disk_file {
   unsigned size;  /* in bytes */
   char* contents;
   struct stat64* stat;
-  unsigned* page_refs;
+  unsigned* page_refs; /* for mmap page refs */
 } exe_disk_file_t;
 
-typedef enum {
+typedef enum exe_file_flag {
   eOpen         = (1 << 0),
   eCloseOnExec  = (1 << 1),
   eReadable     = (1 << 2),
   eWriteable    = (1 << 3)
 } exe_file_flag_t;
 
-typedef struct {      
+typedef struct exe_file {      
   int fd;                   /* actual fd if not symbolic */
   unsigned flags;           /* set of exe_file_flag_t values. fields
                                are only defined when flags at least
@@ -60,16 +61,23 @@ typedef struct {
   exe_disk_file_t* dfile;   /* ptr to file on disk, if symbolic */
 } exe_file_t;
 
-typedef struct {
+typedef struct exe_file_system {
   unsigned n_sym_files; /* number of symbolic input files, excluding stdin */
   exe_disk_file_t *sym_stdin, *sym_stdout;
   unsigned stdout_writes; /* how many chars were written to stdout */
   exe_disk_file_t *sym_files;
 
+  // TODO: We should in theory support multiple persistent files.
   exe_disk_file_t *sym_pmem;
   unsigned sym_pmem_size; // in bytes
   //FIXME: handle sizes better
   char sym_pmem_filename[128];
+  // --- for the "concrete" initializations.
+  bool sym_pmem_init_concrete;
+  bool sym_pmem_init_to_zero;
+  bool sym_pmem_delay_create;
+  bool sym_pmem_created;
+  char sym_pmem_init_from[128];
   /* --- */
   /* the maximum number of failures on one path; gets decremented after each failure */
   unsigned max_failures; 
@@ -100,7 +108,8 @@ extern exe_sym_env_t __exe_env;
 void klee_init_fds(unsigned n_files, unsigned file_length,
                    unsigned stdin_length, int sym_stdout_flag,
                    int do_all_writes_flag, unsigned max_failures,
-                   char* sym_pmem_filename, unsigned sym_pmem_size);
+                   char* sym_pmem_filename, unsigned sym_pmem_size,
+                   char* sym_pmem_init, bool sym_pmem_delay_create);
 void klee_init_env(int *argcPtr, char ***argvPtr);
 
 /* *** */

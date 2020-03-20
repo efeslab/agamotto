@@ -113,7 +113,6 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) {
   //FIXME: ref count
   char msg[4096];
-  // memset(msg, 0, 4096);
 
   int actual_fd = fd;
   size_t actual_size = __concretize_size(length);
@@ -243,4 +242,10 @@ int munlock(const void *addr, size_t len) {
   klee_warning("ignoring (EPERM)");
   errno = EPERM;
   return -1;
+}
+
+int mprotect(void *addr, size_t len, int prot) __attribute__((weak));
+int mprotect(void *addr, size_t len, int prot) {
+  klee_warning("treating mprotect as a no-op (SUCCESS)");
+  return 0;
 }

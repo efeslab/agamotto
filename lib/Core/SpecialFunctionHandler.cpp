@@ -91,6 +91,7 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("klee_get_value_i64", handleGetValue, true),
   add("klee_define_fixed_object", handleDefineFixedObject, false),
   add("klee_define_fixed_object_from_existing", handleDefineFixedObjectFromExisting, false),
+  add("klee_init_concrete_zero", handleInitConcreteZero, false),
   add("klee_undefine_fixed_object", handleUndefineFixedObject, false),
   add("klee_get_obj_size", handleGetObjSize, true),
   add("klee_get_errno", handleGetErrno, true),
@@ -143,6 +144,7 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("klee_pmem_mark_persistent", handleMarkPersistent, true),
   add("klee_pmem_check_persisted", handleIsPersisted, false),
   add("klee_pmem_check_ordered_before", handleIsOrderedBefore, false),
+  add("klee_pmem_is_pmem", handleIsPmem, true),
 
 #undef addDNR
 #undef add
@@ -803,6 +805,27 @@ void SpecialFunctionHandler::handleDefineFixedObjectFromExisting(
   }
 }
 
+void SpecialFunctionHandler::handleInitConcreteZero(ExecutionState &state,
+                                                    KInstruction *target,
+                                                    std::vector<ref<Expr> > &arguments) {
+  assert(arguments.size()==2 &&
+         "invalid number of arguments to klee_init_concrete_zero");
+  assert(isa<ConstantExpr>(arguments[0]) &&
+         "expect constant address argument to klee_init_concrete_zero");
+
+  Executor::ExactResolutionList rl;
+  executor.resolveExact(state, arguments[0], rl, "klee_init_concrete_zero");
+
+  for (Executor::ExactResolutionList::iterator it = rl.begin(), ie = rl.end(); 
+          it != ie; ++it) {
+    const MemoryObject *mo = it->first.first;
+    const ObjectState *cos = it->first.second;
+    ObjectState *os = state.addressSpace.getWriteable(mo, cos);
+    
+    os->initializeToZero();
+  }
+}
+
 void SpecialFunctionHandler::handleUndefineFixedObject(ExecutionState &state,
                                                        KInstruction *target,
                                                        std::vector<ref<Expr> > &arguments) {
@@ -974,6 +997,28 @@ void SpecialFunctionHandler::handleMarkPersistent(ExecutionState &state,
                                      "wrong size given to klee_pmem_mark_persistent[_name]", 
                                      Executor::User);
     }
+  }
+}
+
+void SpecialFunctionHandler::handleIsPmem(ExecutionState &state,
+                                          KInstruction *target,
+                                          std::vector<ref<Expr> > &arguments) {
+  assert(arguments.size() == 1 &&
+      "invalid number of arguments to klee_pmem_check_persisted");
+
+  ref<Expr> addr = arguments[0];
+
+  Executor::ExactResolutionList rl;
+  executor.resolveExact(state, arguments[0], rl, "mark_persistent");
+  
+  for (Executor::ExactResolutionList::iterator it = rl.begin(), 
+         ie = rl.end(); it != ie; ++it) {
+    // const MemoryObject *mo = it->first.first; 
+    const ObjectState *os = it->first.second;
+    ExecutionState *s = it->second;
+
+    ref<Expr> isPmem = ConstantExpr::create(isa<PersistentState>(os), Expr::Bool);
+    executor.bindLocal(target, *s, isPmem);  
   }
 }
 

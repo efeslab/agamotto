@@ -13,10 +13,10 @@ klee_add_test_executable(TARGET 001_BranchMod SOURCES
   branch_nvm_mod.c
 )
 
-klee_add_test_object(001_SimpleMod
+klee_add_test_object(TARGET 001_SimpleMod SOURCES
   simple_nvm_mod.c
 )
 
-klee_add_test_object(001_SimpleBranchMod
+klee_add_test_object(TARGET 001_SimpleBranchMod SOURCES
   branch_paths.c
 ) 

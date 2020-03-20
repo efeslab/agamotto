@@ -630,16 +630,56 @@ void ObjectState::print() const {
 
 PersistentState::PersistentState(const ObjectState *os, 
                                  const Array *cacheLines,
-                                 const Array *rootCauses)
+                                 const Array *rootCauses,
+                                 const Array *idxArray)
   : ObjectState(*os),
     cacheLineUpdates(cacheLines, nullptr),
     pendingCacheLineUpdates(cacheLineUpdates),
-    rootCauseLocations(rootCauses, nullptr) {}
+    idxEmptyUpdates(idxArray, nullptr),
+    rootCauseLocations(rootCauses, nullptr) {
+  // -- For cacheline stuff
+  // 0 <= X <= 2^32
+  idxUnbounded = ReadExpr::create(idxEmptyUpdates,
+                                  ConstantExpr::create(0, idxArray->range));
+  // idxUnbounded = ReadExpr::createTempRead(idxArray, idxArray->range);
+  idxUnbounded->dump();
+
+  assert(!(numCacheLines() % nrLinesPerSlice) && "not divisible!");
+
+  for (unsigned start = 0; start < numCacheLines(); start += nrLinesPerSlice) {
+    ref<Expr> lowerBound = UleExpr::create(ConstantExpr::create(start, idxArray->range), idxUnbounded);
+    unsigned end = start + nrLinesPerSlice;
+    ref<Expr> upperBound = UltExpr::create(idxUnbounded, ConstantExpr::create(end, idxArray->range));
+    ref<Expr> bounds = AndExpr::create(lowerBound, upperBound);
+
+    idxConstraints.push_back(bounds);
+  }
+
+  // Asserts X < numCacheLines 
+  // ref<Expr> nrLines = ConstantExpr::create(numCacheLines(), idxArray->range);
+  // // nrLines->dump();
+  // idxUpperBound = UltExpr::create(idxUnbounded, nrLines);
+  // // Asserts 0 <= X
+  // idxLowerBound = UleExpr::create(ConstantExpr::create(0, idxArray->range), idxUnbounded);
+  // // Asserts 0 <= X < numCacheLines
+  // // ConstraintManager constraints;
+  // // constraints.addConstraint(idxUpperBound);
+  // // constraints.addConstraint(idxLowerBound);
+  // // idxBounded = constraints.simplifyExpr(idxUnbounded);
+  // idxBounded = AndExpr::create(idxLowerBound, idxUpperBound);
+  // idxBounded->dump();
+  // assert(idxUnbounded != idxBounded);
+}
 
 PersistentState::PersistentState(const PersistentState &ps)
   : ObjectState(ps),
     cacheLineUpdates(ps.cacheLineUpdates),
     pendingCacheLineUpdates(ps.pendingCacheLineUpdates),
+
+    idxEmptyUpdates(ps.idxEmptyUpdates),
+    idxUnbounded(ps.idxUnbounded),
+    idxConstraints(ps.idxConstraints),
+
     rootCauseLocations(ps.rootCauseLocations),
     allRootLocations(ps.allRootLocations) {}
 
@@ -679,11 +719,15 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state, ref<Ex
 
   // Now update root cause.
   std::string info = getLocationInfo(state);
+  const char *sanity_check = nullptr;
   if (allRootLocations.find(info) != allRootLocations.end()) {
-    allRootLocations[info] = std::make_shared<std::string>(info);
+    sanity_check = allRootLocations.find(info)->c_str();
   }
 
-  rootCauseLocations.extend(cacheLine, ptrAsExpr(allRootLocations[info].get()));
+  allRootLocations.insert(info);
+  assert(!sanity_check || sanity_check == allRootLocations.find(info)->c_str());
+
+  rootCauseLocations.extend(cacheLine, ptrAsExpr((void*)allRootLocations.find(info)->c_str()));
 }
 
 void PersistentState::persistCacheLineAtOffset(unsigned offset) {
@@ -696,7 +740,7 @@ void PersistentState::persistCacheLineAtOffset(ref<Expr> offset) {
   ref<Expr> cacheLine = getCacheLine(offset);
   pendingCacheLineUpdates.extend(cacheLine, getPersistedExpr());
   // Update the root cause to be empty.
-  rootCauseLocations.extend(cacheLine, ptrAsExpr(nullptr));
+  rootCauseLocations.extend(cacheLine, getNullptr());
 }
 
 void PersistentState::commitPendingPersists() {
@@ -708,13 +752,27 @@ void PersistentState::commitPendingPersists() {
   cacheLineUpdates = pendingCacheLineUpdates;
 }
 
-ref<Expr> PersistentState::isPersisted() const {
+ref<Expr> PersistentState::isPersisted(ExecutionState &state) const {
+  /**
+   * This is extremely inefficient for large objects.
+   */
   // AND together all cache lines.
+  #if 0
   ref<Expr> result = isCacheLinePersisted(0);
   for (unsigned i = 1; i < numCacheLines(); ++i) {
     result = AndExpr::create(isCacheLinePersisted(i), result);
   }
   return EqExpr::create(getPersistedExpr(), result);
+  #else
+  // idxUnbounded->dump();
+  // idxBounded->dump();
+  state.constraints.addConstraint(idxConstraints.front());
+  return EqExpr::create(getPersistedExpr(), isCacheLinePersisted(idxUnbounded));
+  #endif
+}
+
+ref<Expr> PersistentState::isPersistedUnconstrained() const {
+  return EqExpr::create(getPersistedExpr(), isCacheLinePersisted(idxUnbounded));
 }
 
 void PersistentState::clearRootCauses() {
@@ -722,7 +780,8 @@ void PersistentState::clearRootCauses() {
 }
 
 std::unordered_set<std::string> PersistentState::getRootCauses(
-    TimingSolver *solver, const ExecutionState &state) const {
+    TimingSolver *solver, ExecutionState &state) const {
+  #if 0
   std::unordered_set<std::string> ret;
   for (unsigned i = 0; i < numCacheLines(); ++i) {
     std::unordered_set<std::string> locs = getRootCause(solver, state, i);
@@ -730,6 +789,23 @@ std::unordered_set<std::string> PersistentState::getRootCauses(
   }
 
   return ret;
+  #else
+  std::unordered_set<std::string> causes;
+
+  ConstraintManager orig = state.constraints;
+  for (const ref<Expr> &sliceConstraint : idxConstraints) {
+    ConstraintManager cm = orig; // copy
+    cm.addConstraint(sliceConstraint);
+    state.constraints = cm;
+    
+    auto sliceCauses = getRootCause(solver, state, idxUnbounded);
+    causes.insert(sliceCauses.begin(), sliceCauses.end());
+  }
+
+  state.constraints = orig;
+  
+  return causes;
+  #endif
 }
 
 ref<Expr> PersistentState::isCacheLinePersisted(unsigned cacheLine) const {
@@ -745,23 +821,23 @@ ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine) const {
 }
 
 std::unordered_set<std::string> PersistentState::getRootCause(
-  TimingSolver *solver, const ExecutionState &state, unsigned cacheLine) const {
+  TimingSolver *solver, ExecutionState &state, unsigned cacheLine) const {
   return getRootCause(solver, state, klee::ConstantExpr::create(cacheLine, Expr::Int32));
 }
 
 std::unordered_set<std::string> PersistentState::getRootCause(
-  TimingSolver *solver, const ExecutionState &state, ref<Expr> cacheLine) const {
+  TimingSolver *solver, ExecutionState &state, ref<Expr> cacheLine) const {
   ref<Expr> result = ReadExpr::create(rootCauseLocations,
                                       ZExtExpr::create(cacheLine, Expr::Int32));
   
   std::unordered_set<std::string> possible;
 
-  for (const auto &p : allRootLocations) {
-    ref<Expr> isCause = EqExpr::create(result, ptrAsExpr(p.second.get()));
+  for (const std::string &loc : allRootLocations) {
+    ref<Expr> isCause = EqExpr::create(result, ptrAsExpr((void*)loc.c_str()));\
     bool mayBeCause = false;
     bool success = solver->mayBeTrue(state, isCause, mayBeCause);
     if (success && mayBeCause) {
-      possible.insert(p.first);
+      possible.insert(loc); // copy
     } else if (!success) {
       klee_warning("Did not succeed at finding the root cause!");
     }
@@ -772,19 +848,32 @@ std::unordered_set<std::string> PersistentState::getRootCause(
     ref<Expr> isNullptr = EqExpr::create(result, getNullptr());
     bool mustBeNull = false;
     bool success = solver->mustBeTrue(state, isNullptr, mustBeNull);
+
     assert(success && mustBeNull && "Could not prove null!");
   }
 
   return possible;
 }
 
-bool PersistentState::mustBePersisted(TimingSolver *solver, const ExecutionState &state) const {
-  ref<Expr> result = isPersisted();
-  bool mustBe;
-  bool success = solver->mustBeTrue(state, result, mustBe);
-  assert(success && "Could not solve!");
+bool PersistentState::mustBePersisted(TimingSolver *solver, ExecutionState &state) const {
+  bool ret = true;
+  
+  ConstraintManager orig = state.constraints;
+  for (const ref<Expr> &sliceConstraint : idxConstraints) {
+    ConstraintManager cm = orig; // copy
+    cm.addConstraint(sliceConstraint);
+    state.constraints = cm;
 
-  return mustBe;
+    bool mustBe;
+    bool success = solver->mustBeTrue(state, isPersistedUnconstrained(), mustBe);
+    assert(success && "Could not solve!");
+    ret = ret && mustBe;
+    if (!ret) return false;
+  }
+
+  state.constraints = orig;
+  
+  return true;
 }
 
 ref<Expr> PersistentState::getCacheLine(ref<Expr> offset) const {

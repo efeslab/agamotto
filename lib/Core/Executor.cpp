@@ -3892,8 +3892,14 @@ void Executor::executeMarkPersistent(ExecutionState &state,
       &initPtrs[0], &initPtrs[0] + initPtrs.size(),
       Expr::Int32 /* indicies */, Expr::Int64 /* value size */);
 
+  // Create array so we can create an unbounded value.
+  const Array *idxArray = arrayCache.CreateArray(
+      baseName + "_idxArray", 1, nullptr, nullptr,
+      Expr::Int32, Expr::Int32);
+
   // Construct a persistent ObjectState and bind it to the memory object.
-  state.addressSpace.bindObject(mo, new PersistentState(os, cacheLines, rootCauseArr));
+  state.addressSpace.bindObject(mo, 
+      new PersistentState(os, cacheLines, rootCauseArr, idxArray));
 
   /* std::string name; */
   /* mo->getAllocInfo(name); */
@@ -3958,24 +3964,37 @@ void Executor::executeCheckPersistence(ExecutionState &state,
   assert(os);
   ObjectState *wos = state.addressSpace.getWriteable(mo, os);
   PersistentState *ps = dyn_cast<PersistentState>(wos);
+  assert(ps);
 
-  StatePair isPersisted = fork(state, ps->isPersisted(), true);
+  ConstraintManager orig = state.constraints;
 
-  // If there's a state where it's not definitely persisted, terminate it.
-  ExecutionState *notPersisted = isPersisted.second;
-  if (notPersisted) {
-    // Should instead do the root cause analysis.
-    std::string addrInfo("\npmem persistence failures:\n");
-    // mo->getAllocInfo(addrInfo);
-    uint64_t id = 1;
-    for (const auto &str : ps->getRootCauses(solver, *notPersisted)) {
-      addrInfo += std::to_string(id++) + ") " + str + std::string("\n");
+  for (const ref<Expr> &sliceConstraint : ps->getConstraints()) {
+    errs() << "check slice\n";
+    sliceConstraint->dump();
+    ConstraintManager cm = orig;
+    cm.addConstraint(sliceConstraint);
+    state.constraints = cm;
+
+    StatePair isPersisted = fork(state, ps->isPersistedUnconstrained(), true);
+
+    // If there's a state where it's not definitely persisted, terminate it.
+    ExecutionState *notPersisted = isPersisted.second;
+    if (notPersisted) {
+      // Should instead do the root cause analysis.
+      std::string addrInfo("\npmem persistence failures:\n");
+      // mo->getAllocInfo(addrInfo);
+      uint64_t id = 1;
+      for (const auto &str : ps->getRootCauses(solver, *notPersisted)) {
+        addrInfo += std::to_string(id++) + ") " + str + std::string("\n");
+      }
+      klee_warning("addrInfo: '%s'", addrInfo.c_str());
+
+      terminateStateOnError(*notPersisted, "memory object not persisted",
+                            Executor::PMem, NULL, addrInfo);
     }
-    klee_warning("addrInfo: '%s'", addrInfo.c_str());
+  } 
 
-    terminateStateOnError(*notPersisted, "memory object not persisted",
-                          Executor::PMem, NULL, addrInfo);
-  }
+  state.constraints = orig;
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state,

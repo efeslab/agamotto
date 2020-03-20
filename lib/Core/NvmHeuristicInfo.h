@@ -54,6 +54,8 @@ namespace klee {
   class Executor;
   class ExecutionState;
 
+  class NvmInstructionDesc;
+
   typedef std::shared_ptr<AndersenAAWrapperPass> andersen_sptr_t;
 
   struct Hashable {
@@ -159,8 +161,10 @@ namespace klee {
    * ---
    * This is the runtime state.
    */
+  class NvmValueDesc;
   class NvmValueDesc : public Hashable, public StaticStorage<NvmValueDesc> {
     private:
+      friend class NvmInstructionDesc;
       // Here we track mmap locations to make weight calculation easier. Whether
       // or not 
       std::unordered_set<llvm::Value*> mmap_calls_;
@@ -240,6 +244,7 @@ namespace klee {
       friend bool operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs);
   };
 
+  class NvmInstructionDesc;
   class NvmInstructionDesc : public Hashable, public StaticStorage<NvmInstructionDesc> {
     private:
 

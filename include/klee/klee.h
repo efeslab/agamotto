@@ -11,6 +11,7 @@
 #define KLEE_H
 
 #include "stdint.h"
+#include "stdbool.h"
 #include "stddef.h"
 
 #ifdef __cplusplus
@@ -29,6 +30,11 @@ extern "C" {
    * Given that addr->addr+nbytes is a valid memory region, 
    */
   void klee_define_fixed_object_from_existing(void *addr, size_t nbytes);
+
+   /**
+    * Initializes the memory to 0 concretely.
+    */
+  void klee_init_concrete_zero(void *addr, size_t nbytes);
 
   /* Remove an accesible memory object at a user specified location. This is
    * required for when external memory leaves scope. (mmap syscall)
@@ -187,6 +193,11 @@ extern "C" {
    */
   void klee_pmem_check_ordered_before(void *addrA, size_t sizeA,
                                       void *addrB, size_t sizeB);
+
+  /**
+   * Returns whether or not this pointer refers to a persistent memory object
+   */
+  bool klee_pmem_is_pmem(void *addr);
 
 #ifdef __cplusplus
 }
