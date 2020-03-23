@@ -344,9 +344,10 @@ class PersistentState : public ObjectState {
      * set.
      */
     UpdateList rootCauseLocations;
-    // We store all of the unique root cause locations. We use the c_str() pointer
-    // as the value to write as the location.
-    std::unordered_set<std::string> allRootLocations;
+    // We store all of the unique root cause locations. We can't use the pointer
+    // due to copies, but we can make unique IDs
+    uint64_t nextLocId = 1; // Start at 1
+    std::unordered_map<std::string, uint64_t> allRootLocations;
 
     /// DO NOT USE. Use clone() instead.
     PersistentState(const PersistentState &ps);

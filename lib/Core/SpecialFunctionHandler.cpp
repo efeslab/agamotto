@@ -31,6 +31,7 @@
 #include <errno.h>
 #include <sstream>
 #include <sys/mman.h>
+#include <unistd.h>
 
 using namespace llvm;
 using namespace klee;
@@ -453,8 +454,48 @@ void SpecialFunctionHandler::handleMemalign(ExecutionState &state,
         0, "Symbolic alignment for memalign. Choosing smallest alignment");
   }
 
-  executor.executeAlloc(state, arguments[1], false, target, false, 0,
-                        alignment);
+  // Try to split up the memory allocation
+  if (ConstantExpr *ce = dyn_cast<ConstantExpr>(arguments[1].get())) {
+    // Should be concrete for the case we care about--pmem file.
+    uint64_t size = ce->getZExtValue();
+    uint64_t pgsz = getpagesize();
+
+    uint64_t mmap_size = (size % pgsz) ? ((size / pgsz) + 1) * pgsz : size;
+
+    // We'll treat it like a fixed object and just call mmap internally.
+    // TODO: reclaim
+    void *base_addr = mmap(nullptr, mmap_size, PROT_READ | PROT_WRITE, 
+                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (MAP_FAILED == base_addr) {
+      klee_error("Could not map!");
+    }
+
+    MemoryObject *baseObj = nullptr;
+    for (uint64_t offset = 0; offset < size; offset += pgsz) {
+      MemoryObject *mo = executor.memory->allocateFixed(
+                (uint64_t)base_addr + offset, pgsz, state.prevPC->inst);
+      if (mo) (void)executor.bindObjectInState(state, mo, false);
+      if (!baseObj) baseObj = mo;
+    }
+
+    if (!baseObj) {
+      executor.bindLocal(target, state,
+                ConstantExpr::alloc(0, Context::get().getPointerWidth()));
+    } else {
+      // ObjectState *os = bindObjectInState(state, mo, isLocal);
+      // if (zeroMemory) {
+      //   os->initializeToZero();
+      // } else {
+      //   os->initializeToRandom();
+      // }
+      executor.bindLocal(target, state, baseObj->getBaseExpr());
+    }
+
+  } else {
+    klee_warning("Could not split memalign--symbolic size!\n");
+    executor.executeAlloc(state, arguments[1], false, target, false, 0,
+                          alignment);
+  }
 }
 
 void SpecialFunctionHandler::handleAssume(ExecutionState &state,
@@ -975,14 +1016,21 @@ void SpecialFunctionHandler::handleMarkPersistent(ExecutionState &state,
          ie = rl.end(); it != ie; ++it) {
     const MemoryObject *mo = it->first.first;
     mo->setName(name);
+    klee_warning("Marking object at %p as persistent", (void*)mo->address);
     
     ExecutionState *s = it->second;
 
     // FIXME: Type coercion should be done consistently somewhere.
     bool res;
+    // bool success __attribute__ ((unused)) =
+    //   executor.solver->mustBeTrue(*s, 
+    //                               EqExpr::create(ZExtExpr::create(arguments[1],
+    //                                                               Context::get().getPointerWidth()),
+    //                                              mo->getSizeExpr()),
+    //                               res);
     bool success __attribute__ ((unused)) =
       executor.solver->mustBeTrue(*s, 
-                                  EqExpr::create(ZExtExpr::create(arguments[1],
+                                  EqExpr::create(ConstantExpr::create(4096,
                                                                   Context::get().getPointerWidth()),
                                                  mo->getSizeExpr()),
                                   res);

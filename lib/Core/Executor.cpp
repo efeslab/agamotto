@@ -3966,10 +3966,11 @@ void Executor::executeCheckPersistence(ExecutionState &state,
   PersistentState *ps = dyn_cast<PersistentState>(wos);
   assert(ps);
 
+  #if 1
   ConstraintManager orig = state.constraints;
 
   for (const ref<Expr> &sliceConstraint : ps->getConstraints()) {
-    errs() << "check slice\n";
+    fprintf(stderr, "check slice for %p\n", (void*)mo->address);
     sliceConstraint->dump();
     ConstraintManager cm = orig;
     cm.addConstraint(sliceConstraint);
@@ -3980,11 +3981,21 @@ void Executor::executeCheckPersistence(ExecutionState &state,
     // If there's a state where it's not definitely persisted, terminate it.
     ExecutionState *notPersisted = isPersisted.second;
     if (notPersisted) {
+      const ObjectState *nos = notPersisted->addressSpace.findObject(mo);
+      assert(nos);
+      ObjectState *nwos = notPersisted->addressSpace.getWriteable(mo, nos);
+      PersistentState *nps = dyn_cast<PersistentState>(wos);
+      assert(nps);
+
+      for (const ref<Expr> cons : notPersisted->constraints) {
+        cons->dump();
+      }
+      klee_warning("Non-persistence detected!");
       // Should instead do the root cause analysis.
       std::string addrInfo("\npmem persistence failures:\n");
       // mo->getAllocInfo(addrInfo);
       uint64_t id = 1;
-      for (const auto &str : ps->getRootCauses(solver, *notPersisted)) {
+      for (const auto &str : nps->getRootCauses(solver, *notPersisted)) {
         addrInfo += std::to_string(id++) + ") " + str + std::string("\n");
       }
       klee_warning("addrInfo: '%s'", addrInfo.c_str());
@@ -3995,6 +4006,32 @@ void Executor::executeCheckPersistence(ExecutionState &state,
   } 
 
   state.constraints = orig;
+  #else 
+  StatePair isPersisted = fork(state, ps->isPersistedUnconstrained(), true);
+
+  // If there's a state where it's not definitely persisted, terminate it.
+  ExecutionState *notPersisted = isPersisted.second;
+  if (notPersisted) {
+    for (const ref<Expr> cons : notPersisted->constraints) {
+      cons->dump();
+    }
+    klee_warning("Non-persistence detected!");
+    // Should instead do the root cause analysis.
+    std::string addrInfo("\npmem persistence failures:\n");
+    // mo->getAllocInfo(addrInfo);
+    uint64_t id = 1;
+    for (const auto &str : ps->getRootCauses(solver, *notPersisted)) {
+      addrInfo += std::to_string(id++) + ") " + str + std::string("\n");
+    }
+    klee_warning("addrInfo: '%s'", addrInfo.c_str());
+    klee_warning("can we do it twice?");
+    (void)ps->getRootCauses(solver, *notPersisted);
+    klee_warning("i guess");
+
+    terminateStateOnError(*notPersisted, "memory object not persisted",
+                          Executor::PMem, NULL, addrInfo);
+  }
+  #endif 
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state,

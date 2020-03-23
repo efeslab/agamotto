@@ -646,6 +646,7 @@ PersistentState::PersistentState(const ObjectState *os,
 
   assert(!(numCacheLines() % nrLinesPerSlice) && "not divisible!");
 
+  #if 0
   for (unsigned start = 0; start < numCacheLines(); start += nrLinesPerSlice) {
     ref<Expr> lowerBound = UleExpr::create(ConstantExpr::create(start, idxArray->range), idxUnbounded);
     unsigned end = start + nrLinesPerSlice;
@@ -654,6 +655,11 @@ PersistentState::PersistentState(const ObjectState *os,
 
     idxConstraints.push_back(bounds);
   }
+  #else 
+  ref<Expr> lowerBound = UleExpr::create(ConstantExpr::create(0, idxArray->range), idxUnbounded);
+  ref<Expr> upperBound = UltExpr::create(idxUnbounded, ConstantExpr::create(numCacheLines(), idxArray->range));
+  idxConstraints.push_back(AndExpr::create(lowerBound, upperBound));
+  #endif
 
   // Asserts X < numCacheLines 
   // ref<Expr> nrLines = ConstantExpr::create(numCacheLines(), idxArray->range);
@@ -681,6 +687,7 @@ PersistentState::PersistentState(const PersistentState &ps)
     idxConstraints(ps.idxConstraints),
 
     rootCauseLocations(ps.rootCauseLocations),
+    nextLocId(ps.nextLocId),
     allRootLocations(ps.allRootLocations) {}
 
 ObjectState *PersistentState::clone() const {
@@ -719,15 +726,16 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state, ref<Ex
 
   // Now update root cause.
   std::string info = getLocationInfo(state);
-  const char *sanity_check = nullptr;
-  if (allRootLocations.find(info) != allRootLocations.end()) {
-    sanity_check = allRootLocations.find(info)->c_str();
+  if (!allRootLocations[info]) {
+    allRootLocations[info] = nextLocId;
+    nextLocId++;
   }
 
-  allRootLocations.insert(info);
-  assert(!sanity_check || sanity_check == allRootLocations.find(info)->c_str());
+  // allRootLocations.insert(info);
+  // assert(!sanity_check || sanity_check == allRootLocations.find(info)->c_str());
 
-  rootCauseLocations.extend(cacheLine, ptrAsExpr((void*)allRootLocations.find(info)->c_str()));
+  rootCauseLocations.extend(cacheLine, 
+      ConstantExpr::create(allRootLocations[info], rootCauseLocations.root->range));
 }
 
 void PersistentState::persistCacheLineAtOffset(unsigned offset) {
@@ -789,7 +797,7 @@ std::unordered_set<std::string> PersistentState::getRootCauses(
   }
 
   return ret;
-  #else
+  #elif 1
   std::unordered_set<std::string> causes;
 
   ConstraintManager orig = state.constraints;
@@ -805,6 +813,8 @@ std::unordered_set<std::string> PersistentState::getRootCauses(
   state.constraints = orig;
   
   return causes;
+  #else 
+  return getRootCause(solver, state, idxUnbounded);
   #endif
 }
 
@@ -832,12 +842,13 @@ std::unordered_set<std::string> PersistentState::getRootCause(
   
   std::unordered_set<std::string> possible;
 
-  for (const std::string &loc : allRootLocations) {
-    ref<Expr> isCause = EqExpr::create(result, ptrAsExpr((void*)loc.c_str()));\
+  for (const auto &p : allRootLocations) {
+    ref<Expr> locId = ConstantExpr::create(p.second, rootCauseLocations.root->range);
+    ref<Expr> isCause = EqExpr::create(result, locId);
     bool mayBeCause = false;
     bool success = solver->mayBeTrue(state, isCause, mayBeCause);
     if (success && mayBeCause) {
-      possible.insert(loc); // copy
+      possible.insert(p.first); // copy
     } else if (!success) {
       klee_warning("Did not succeed at finding the root cause!");
     }
@@ -845,11 +856,13 @@ std::unordered_set<std::string> PersistentState::getRootCause(
 
   // If there are no causes, then there must be no updates.
   if (!possible.size()) {
+    ref<Expr> nullId = ConstantExpr::create(0, rootCauseLocations.root->range);
     ref<Expr> isNullptr = EqExpr::create(result, getNullptr());
     bool mustBeNull = false;
     bool success = solver->mustBeTrue(state, isNullptr, mustBeNull);
 
-    assert(success && mustBeNull && "Could not prove null!");
+    assert(success && "Could not solve!");
+    assert(mustBeNull && "Could not prove null!");
   }
 
   return possible;
