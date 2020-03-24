@@ -1,0 +1,5 @@
+KLEE: Using STP solver backend
+KLEE: ERROR: runtime/POSIX/fd.c:485: memory object not persisted
+KLEE: NOTE: now ignoring this error at this location
+KLEE: ERROR: runtime/POSIX/mman.c:191: memory object not persisted
+KLEE: NOTE: now ignoring this error at this location

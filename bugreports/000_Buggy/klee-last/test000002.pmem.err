@@ -1,0 +1,41 @@
+Error: memory object not persisted
+File: runtime/POSIX/mman.c
+Line: 191
+assembly.ll line: 107555
+Stack: 
+	#000107555 in munmap_sym (=23220970991616, =8388608, =136072608) at runtime/POSIX/mman.c:191
+	#100107625 in munmap (=23220970991616, =8388608) at runtime/POSIX/mman.c:205
+	#200047706 in util_unmap_part (=45880184) at ../../src/../src/common/set.c:488
+	#300049865 in util_replica_close (=136499104, =0) at ../../src/../src/common/set.c:2914
+	#400049645 in util_poolset_close (=136499104, =0) at ../../src/../src/common/set.c:634
+	#500090770 in obj_pool_cleanup (=23220970991616) at obj.c:1960
+	#600092401 in pmemobj_close (=23220970991616) at obj.c:2000
+	#700013272 in __klee_posix_wrapped_main (=3, =135276416) at nvmbugs/000_pmdk_btree_map/driver.c:93
+	#800010818 in __user_main (=7, =54533552, =54533616) at runtime/POSIX/klee_init_env.c:281
+	#900003297 in __uClibc_main (=30525064, =7, =54533552, =48268552, =48268424, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1000003464 in main (=7, =54533552)
+Info: 
+
+pmem persistence failures:
+1) File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 12434
+Stack: 
+	#000012434 in memcpy (=23220974146752, =406765576, =8) at libc/string/memcpy.c:29
+	#100033953 in huge_write_footer (=23220974146640, =15) at memblock.c:1164
+	#200034850 in memblock_huge_init (=270282160, =23220970998320, =2, =0, =15) at memblock.c:1305
+	#300068669 in heap_split_block (=23220970998320, =304474912, =272169824, =1) at heap.c:932
+	#400068039 in heap_get_bestfit_block (=23220970998320, =304474912, =272169824) at heap.c:966
+	#500068333 in heap_ensure_run_bucket_filled (=23220970998320, =313079008, =1) at heap.c:855
+	#600067974 in heap_get_bestfit_block (=23220970998320, =313079008, =309297440) at heap.c:958
+	#700074468 in palloc_reservation_create (=23220970998320, =304, =81301896, =309315680, =1013, =0, =0, =0, =309297408) at palloc.c:238
+	#800081823 in palloc_reserve (=23220970998320, =304, =81301896, =309315680, =1013, =0, =0, =0, =309297408) at palloc.c:603
+	#900104633 in tx_alloc_common (=131256832, =304, =1013, =81301896, =309315680) at tx.c:612
+	#1000104831 in pmemobj_tx_zalloc (=304, =1013) at tx.c:1554
+	#1100014189 in btree_map_insert_empty (=2754468283732250526, =3933648, =406809056) at nvmbugs/000_pmdk_btree_map/btree_map_buggy.c:148
+	#1200013706 in btree_map_insert (=23220970991616, =2754468283732250526, =3933648, =0, =2754468283732250526, =3933776) at nvmbugs/000_pmdk_btree_map/btree_map_buggy.c:291
+	#1300013085 in __klee_posix_wrapped_main (=3, =135276416) at nvmbugs/000_pmdk_btree_map/driver.c:80
+	#1400010818 in __user_main (=7, =54533552, =54533616) at runtime/POSIX/klee_init_env.c:281
+	#1500003297 in __uClibc_main (=30525064, =7, =54533552, =48268552, =48268424, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003464 in main (=7, =54533552)
+
