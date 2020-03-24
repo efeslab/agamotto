@@ -93,14 +93,14 @@ void *mmap_sym(exe_file_t* f, size_t length, off_t offset) {
   }
 
   size_t actual_length = (length % pgsz == 0) ? length : (length + pgsz) - (length % pgsz);
-  if (offset + actual_length > df->size) {
+  if ((offset + actual_length) > df->size) {
     klee_error("trying to map beyond the file size!");
     return MAP_FAILED;
   }
 
   // finally, good to actual perform the mapping
   size_t page_start = offset / pgsz;
-  size_t page_end = page_start + actual_length / pgsz;
+  size_t page_end = page_start + (actual_length / pgsz);
   // want to increment page_refs in interval: [page_start, page_end)
   for (; page_start < page_end; page_start++) {
     df->page_refs[page_start]++;
@@ -198,7 +198,7 @@ int munmap(void *start, size_t length) {
     exe_disk_file_t* df = __exe_fs.sym_pmem;
     // call munmap_pmem if the following intervals overlap:
     // [df->contents, df->contents+df->size) and [start, start+length)
-    if (df->contents <= (char*)start + length && (char*)start <= df->contents + df->size) {
+    if (df->contents < (char*)start + length && (char*)start < df->contents + df->size) {
       return munmap_sym(start, length, df);
     }
   }

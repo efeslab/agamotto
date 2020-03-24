@@ -3970,8 +3970,8 @@ void Executor::executeCheckPersistence(ExecutionState &state,
   ConstraintManager orig = state.constraints;
 
   for (const ref<Expr> &sliceConstraint : ps->getConstraints()) {
-    fprintf(stderr, "check slice for %p\n", (void*)mo->address);
-    sliceConstraint->dump();
+    // fprintf(stderr, "check slice for %p\n", (void*)mo->address);
+    // sliceConstraint->dump();
     ConstraintManager cm = orig;
     cm.addConstraint(sliceConstraint);
     state.constraints = cm;
@@ -3984,13 +3984,13 @@ void Executor::executeCheckPersistence(ExecutionState &state,
       const ObjectState *nos = notPersisted->addressSpace.findObject(mo);
       assert(nos);
       ObjectState *nwos = notPersisted->addressSpace.getWriteable(mo, nos);
-      PersistentState *nps = dyn_cast<PersistentState>(wos);
+      PersistentState *nps = dyn_cast<PersistentState>(nwos);
       assert(nps);
 
-      for (const ref<Expr> cons : notPersisted->constraints) {
-        cons->dump();
-      }
-      klee_warning("Non-persistence detected!");
+      // for (const ref<Expr> cons : notPersisted->constraints) {
+      //   cons->dump();
+      // }
+      // klee_warning("Non-persistence detected!");
       // Should instead do the root cause analysis.
       std::string addrInfo("\npmem persistence failures:\n");
       // mo->getAllocInfo(addrInfo);

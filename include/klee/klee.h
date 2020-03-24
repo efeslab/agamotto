@@ -197,7 +197,7 @@ extern "C" {
   /**
    * Returns whether or not this pointer refers to a persistent memory object
    */
-  bool klee_pmem_is_pmem(void *addr);
+  bool klee_pmem_is_pmem(void *addr, size_t size);
 
 #ifdef __cplusplus
 }

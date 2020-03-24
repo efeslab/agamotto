@@ -642,7 +642,7 @@ PersistentState::PersistentState(const ObjectState *os,
   idxUnbounded = ReadExpr::create(idxEmptyUpdates,
                                   ConstantExpr::create(0, idxArray->range));
   // idxUnbounded = ReadExpr::createTempRead(idxArray, idxArray->range);
-  idxUnbounded->dump();
+  // idxUnbounded->dump();
 
   assert(!(numCacheLines() % nrLinesPerSlice) && "not divisible!");
 
