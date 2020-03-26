@@ -1,0 +1,155 @@
+Error: memory object not persisted
+File: runtime/POSIX/fd.c
+Line: 527
+assembly.ll line: 5553
+Stack: 
+	#000005553 in close (=3) at runtime/POSIX/fd.c:527
+	#100036634 in util_part_fdclose (=65119528) at ../../src/../src/common/set.c:1842
+	#200036598 in util_replica_fdclose (=65119456) at ../../src/../src/common/set.c:4354
+	#300036557 in util_poolset_fdclose_always (=231041056) at ../../src/../src/common/set.c:709
+	#400036284 in util_poolset_fdclose (=231041056) at ../../src/../src/common/set.c:724
+	#500091656 in obj_open_common (=148072512, =148049888, =0, =1) at obj.c:1799
+	#600091464 in pmemobj_openU (=148072512, =148049888) at obj.c:1826
+	#700091429 in pmemobj_open (=148072512, =148049888) at obj.c:1839
+	#800012792 in __klee_posix_wrapped_main (=3, =150447616) at nvmbugs/000_pmdk_btree_map/driver.c:35
+	#900011011 in __user_main (=9, =146433664, =146433744) at runtime/POSIX/klee_init_env.c:281
+	#1000003300 in __uClibc_main (=46249352, =9, =146433664, =63977224, =63977096, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1100003467 in main (=9, =146433664)
+Info: 
+
+pmem persistence failures:
+1) File: obj.c
+Line: 186
+assembly.ll line: 24799
+Stack: 
+	#000024799 in obj_ctl_init_and_load (=22852710072320) at obj.c:186
+	#100088542 in obj_runtime_init (=22852710072320, =0, =1, =1024) at obj.c:1259
+	#200091646 in obj_open_common (=148072512, =148049888, =0, =1) at obj.c:1789
+	#300091464 in pmemobj_openU (=148072512, =148049888) at obj.c:1826
+	#400091429 in pmemobj_open (=148072512, =148049888) at obj.c:1839
+	#500012792 in __klee_posix_wrapped_main (=3, =150447616) at nvmbugs/000_pmdk_btree_map/driver.c:35
+	#600011011 in __user_main (=9, =146433664, =146433744) at runtime/POSIX/klee_init_env.c:281
+	#700003300 in __uClibc_main (=46249352, =9, =146433664, =63977224, =63977096, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800003467 in main (=9, =146433664)
+
+2) File: libc/string/memset.c
+Line: 28
+assembly.ll line: 12666
+Stack: 
+	#000012666 in memset (=22852710079008, =0, =1504) at libc/string/memset.c:28
+	#100091858 in obj_replicas_init (=231041056) at obj.c:1652
+	#200091527 in obj_open_common (=148072512, =148049888, =0, =1) at obj.c:1752
+	#300091464 in pmemobj_openU (=148072512, =148049888) at obj.c:1826
+	#400091429 in pmemobj_open (=148072512, =148049888) at obj.c:1839
+	#500012792 in __klee_posix_wrapped_main (=3, =150447616) at nvmbugs/000_pmdk_btree_map/driver.c:35
+	#600011011 in __user_main (=9, =146433664, =146433744) at runtime/POSIX/klee_init_env.c:281
+	#700003300 in __uClibc_main (=46249352, =9, =146433664, =63977224, =63977096, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800003467 in main (=9, =146433664)
+
+3) File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 12627
+Stack: 
+	#000012627 in memcpy (=22852710079024, =22852710079288, =80) at libc/string/memcpy.c:29
+	#100071447 in heap_boot (=22852710079024, =22852713226240, =5234688, =22852710078496, =22852710072320, =22852710079288, =245657184, =231041056) at heap.c:1469
+	#200080496 in palloc_boot (=22852710079024, =22852713226240, =5234688, =22852710078496, =22852710072320, =22852710079288, =245657184, =231041056) at palloc.c:877
+	#300080315 in pmalloc_boot (=22852710072320) at pmalloc.c:208
+	#400080099 in lane_recover_and_section_boot (=22852710072320) at lane.c:399
+	#500088959 in obj_runtime_init_common (=22852710072320) at obj.c:859
+	#600088494 in obj_runtime_init (=22852710072320, =0, =1, =1024) at obj.c:1234
+	#700091646 in obj_open_common (=148072512, =148049888, =0, =1) at obj.c:1789
+	#800091464 in pmemobj_openU (=148072512, =148049888) at obj.c:1826
+	#900091429 in pmemobj_open (=148072512, =148049888) at obj.c:1839
+	#1000012792 in __klee_posix_wrapped_main (=3, =150447616) at nvmbugs/000_pmdk_btree_map/driver.c:35
+	#1100011011 in __user_main (=9, =146433664, =146433744) at runtime/POSIX/klee_init_env.c:281
+	#1200003300 in __uClibc_main (=46249352, =9, =146433664, =63977224, =63977096, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300003467 in main (=9, =146433664)
+
+4) File: obj.c
+Line: 1272
+assembly.ll line: 88576
+Stack: 
+	#000088576 in obj_runtime_init (=22852710072320, =0, =1, =1024) at obj.c:1272
+	#100091646 in obj_open_common (=148072512, =148049888, =0, =1) at obj.c:1789
+	#200091464 in pmemobj_openU (=148072512, =148049888) at obj.c:1826
+	#300091429 in pmemobj_open (=148072512, =148049888) at obj.c:1839
+	#400012792 in __klee_posix_wrapped_main (=3, =150447616) at nvmbugs/000_pmdk_btree_map/driver.c:35
+	#500011011 in __user_main (=9, =146433664, =146433744) at runtime/POSIX/klee_init_env.c:281
+	#600003300 in __uClibc_main (=46249352, =9, =146433664, =63977224, =63977096, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003467 in main (=9, =146433664)
+
+5) File: obj.c
+Line: 1026
+assembly.ll line: 90592
+Stack: 
+	#000090592 in obj_replica_init_local (=22852710072320, =1, =8388608) at obj.c:1026
+	#100088122 in obj_replica_init (=22852710072320, =231041056, =0, =0) at obj.c:1169
+	#200091873 in obj_replicas_init (=231041056) at obj.c:1659
+	#300091527 in obj_open_common (=148072512, =148049888, =0, =1) at obj.c:1752
+	#400091464 in pmemobj_openU (=148072512, =148049888) at obj.c:1826
+	#500091429 in pmemobj_open (=148072512, =148049888) at obj.c:1839
+	#600012792 in __klee_posix_wrapped_main (=3, =150447616) at nvmbugs/000_pmdk_btree_map/driver.c:35
+	#700011011 in __user_main (=9, =146433664, =146433744) at runtime/POSIX/klee_init_env.c:281
+	#800003300 in __uClibc_main (=46249352, =9, =146433664, =63977224, =63977096, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900003467 in main (=9, =146433664)
+
+6) File: obj.c
+Line: 1265
+assembly.ll line: 88560
+Stack: 
+	#000088560 in obj_runtime_init (=22852710072320, =0, =1, =1024) at obj.c:1265
+	#100091646 in obj_open_common (=148072512, =148049888, =0, =1) at obj.c:1789
+	#200091464 in pmemobj_openU (=148072512, =148049888) at obj.c:1826
+	#300091429 in pmemobj_open (=148072512, =148049888) at obj.c:1839
+	#400012792 in __klee_posix_wrapped_main (=3, =150447616) at nvmbugs/000_pmdk_btree_map/driver.c:35
+	#500011011 in __user_main (=9, =146433664, =146433744) at runtime/POSIX/klee_init_env.c:281
+	#600003300 in __uClibc_main (=46249352, =9, =146433664, =63977224, =63977096, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003467 in main (=9, =146433664)
+
+7) File: obj.c
+Line: 1147
+assembly.ll line: 88044
+Stack: 
+	#000088044 in obj_replica_init (=22852710072320, =231041056, =0, =0) at obj.c:1147
+	#100091873 in obj_replicas_init (=231041056) at obj.c:1659
+	#200091527 in obj_open_common (=148072512, =148049888, =0, =1) at obj.c:1752
+	#300091464 in pmemobj_openU (=148072512, =148049888) at obj.c:1826
+	#400091429 in pmemobj_open (=148072512, =148049888) at obj.c:1839
+	#500012792 in __klee_posix_wrapped_main (=3, =150447616) at nvmbugs/000_pmdk_btree_map/driver.c:35
+	#600011011 in __user_main (=9, =146433664, =146433744) at runtime/POSIX/klee_init_env.c:281
+	#700003300 in __uClibc_main (=46249352, =9, =146433664, =63977224, =63977096, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800003467 in main (=9, =146433664)
+
+8) File: obj.c
+Line: 1042
+assembly.ll line: 90635
+Stack: 
+	#000090635 in obj_replica_init_local (=22852710072320, =1, =8388608) at obj.c:1042
+	#100088122 in obj_replica_init (=22852710072320, =231041056, =0, =0) at obj.c:1169
+	#200091873 in obj_replicas_init (=231041056) at obj.c:1659
+	#300091527 in obj_open_common (=148072512, =148049888, =0, =1) at obj.c:1752
+	#400091464 in pmemobj_openU (=148072512, =148049888) at obj.c:1826
+	#500091429 in pmemobj_open (=148072512, =148049888) at obj.c:1839
+	#600012792 in __klee_posix_wrapped_main (=3, =150447616) at nvmbugs/000_pmdk_btree_map/driver.c:35
+	#700011011 in __user_main (=9, =146433664, =146433744) at runtime/POSIX/klee_init_env.c:281
+	#800003300 in __uClibc_main (=46249352, =9, =146433664, =63977224, =63977096, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900003467 in main (=9, =146433664)
+
+9) File: heap.c
+Line: 1477
+assembly.ll line: 71478
+Stack: 
+	#000071478 in heap_boot (=22852710079024, =22852713226240, =5234688, =22852710078496, =22852710072320, =22852710079288, =245657184, =231041056) at heap.c:1477
+	#100080496 in palloc_boot (=22852710079024, =22852713226240, =5234688, =22852710078496, =22852710072320, =22852710079288, =245657184, =231041056) at palloc.c:877
+	#200080315 in pmalloc_boot (=22852710072320) at pmalloc.c:208
+	#300080099 in lane_recover_and_section_boot (=22852710072320) at lane.c:399
+	#400088959 in obj_runtime_init_common (=22852710072320) at obj.c:859
+	#500088494 in obj_runtime_init (=22852710072320, =0, =1, =1024) at obj.c:1234
+	#600091646 in obj_open_common (=148072512, =148049888, =0, =1) at obj.c:1789
+	#700091464 in pmemobj_openU (=148072512, =148049888) at obj.c:1826
+	#800091429 in pmemobj_open (=148072512, =148049888) at obj.c:1839
+	#900012792 in __klee_posix_wrapped_main (=3, =150447616) at nvmbugs/000_pmdk_btree_map/driver.c:35
+	#1000011011 in __user_main (=9, =146433664, =146433744) at runtime/POSIX/klee_init_env.c:281
+	#1100003300 in __uClibc_main (=46249352, =9, =146433664, =63977224, =63977096, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1200003467 in main (=9, =146433664)
+

@@ -3362,6 +3362,54 @@ void Executor::terminateStateOnError(ExecutionState &state,
     haltExecution = true;
 }
 
+void Executor::terminateStateOnPmemError(ExecutionState &state,
+                                         const std::unordered_set<std::string> &errors) {
+  Instruction * lastInst;
+  const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
+
+  std::string info_str;
+  llvm::raw_string_ostream info(info_str);
+
+  for (const std::string &err : errors) {
+    if (pmemErrorDescriptions.insert(err).second) {
+      if (ii.file != "") {
+        klee_message("ERROR: %s:%d: %s", ii.file.c_str(), ii.line, TerminateReasonNames[TerminateReason::PMem]);
+      } else {
+        klee_message("ERROR: (location information missing) %s", TerminateReasonNames[TerminateReason::PMem]);
+      }
+
+      info << pmemErrorDescriptions.size() << ") " << err << "\n";
+    }
+  }
+
+  if (info.str() != "") {
+    std::string MsgString;
+    llvm::raw_string_ostream msg(MsgString);
+    msg << "Error: persistent memory violation!\n";
+    if (ii.file != "") {
+      msg << "File: " << ii.file << "\n";
+      msg << "Line: " << ii.line << "\n";
+      msg << "assembly.ll line: " << ii.assemblyLine << "\n";
+    }
+    msg << "Stack: \n";
+    state.dumpStack(msg);
+
+    msg << "Errors: \n" << info.str();
+
+    std::string suffix_buf;
+    suffix_buf = TerminateReasonNames[TerminateReason::PMem];
+    suffix_buf += ".err";
+
+    interpreterHandler->processTestCase(state, msg.str().c_str(), suffix_buf.c_str());
+  }  
+
+  terminateState(state);
+
+  if (shouldExitOn(TerminateReason::PMem)) {
+    haltExecution = true;
+  }
+}
+
 // XXX shoot me
 static const char *okExternalsList[] = { "printf",
                                          "fprintf",
@@ -3992,16 +4040,15 @@ void Executor::executeCheckPersistence(ExecutionState &state,
       // }
       // klee_warning("Non-persistence detected!");
       // Should instead do the root cause analysis.
-      std::string addrInfo("\npmem persistence failures:\n");
+      // std::string' addrInfo("\npmem persistence failures:\n");
       // mo->getAllocInfo(addrInfo);
-      uint64_t id = 1;
-      for (const auto &str : nps->getRootCauses(solver, *notPersisted)) {
-        addrInfo += std::to_string(id++) + ") " + str + std::string("\n");
-      }
-      klee_warning("addrInfo: '%s'", addrInfo.c_str());
+      // uint64_t id = 1;
+      // for (const auto &str : ) {
+      //   addrInfo += std::to_string(id++) + ") " + str + std::string("\n");
+      // }
+      // klee_warning("addrInfo: '%s'", addrInfo.c_str());
 
-      terminateStateOnError(*notPersisted, "memory object not persisted",
-                            Executor::PMem, NULL, addrInfo);
+      terminateStateOnPmemError(*notPersisted, nps->getRootCauses(solver, *notPersisted));
     }
   } 
 

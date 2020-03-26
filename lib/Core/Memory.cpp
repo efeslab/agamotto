@@ -929,6 +929,10 @@ std::string PersistentState::getLocationInfo(const ExecutionState &state) {
 
   std::string infoStr;
   llvm::raw_string_ostream msg(infoStr);
+  msg << "Persistent Memory Info:\n";
+  msg << "\tName: " << getObject()->name << "\n";
+  msg << "\tAddress: " << getObject()->address << "\n";
+  msg << "\tSize: " << getObject()->size << "\n";
   if (iip->file != "") {
     msg << "File: " << iip->file << "\n";
     msg << "Line: " << iip->line << "\n";

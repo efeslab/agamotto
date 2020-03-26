@@ -415,7 +415,7 @@ class PersistentState : public ObjectState {
     unsigned numCacheLines() const;
     unsigned cacheLineSize() const;
 
-    static std::string getLocationInfo(const ExecutionState &state);
+    std::string getLocationInfo(const ExecutionState &state);
 };
   
 } // End klee namespace

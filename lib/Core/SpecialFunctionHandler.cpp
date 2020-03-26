@@ -1091,17 +1091,12 @@ void SpecialFunctionHandler::handleIsPmem(ExecutionState &state,
     ObjectPair res;
     bool success;
     assert(state.addressSpace.resolveOne(state, executor.solver, ptrExpr, res, success));
-    assert(success && "could not resolve one!");
+    assert(success && "could not resolve one! (isPmem)");
     pmemObjs.push_back(res);
-    // executor.resolveExact(state, ptrExpr, rl, "klee_pmem_is_pmem (address resolution)");
   }
   
-  // for (Executor::ExactResolutionList::iterator it = rl.begin(), 
-  //        ie = rl.end(); it != ie; ++it) {
   for (ObjectPair &op : pmemObjs) {
-    // const MemoryObject *mo = it->first.first; 
     const ObjectState *os = op.second;
-    // ExecutionState *s = it->second;
 
     ref<Expr> isPmem = ConstantExpr::create(isa<PersistentState>(os), Expr::Bool);
     assert(!isPmem.isNull() && "null boolean expr from klee_pmem_is_pmem!");
@@ -1125,23 +1120,6 @@ void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,
     klee_error("Not sure how to handle symbolic size argument yet!");
   }
 
-  // Executor::ExactResolutionList rl;
-  // for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
-  //   ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
-  //   ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
-  //   executor.resolveExact(state, ptrExpr, rl, "check_persisted");
-  // }
-  
-  // for (Executor::ExactResolutionList::iterator it = rl.begin(), 
-  //        ie = rl.end(); it != ie; ++it) {
-  //   const MemoryObject *mo = it->first.first; 
-  //   const ObjectState *os = it->first.second;
-  //   assert(isa<PersistentState>(os) && "trying to check if non-pmem is persisted!");
-  //   ExecutionState *s = it->second;
-
-  //   executor.executeCheckPersistence(*s, mo);
-  // }
-
   std::list<ObjectPair> pmemObjs;
   for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
     ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
@@ -1150,25 +1128,14 @@ void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,
     ObjectPair res;
     bool success;
     assert(state.addressSpace.resolveOne(state, executor.solver, ptrExpr, res, success));
-    assert(success && "could not resolve one!");
+    assert(success && "could not resolve one! (isPersisted)");
     pmemObjs.push_back(res);
-    // executor.resolveExact(state, ptrExpr, rl, "klee_pmem_is_pmem (address resolution)");
   }
   
-  // for (Executor::ExactResolutionList::iterator it = rl.begin(), 
-  //        ie = rl.end(); it != ie; ++it) {
   for (ObjectPair &op : pmemObjs) {
-    // const MemoryObject *mo = it->first.first; 
-    // const ObjectState *os = op.second;
-    // // ExecutionState *s = it->second;
-
-    // ref<Expr> isPmem = ConstantExpr::create(isa<PersistentState>(os), Expr::Bool);
-    // assert(!isPmem.isNull() && "null boolean expr from klee_pmem_check_persisted!");
-    // executor.bindLocal(target, state, isPmem);  
     const MemoryObject *mo = op.first; 
     const ObjectState *os = op.second;
     assert(isa<PersistentState>(os) && "trying to check if non-pmem is persisted!");
-    // ExecutionState *s = it->second;
 
     executor.executeCheckPersistence(state, mo);
   }
