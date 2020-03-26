@@ -139,7 +139,8 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
   if (ret != MAP_FAILED) {
     // Do this in page sizes to make unmap easier
     size_t pgsz = (size_t)getpagesize();
-    for (void *addr = ret; addr < ret + actual_size; addr += pgsz) {
+    void *addr;
+    for (addr = ret; addr < ret + actual_size; addr += pgsz) {
       klee_define_fixed_object_from_existing(addr, pgsz);
       // if (actual_fd >= 0 && !memcmp(addr, zeros, pgsz)) klee_warning("mmap-ed page is 0!");
       if (actual_fd >= 0) {
@@ -172,7 +173,7 @@ int munmap_sym(char* start, size_t length, exe_disk_file_t* df) {
     klee_warning("arguments passed to munmap are not page aligned; will round to enclosing pages");
   }
   unsigned page_start = offset / pgsz;
-  unsigned page_end = page_start + ceil(length / 4096.0);
+  unsigned page_end = page_start + ceil(length / (double)pgsz);
   // decrement page_refs in interval [page_start, page_end)
   // if ref count goes to zero, check that the page is persisted
   for (; page_start < page_end; page_start++) {
@@ -185,7 +186,7 @@ int munmap_sym(char* start, size_t length, exe_disk_file_t* df) {
       // Force a persistent check on unmap to ensure we check. We can check
       // on sfences, but if a program also omits those, this will be our only
       // check.
-      klee_pmem_check_persisted(df->contents + 4096*page_start, 4096);
+      klee_pmem_check_persisted(df->contents + (pgsz*page_start), pgsz);
     }
   }
   return 0;
@@ -194,6 +195,7 @@ int munmap_sym(char* start, size_t length, exe_disk_file_t* df) {
 int munmap(void *start, size_t length) __attribute__((weak));
 int munmap(void *start, size_t length) {
   size_t actual_size = __concretize_size(length);
+  
   if (__exe_fs.sym_pmem) {
     exe_disk_file_t* df = __exe_fs.sym_pmem;
     // call munmap_pmem if the following intervals overlap:
@@ -208,7 +210,9 @@ int munmap(void *start, size_t length) {
   klee_warning(msg);
 
   size_t pgsz = (size_t)getpagesize();
-  for (void *addr = start; addr < start + actual_size; addr += pgsz) {
+  start = __concretize_ptr(start);
+  void *addr;
+  for (addr = start; addr < start + actual_size; addr += pgsz) {
     // snprintf(msg, 4096, "\tundef(addr=%p, length=%lu)", addr, pgsz);
     // klee_warning(msg);
 
@@ -217,7 +221,9 @@ int munmap(void *start, size_t length) {
       // klee_warning(msg);
       // klee_pmem_check_persisted(addr, pgsz);
     // }
-    klee_pmem_check_persisted(addr, pgsz);
+    if (klee_pmem_is_pmem(addr, pgsz))
+      klee_pmem_check_persisted(addr, pgsz);
+
     klee_undefine_fixed_object(addr);
   }
 

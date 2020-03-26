@@ -782,7 +782,7 @@ void SpecialFunctionHandler::handleCheckMemoryAccess(ExecutionState &state,
 
     if (!state.addressSpace.resolveOne(cast<ConstantExpr>(address), op)) {
       executor.terminateStateOnError(state,
-                                     "check_memory_access: memory error",
+                                     "check_memory_access: memory error (failed to resolve one)",
 				     Executor::Ptr, NULL,
                                      executor.getAddressInfo(state, address));
     } else {
@@ -791,7 +791,7 @@ void SpecialFunctionHandler::handleCheckMemoryAccess(ExecutionState &state,
                                         cast<ConstantExpr>(size)->getZExtValue());
       if (!chk->isTrue()) {
         executor.terminateStateOnError(state,
-                                       "check_memory_access: memory error",
+                                       "check_memory_access: memory error (failed bounds check)",
 				       Executor::Ptr, NULL,
                                        executor.getAddressInfo(state, address));
       }
@@ -1071,6 +1071,48 @@ void SpecialFunctionHandler::handleIsPmem(ExecutionState &state,
                                           KInstruction *target,
                                           std::vector<ref<Expr> > &arguments) {
   assert(arguments.size() == 2 &&
+      "invalid number of arguments to klee_pmem_is_pmem");
+
+  ref<Expr> addr = arguments[0];
+  ref<Expr> size = arguments[1];
+  uint64_t realSize = 0;
+  if (ConstantExpr *ce = dyn_cast<ConstantExpr>(size.get())) {
+    realSize = ce->getZExtValue();
+  } else {
+    size->dump();
+    klee_error("Not sure how to handle symbolic size argument yet!");
+  }
+
+  std::list<ObjectPair> pmemObjs;
+  for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
+    ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
+    ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
+    
+    ObjectPair res;
+    bool success;
+    assert(state.addressSpace.resolveOne(state, executor.solver, ptrExpr, res, success));
+    assert(success && "could not resolve one!");
+    pmemObjs.push_back(res);
+    // executor.resolveExact(state, ptrExpr, rl, "klee_pmem_is_pmem (address resolution)");
+  }
+  
+  // for (Executor::ExactResolutionList::iterator it = rl.begin(), 
+  //        ie = rl.end(); it != ie; ++it) {
+  for (ObjectPair &op : pmemObjs) {
+    // const MemoryObject *mo = it->first.first; 
+    const ObjectState *os = op.second;
+    // ExecutionState *s = it->second;
+
+    ref<Expr> isPmem = ConstantExpr::create(isa<PersistentState>(os), Expr::Bool);
+    assert(!isPmem.isNull() && "null boolean expr from klee_pmem_is_pmem!");
+    executor.bindLocal(target, state, isPmem);  
+  }
+}
+
+void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,
+                                               KInstruction *target,
+                                               std::vector<ref<Expr>> &arguments) {
+  assert(arguments.size()==2 &&
       "invalid number of arguments to klee_pmem_check_persisted");
 
   ref<Expr> addr = arguments[0];
@@ -1083,37 +1125,51 @@ void SpecialFunctionHandler::handleIsPmem(ExecutionState &state,
     klee_error("Not sure how to handle symbolic size argument yet!");
   }
 
-  Executor::ExactResolutionList rl;
+  // Executor::ExactResolutionList rl;
+  // for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
+  //   ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
+  //   ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
+  //   executor.resolveExact(state, ptrExpr, rl, "check_persisted");
+  // }
+  
+  // for (Executor::ExactResolutionList::iterator it = rl.begin(), 
+  //        ie = rl.end(); it != ie; ++it) {
+  //   const MemoryObject *mo = it->first.first; 
+  //   const ObjectState *os = it->first.second;
+  //   assert(isa<PersistentState>(os) && "trying to check if non-pmem is persisted!");
+  //   ExecutionState *s = it->second;
+
+  //   executor.executeCheckPersistence(*s, mo);
+  // }
+
+  std::list<ObjectPair> pmemObjs;
   for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
     ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
     ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
-    executor.resolveExact(state, ptrExpr, rl, "mark_persistent");
+    
+    ObjectPair res;
+    bool success;
+    assert(state.addressSpace.resolveOne(state, executor.solver, ptrExpr, res, success));
+    assert(success && "could not resolve one!");
+    pmemObjs.push_back(res);
+    // executor.resolveExact(state, ptrExpr, rl, "klee_pmem_is_pmem (address resolution)");
   }
   
-  for (Executor::ExactResolutionList::iterator it = rl.begin(), 
-         ie = rl.end(); it != ie; ++it) {
+  // for (Executor::ExactResolutionList::iterator it = rl.begin(), 
+  //        ie = rl.end(); it != ie; ++it) {
+  for (ObjectPair &op : pmemObjs) {
     // const MemoryObject *mo = it->first.first; 
-    const ObjectState *os = it->first.second;
-    ExecutionState *s = it->second;
+    // const ObjectState *os = op.second;
+    // // ExecutionState *s = it->second;
 
-    ref<Expr> isPmem = ConstantExpr::create(isa<PersistentState>(os), Expr::Bool);
-    assert(!isPmem.isNull() && "null boolean expr from klee_pmem_check_persisted!");
-    executor.bindLocal(target, *s, isPmem);  
-  }
-}
+    // ref<Expr> isPmem = ConstantExpr::create(isa<PersistentState>(os), Expr::Bool);
+    // assert(!isPmem.isNull() && "null boolean expr from klee_pmem_check_persisted!");
+    // executor.bindLocal(target, state, isPmem);  
+    const MemoryObject *mo = op.first; 
+    const ObjectState *os = op.second;
+    assert(isa<PersistentState>(os) && "trying to check if non-pmem is persisted!");
+    // ExecutionState *s = it->second;
 
-void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,
-                                               KInstruction *target,
-                                               std::vector<ref<Expr>> &arguments) {
-  assert(arguments.size()==2 &&
-      "invalid number of arguments to klee_pmem_check_persisted");
-
-  // ref<Expr> addr = arguments[0];
-  // ref<Expr> size = arguments[1];
-  klee_warning_once(0, "klee_pmem_is_pmem currently checks all persistent memory in the system");
-
-  for (const MemoryObject *mo : state.persistentObjects) {
-    // klee_warning("Doing handleIsPersisted for %p", (void*)mo->address);
     executor.executeCheckPersistence(state, mo);
   }
 }

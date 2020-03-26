@@ -15,6 +15,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <malloc.h>
+#include <math.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -143,48 +144,15 @@ static int has_permission(int flags, struct stat64 *s) {
   return 1;
 }
 
+static int __concretize_int(int i) {
+  int c = klee_get_value_i32(i);
+  klee_assume(c == i);
+  return c;
+}
 
-// largely copied from fd_init.c:__create_new_dfile
-// biggest difference is not allocating the contents until the mmap later
-// return value: 0 means fine, non-zero means error
-static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
-                               const char *name, struct stat64 *defaults) {
-  struct stat64 *s = malloc(sizeof(*s));
-  const char *sp;
-  char sname[64];
-  for (sp=name; *sp; ++sp)
-    sname[sp-name] = *sp;
-  memcpy(&sname[sp-name], "-stat", 6);
-  // snprintf(sname, 64, "%s-stat", name);
+static void __setup_pmem_struct_stat(struct stat64 *s, exe_disk_file_t *dfile, struct stat64 *defaults, const char *sname) {
 
-  assert(size);
-  size_t pgsz = getpagesize();
-  if (size % pgsz != 0) {
-    klee_error("pmem file size must be multiple of page size (4096)");
-    return -1;
-  }
-
-  dfile->size = size;
-  // FIXME: page aligned vs. cache aligned
-  dfile->contents = memalign(pgsz, dfile->size);
-  if (__exe_fs.sym_pmem_init_concrete) {
-    if (__exe_fs.sym_pmem_init_to_zero) {
-      // memset(dfile->contents, 0, dfile->size);
-      klee_init_concrete_zero(dfile->contents, dfile->size);
-    } else {
-      int fd = __fd_open(__exe_fs.sym_pmem_init_from, O_RDONLY, 0);
-      assert(fd != -1);
-      size_t total_read = 0;
-      while (total_read < (size_t)dfile->size) {
-        ssize_t ret = read(fd, dfile->contents + total_read, dfile->size - total_read);
-        assert(ret > 0);
-        total_read += ret;
-      }
-    }
-  }
-  // FIXME: proper name, not just "data"
-  klee_pmem_mark_persistent(dfile->contents, dfile->size, "pmem_file_data");
-  
+  size_t pgsz = (size_t)getpagesize();
   // FIXME: what should stat64 actually be?
   klee_make_symbolic(s, sizeof(*s), sname);
 
@@ -237,12 +205,81 @@ static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
     s->st_size = dfile->size;
   }
   s->st_blocks = 8;
+}
+
+// largely copied from fd_init.c:__create_new_dfile
+// biggest difference is not allocating the contents until the mmap later
+// return value: 0 means fine, non-zero means error
+static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
+                               const char *name, struct stat64 *defaults) {
+  struct stat64 *s = malloc(sizeof(*s));
+  const char *sp;
+  char sname[64];
+  for (sp=name; *sp; ++sp)
+    sname[sp-name] = *sp;
+  memcpy(&sname[sp-name], "-stat", 6);
+  // snprintf(sname, 64, "%s-stat", name);
+
+  assert(size);
+  size_t pgsz = getpagesize();
+  if (size % pgsz != 0) {
+    klee_error("pmem file size must be multiple of page size (4096)");
+    return -1;
+  }
+
+  dfile->size = size;
+  // FIXME: page aligned vs. cache aligned
+  dfile->contents = memalign(pgsz, dfile->size);
+  if (__exe_fs.sym_pmem_init_concrete) {
+    if (__exe_fs.sym_pmem_init_to_zero) {
+      // memset(dfile->contents, 0, dfile->size);
+      klee_init_concrete_zero(dfile->contents, dfile->size);
+    } else {
+      klee_warning("Setting up from the concrete file!");
+      klee_set_forking(0);
+      int fd = syscall(__NR_open, __exe_fs.sym_pmem_init_from, O_RDONLY, 0);
+      assert(fd != -1);
+      // Confirm the region is the right size.
+      struct stat64 init_stat;
+      int sret = __concretize_int(syscall(__NR_fstat, fd, &init_stat));
+      assert(!sret);
+      assert(dfile->size == __concretize_size(init_stat.st_size) && "init-from-file needs to be the same size as the symbolic pmem file!");
+
+      // Now give this file the same metadata as the concrete one.
+      memcpy(s, &init_stat, sizeof(struct stat64));
+
+      size_t total_read = 0;
+      while (total_read < (size_t)dfile->size) {
+        // (iangneal) XXX: this is a hack as read expects a single memory object, 
+        // and memalign splits them into smaller memory objects. So, we just read 
+        // a page at a time. 
+        size_t toRead = __concretize_size((dfile->size - total_read) < pgsz ? dfile->size - total_read : pgsz);
+        ssize_t ret = __concretize_int(syscall(__NR_read, fd, __concretize_ptr(dfile->contents + total_read), toRead));
+        if (ret <= 0) {
+          fprintf(stderr, "read(%d, %p, %lu) for setup returned %ld, reason is %d (%s)\n", 
+                  fd, dfile->contents + toRead, toRead, ret, errno, strerror(errno));
+        }
+        assert(ret > 0);
+        total_read += ret;
+      }
+      klee_set_forking(1);
+      klee_warning("done!");
+    }
+  }
+  // FIXME: proper name, not just "data"
+  klee_pmem_mark_persistent(dfile->contents, dfile->size, "pmem_file_data");
+  
+  if (!__exe_fs.sym_pmem_init_concrete || __exe_fs.sym_pmem_init_to_zero) {
+    __setup_pmem_struct_stat(s, dfile, defaults, sname);
+  }
+  
   dfile->stat = s;
 
   unsigned num_pages = dfile->size / pgsz;
   unsigned total_size = sizeof(unsigned)*num_pages;
   dfile->page_refs = malloc(total_size);
-  for (unsigned i = 0; i < num_pages; i++) {
+  unsigned i;
+  for (i = 0; i < num_pages; i++) {
     dfile->page_refs[i] = 0;
   }
 
@@ -257,10 +294,11 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
   /* Special case Persistent-Memory handling */
   // file to be used for persistent memory-mapping
   int isPmemFile = !strcmp(pathname, __exe_fs.sym_pmem_filename);
-  if (isPmemFile) {
+  if (isPmemFile && !__exe_fs.sym_pmem) {
+  // if (isPmemFile) {
     // stealing this code from fd_init.c:klee_init_fds
     struct stat64 s;
-    stat64(".", &s);
+    stat64(".", &s); // For the defaults.
     __exe_fs.sym_pmem = malloc(sizeof(*__exe_fs.sym_pmem) * 1);
     if (-1 == __create_pmem_dfile(__exe_fs.sym_pmem, __exe_fs.sym_pmem_size, pathname, &s)) {
       return -1;
@@ -328,7 +366,9 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
       klee_warning("!has_permission");
       errno = EACCES;
       return -1;
-    } else {
+    } else if (!isPmemFile) {
+      // (iangneal): why? We do this only for non-pmem files cuz otherwise
+      // we have to re-init the pmem file
       f->dfile->stat->st_mode = ((f->dfile->stat->st_mode & ~0777) |
 				 (mode & ~__exe_env.umask));
     }
@@ -479,10 +519,12 @@ int close(int fd) {
     unsigned page_end = ceil(f->dfile->size / (double)pgsz);
     // decrement page_refs in interval [page_start, page_end)
     // if ref count goes to zero, check that the page is persisted
-    for (unsigned pageno = 0u; pageno < page_end; pageno++) {
+    unsigned pageno;
+    for (pageno = 0u; pageno < page_end; pageno++) {
       // Not sure if we should do anything about the page refs here.
-      if (f->dfile->page_refs[pageno]) {
-        klee_pmem_check_persisted(f->dfile->contents + (pgsz*pageno), pgsz);
+      void *addr = f->dfile->contents + (pgsz * pageno);
+      if (f->dfile->page_refs[pageno] && addr && klee_pmem_is_pmem(addr, pgsz)) {
+        klee_pmem_check_persisted(addr, pgsz);
       }
     }
   }
@@ -536,6 +578,7 @@ ssize_t read(int fd, void *buf, size_t count) {
     /* XXX In terms of looking for bugs we really should do this check
        before concretization, at least once the routine has been fixed
        to properly work with symbolics. */
+    // fprintf(stderr, "read: checking access to [%p, %p)\n", buf, buf + count);
     klee_check_memory_access(buf, count);
     if (f->fd == 0)
       r = syscall(__NR_read, f->fd, buf, count);
@@ -729,8 +772,7 @@ int fstatat(int fd, const char *path, struct stat *buf, int flags) {
   } 
 
 #if (defined __NR_newfstatat) && (__NR_newfstatat != 0)
-  return syscall(__NR_newfstatat, (long)fd,
-                 (path ? __concretize_string(path) : NULL), buf, (long)flags);
+  return syscall(__NR_newfstatat, (long)fd, __concretize_string(path), buf, (long)flags);
 #else
   return syscall(__NR_fstatat64, (long)fd,
                  (path ? __concretize_string(path) : NULL), buf, (long)flags);
@@ -1538,6 +1580,7 @@ static size_t __concretize_size(size_t s) {
 static const char *__concretize_string(const char *s) {
   char *sc = __concretize_ptr(s);
   unsigned i;
+  if (!sc) return sc;
 
   for (i = 0;; ++i, ++sc) {
     char c = *sc;
