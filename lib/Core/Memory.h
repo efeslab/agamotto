@@ -330,8 +330,46 @@ class PersistentState : public ObjectState {
     std::vector<ref<Expr>> idxConstraints;
 
     /**
-     * (iangneal): We want symbolic root-cause detection. This is how:
+     * (iangneal): We want symbolic root-cause detection. 
      * 
+     * This is why:
+     * Each symbolic write can dirty a potentially large range of values if a
+     * symbolic offset is used as part of the write. At the extreme, the program
+     * could write at an unconstrained offset, potentially dirtying any 
+     * cacheline!
+     * 
+     * We already have facilities for solving whether or not a cacheline is 
+     * dirty or clean. However, for each cacheline we determine to not be clean,
+     * we would also like to know where it was most recently modified. This way,
+     * we can let the developer know where they might need to add some persists,
+     * or at least begin their search for finding the bug. Without this 
+     * information, it is nearly impossible to figure out where the bug is for
+     * programs of non-trivial size.
+     * 
+     * To track these root causes, we use a similar symbolic cacheline
+     * construction to how we track clean/dirty bits. Every time we dirty a 
+     * cache line, we update the state of the cacheline, and also write a 
+     * unique ID value into the root cause update list at the same symbolic 
+     * offset. When we perform a flush, we write a 0, equivalent to "no root
+     * cause." As a performance optimization, we only solve this array when we
+     * determine that the entire system is not guaranteed to be persistent.
+     * 
+     * We chose to do this symbolically for several reasons:
+     * 1. We can natively handle the symbolic offsets that dirty the cachelines.
+     * 2. We can use the solver to determine which root causes are still
+     * relevant (i.e. not flushed) at the time of the check. For example, the
+     * system may write at symbolic offset A, write at symbolic offset B, and 
+     * flush at symbolic offset C. Resolving if A is flushed or if B is flushed
+     * (A and B could also resolve to the same set of cache lines and both be
+     * flushed, or C could flush unrelated addresses) is a task for the solver.
+     * We can then iterate over all known root causes to see if each cacheline 
+     * could have been dirtied by that location (cachelines could also 
+     * potentially be dirtied by different locations, so the most recent 
+     * location could be multiple values.)
+     * 3. It was easy to implement and reason about given the current 
+     * infrastructure.
+     * 
+     * This is how:
      * Every time we dirty a cacheline, we create an update to those same 
      * cachelines with a pointer value. This pointer will point to a program
      * location. We will also track a set with all possible locations, as we
