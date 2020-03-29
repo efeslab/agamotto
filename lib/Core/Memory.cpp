@@ -13,7 +13,7 @@
 #include "MemoryManager.h"
 #include "ObjectHolder.h"
 
-#include "klee/Expr/ArrayCache.h"
+#include "klee/Expr/ArrayCache.h" 
 #include "klee/Expr/Expr.h"
 #include "klee/Expr/ExprPPrinter.h"
 #include "klee/Internal/Support/ErrorHandling.h"
@@ -760,24 +760,10 @@ void PersistentState::commitPendingPersists() {
   cacheLineUpdates = pendingCacheLineUpdates;
 }
 
-ref<Expr> PersistentState::isPersisted(ExecutionState &state) const {
-  /**
-   * This is extremely inefficient for large objects.
-   */
-  // AND together all cache lines.
-  #if 0
-  ref<Expr> result = isCacheLinePersisted(0);
-  for (unsigned i = 1; i < numCacheLines(); ++i) {
-    result = AndExpr::create(isCacheLinePersisted(i), result);
-  }
-  return EqExpr::create(getPersistedExpr(), result);
-  #else
-  // idxUnbounded->dump();
-  // idxBounded->dump();
-  state.constraints.addConstraint(idxConstraints.front());
-  return EqExpr::create(getPersistedExpr(), isCacheLinePersisted(idxUnbounded));
-  #endif
-}
+// ref<Expr> PersistentState::isPersisted(ExecutionState &state) const {
+//   state.constraints.addConstraint(idxConstraints.front());
+//   return EqExpr::create(getPersistedExpr(), isCacheLinePersisted(idxUnbounded));
+// }
 
 ref<Expr> PersistentState::isPersistedUnconstrained() const {
   return EqExpr::create(getPersistedExpr(), isCacheLinePersisted(idxUnbounded));
@@ -789,17 +775,9 @@ void PersistentState::clearRootCauses() {
 
 std::unordered_set<std::string> PersistentState::getRootCauses(
     TimingSolver *solver, ExecutionState &state) const {
-  #if 0
-  std::unordered_set<std::string> ret;
-  for (unsigned i = 0; i < numCacheLines(); ++i) {
-    std::unordered_set<std::string> locs = getRootCause(solver, state, i);
-    ret.insert(locs.begin(), locs.end());
-  }
-
-  return ret;
-  #elif 1
   std::unordered_set<std::string> causes;
 
+  // Copy the constraint manager to reset the constraints once we are finished.
   ConstraintManager orig = state.constraints;
   for (const ref<Expr> &sliceConstraint : idxConstraints) {
     ConstraintManager cm = orig; // copy
@@ -813,9 +791,6 @@ std::unordered_set<std::string> PersistentState::getRootCauses(
   state.constraints = orig;
   
   return causes;
-  #else 
-  return getRootCause(solver, state, idxUnbounded);
-  #endif
 }
 
 ref<Expr> PersistentState::isCacheLinePersisted(unsigned cacheLine) const {
@@ -825,18 +800,18 @@ ref<Expr> PersistentState::isCacheLinePersisted(unsigned cacheLine) const {
 ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine) const {
   ref<Expr> result = ReadExpr::create(cacheLineUpdates,
                                       ZExtExpr::create(cacheLine, Expr::Int32));
-  /* llvm::errs() << getObject()->name << ":\n"; */
-  /* ExprPPrinter::printOne(llvm::errs(), "isCacheLinePersisted", result); */
   return result;
 }
 
-std::unordered_set<std::string> PersistentState::getRootCause(
-  TimingSolver *solver, ExecutionState &state, unsigned cacheLine) const {
+std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solver, 
+                                                              ExecutionState &state, 
+                                                              unsigned cacheLine) const {
   return getRootCause(solver, state, klee::ConstantExpr::create(cacheLine, Expr::Int32));
 }
 
-std::unordered_set<std::string> PersistentState::getRootCause(
-  TimingSolver *solver, ExecutionState &state, ref<Expr> cacheLine) const {
+std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solver, 
+                                                              ExecutionState &state, 
+                                                              ref<Expr> cacheLine) const {
   ref<Expr> result = ReadExpr::create(rootCauseLocations,
                                       ZExtExpr::create(cacheLine, Expr::Int32));
   

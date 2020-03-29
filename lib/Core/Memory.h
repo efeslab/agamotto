@@ -366,13 +366,20 @@ class PersistentState : public ObjectState {
     ObjectState *clone() const override;
 
     virtual Kind getKind() const override { return Persistent; }
+
     static bool classof(const ObjectState *os) {
       return os->getKind() == Persistent;
     }
 
-    void write8(const ExecutionState &state, unsigned offset, uint8_t value) override;
-    void write8(const ExecutionState &state, unsigned offset, ref<Expr> value) override;
-    void write8(const ExecutionState &state, ref<Expr> offset, ref<Expr> value) override;
+    void write8(const ExecutionState &state, 
+                unsigned offset, 
+                uint8_t value) override;
+    void write8(const ExecutionState &state, 
+                unsigned offset, 
+                ref<Expr> value) override;
+    void write8(const ExecutionState &state, 
+                ref<Expr> offset, 
+                ref<Expr> value) override;
 
     void dirtyCacheLineAtOffset(const ExecutionState &state, unsigned offset);
     void dirtyCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset);
@@ -382,19 +389,28 @@ class PersistentState : public ObjectState {
     void persistCacheLineAtOffset(ref<Expr> offset);
 
     void commitPendingPersists();
+    
+    // ref<Expr> isPersisted(ExecutionState &state) const;
 
-    // Returns true if all modified cache lines
-    // are guaranteed to be persisted.
-    ref<Expr> isPersisted(ExecutionState &state) const;
-
+    /**
+     * Creates an expression that evaluates if, for 0 <= idx < INT_MAX, 
+     * if every cacheline at idx is persisted.
+     * 
+     * For this to work properly, you need to constrain the value of the state 
+     * using the constraints from getConstraints() and add them to the current 
+     * state's constraint manager.
+     */
     ref<Expr> isPersistedUnconstrained() const;
 
-    const std::vector<ref<Expr>> getConstraints() const { return idxConstraints; }
+    const std::vector<ref<Expr>> getConstraints() const { 
+      return idxConstraints; 
+    }
 
     // If we are known to per persistent, do this to optimize.
     void clearRootCauses();
 
-    std::unordered_set<std::string> getRootCauses(TimingSolver *solver, ExecutionState &state) const;
+    std::unordered_set<std::string> getRootCauses(TimingSolver *solver, 
+                                                  ExecutionState &state) const;
 
     bool mustBePersisted(TimingSolver *solver, ExecutionState &state) const;
 
@@ -406,8 +422,12 @@ class PersistentState : public ObjectState {
     ref<Expr> isCacheLinePersisted(unsigned offset) const;
     ref<Expr> isCacheLinePersisted(ref<Expr> offset) const;
 
-    std::unordered_set<std::string> getRootCause(TimingSolver *solver, ExecutionState &state, unsigned offset) const;
-    std::unordered_set<std::string> getRootCause(TimingSolver *solver, ExecutionState &state, ref<Expr> offset) const;
+    std::unordered_set<std::string> getRootCause(TimingSolver *solver, 
+                                                 ExecutionState &state, 
+                                                 unsigned offset) const;
+    std::unordered_set<std::string> getRootCause(TimingSolver *solver, 
+                                                 ExecutionState &state, 
+                                                 ref<Expr> offset) const;
 
     static ref<Expr> ptrAsExpr(void *kinst);
 
