@@ -336,6 +336,39 @@ namespace klee {
       }
 
       /**
+       * 
+       */
+      std::list<std::shared_ptr<NvmInstructionDesc>> getUniqueSuccessors(void) {
+        std::list<std::shared_ptr<NvmInstructionDesc>> uniq;
+
+        if (!curr_) return uniq;
+
+        llvm::Instruction *curr = curr_->inst;
+        llvm::Function *cfn = curr->getFunction();
+        llvm::DominatorTree dom(*cfn);
+
+        for (std::shared_ptr<NvmInstructionDesc> &sp : successors_) {
+          
+          llvm::Instruction *succ = sp->curr_->inst;
+          llvm::Function *sfn = succ->getFunction();
+
+          if (cfn == sfn && dom.dominates(succ, curr)) {
+            // Loop detection. Skip.
+            continue;
+          } else if (isa<llvm::CallInst>(curr) && 
+                     cfn == sfn && 
+                     values_->caller_values_ == sp->values_) {
+            // Uninteresting recursion, as we have the same set of values.
+            continue;
+          }
+
+          uniq.push_back(sp);
+        }
+
+        return uniq;
+      }
+
+      /**
        * This allows the process to be forward and backward. After we find all
        * block weights, we go from the ends back up to bubble up the overall
        * priority.
@@ -352,9 +385,33 @@ namespace klee {
        * 
        * If the current node dominates one of it's predecessors, 
        */
-      std::list<std::shared_ptr<NvmInstructionDesc>> getStrictPredecessors() {
-        auto preds = predecessors_;
-        return preds;
+      std::list<std::shared_ptr<NvmInstructionDesc>> getUniquePredecessors() {
+        std::list<std::shared_ptr<NvmInstructionDesc>> uniq;
+
+        if (!curr_) return uniq;
+
+        llvm::Instruction *curr = curr_->inst;
+        llvm::Function *cfn = curr->getFunction();
+        llvm::DominatorTree dom(*cfn);
+
+        for (std::shared_ptr<NvmInstructionDesc> &pptr : predecessors_) {
+          llvm::Instruction *pred = pptr->curr_->inst;
+          llvm::Function *pfn = pred->getFunction();
+
+          if (cfn == pfn && dom.dominates(curr, pred)) {
+            // Loop detection. Skip.
+            continue;
+          } else if (isa<llvm::CallInst>(curr) && 
+                     cfn == pfn && 
+                     values_->caller_values_ == pptr->values_) {
+            // Uninteresting recursion, as we have the same set of values.
+            continue;
+          }
+
+          uniq.push_back(pptr);
+        }
+
+        return uniq;
       }
 
       uint64_t getWeight(void) const { return weight_; };
