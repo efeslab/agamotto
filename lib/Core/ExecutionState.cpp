@@ -18,6 +18,7 @@
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/Support/ErrorHandling.h"
 #include "klee/OptionCategories.h"
+#include "klee/Interpreter.h"
 
 #include "llvm/IR/Function.h"
 #include "llvm/Support/CommandLine.h"
@@ -71,7 +72,9 @@ StackFrame::~StackFrame() {
 
 /***/
 
-ExecutionState::ExecutionState(Executor *executor, KFunction *kf, bool enableNvmHeuristic) :
+ExecutionState::ExecutionState(Executor *executor, 
+                               KFunction *kf, 
+                               const Interpreter::ModuleOptions &modOpts) :
     pc(kf->instructions),
     prevPC(pc),
 
@@ -85,7 +88,7 @@ ExecutionState::ExecutionState(Executor *executor, KFunction *kf, bool enableNvm
     ptreeNode(0),
     steppedInstructions(0) {
   pushFrame(0, kf);
-  if (enableNvmHeuristic) {
+  if (modOpts.EnableNvmInfo) {
     nvmInfo = std::make_unique<NvmHeuristicInfo>(executor, kf, this);
   }
 }

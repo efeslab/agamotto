@@ -32,15 +32,17 @@
 #include <cassert>
 #include <sstream>
 
-using namespace llvm;
 using namespace klee;
 
+using llvm::GlobalValue;
+using llvm::Instruction;
+
 namespace {
-  cl::opt<bool>
+  llvm::cl::opt<bool>
   UseConstantArrays("use-constant-arrays",
-                    cl::desc("Use constant arrays instead of updates when possible (default=true)\n"),
-                    cl::init(true),
-                    cl::cat(SolvingCat));
+                    llvm::cl::desc("Use constant arrays instead of updates when possible (default=true)\n"),
+                    llvm::cl::init(true),
+                    llvm::cl::cat(SolvingCat));
 }
 
 /***/
@@ -205,21 +207,21 @@ const UpdateList &ObjectState::getUpdates() const {
       Writes[i] = std::make_pair(un->index, un->value);
     }
 
-    std::vector< ref<klee::ConstantExpr> > Contents(size);
+    std::vector< ref<ConstantExpr> > Contents(size);
 
     // Initialize to zeros.
     for (unsigned i = 0, e = size; i != e; ++i)
-      Contents[i] = klee::ConstantExpr::create(0, Expr::Int8);
+      Contents[i] = ConstantExpr::create(0, Expr::Int8);
 
     // Pull off as many concrete writes as we can.
     unsigned Begin = 0, End = Writes.size();
     for (; Begin != End; ++Begin) {
       // Push concrete writes into the constant array.
-      klee::ConstantExpr *Index = dyn_cast<klee::ConstantExpr>(Writes[Begin].first);
+      ConstantExpr *Index = dyn_cast<ConstantExpr>(Writes[Begin].first);
       if (!Index)
         break;
 
-      klee::ConstantExpr *Value = dyn_cast<klee::ConstantExpr>(Writes[Begin].second);
+      ConstantExpr *Value = dyn_cast<ConstantExpr>(Writes[Begin].second);
       if (!Value)
         break;
 
@@ -244,7 +246,7 @@ void ObjectState::flushToConcreteStore(TimingSolver *solver,
                                        const ExecutionState &state) const {
   for (unsigned i = 0; i < size; i++) {
     if (isByteKnownSymbolic(i)) {
-      ref<klee::ConstantExpr> ce;
+      ref<ConstantExpr> ce;
       bool success = solver->getValue(state, read8(i), ce);
       if (!success)
         klee_warning("Solver timed out when getting a value for external call, "
@@ -312,11 +314,11 @@ void ObjectState::flushRangeForRead(unsigned rangeBase,
   for (unsigned offset=rangeBase; offset<rangeBase+rangeSize; offset++) {
     if (!isByteFlushed(offset)) {
       if (isByteConcrete(offset)) {
-        updates.extend(klee::ConstantExpr::create(offset, Expr::Int32),
-                       klee::ConstantExpr::create(concreteStore[offset], Expr::Int8));
+        updates.extend(ConstantExpr::create(offset, Expr::Int32),
+                       ConstantExpr::create(concreteStore[offset], Expr::Int8));
       } else {
         assert(isByteKnownSymbolic(offset) && "invalid bit set in flushMask");
-        updates.extend(klee::ConstantExpr::create(offset, Expr::Int32),
+        updates.extend(ConstantExpr::create(offset, Expr::Int32),
                        knownSymbolics[offset]);
       }
 
@@ -332,12 +334,12 @@ void ObjectState::flushRangeForWrite(unsigned rangeBase,
   for (unsigned offset=rangeBase; offset<rangeBase+rangeSize; offset++) {
     if (!isByteFlushed(offset)) {
       if (isByteConcrete(offset)) {
-        updates.extend(klee::ConstantExpr::create(offset, Expr::Int32),
-                       klee::ConstantExpr::create(concreteStore[offset], Expr::Int8));
+        updates.extend(ConstantExpr::create(offset, Expr::Int32),
+                       ConstantExpr::create(concreteStore[offset], Expr::Int8));
         markByteSymbolic(offset);
       } else {
         assert(isByteKnownSymbolic(offset) && "invalid bit set in flushMask");
-        updates.extend(klee::ConstantExpr::create(offset, Expr::Int32),
+        updates.extend(ConstantExpr::create(offset, Expr::Int32),
                        knownSymbolics[offset]);
         setKnownSymbolic(offset, 0);
       }
@@ -407,19 +409,19 @@ void ObjectState::setKnownSymbolic(unsigned offset,
 
 ref<Expr> ObjectState::read8(unsigned offset) const {
   if (isByteConcrete(offset)) {
-    return klee::ConstantExpr::create(concreteStore[offset], Expr::Int8);
+    return ConstantExpr::create(concreteStore[offset], Expr::Int8);
   } else if (isByteKnownSymbolic(offset)) {
     return knownSymbolics[offset];
   } else {
     assert(isByteFlushed(offset) && "unflushed byte without cache value");
     
     return ReadExpr::create(getUpdates(), 
-                            klee::ConstantExpr::create(offset, Expr::Int32));
+                            ConstantExpr::create(offset, Expr::Int32));
   }    
 }
 
 ref<Expr> ObjectState::read8(ref<Expr> offset) const {
-  assert(!isa<klee::ConstantExpr>(offset) && "constant offset passed to symbolic read8");
+  assert(!isa<ConstantExpr>(offset) && "constant offset passed to symbolic read8");
   unsigned base, size;
   fastRangeCheckOffset(offset, &base, &size);
   flushRangeForRead(base, size);
@@ -446,7 +448,7 @@ void ObjectState::write8(const ExecutionState &_unused, unsigned offset, uint8_t
 
 void ObjectState::write8(const ExecutionState &state, unsigned offset, ref<Expr> value) {
   // can happen when ExtractExpr special cases
-  if (klee::ConstantExpr *CE = dyn_cast<klee::ConstantExpr>(value)) {
+  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
     write8(state, offset, (uint8_t) CE->getZExtValue(8));
   } else {
     setKnownSymbolic(offset, value.get());
@@ -457,7 +459,7 @@ void ObjectState::write8(const ExecutionState &state, unsigned offset, ref<Expr>
 }
 
 void ObjectState::write8(const ExecutionState &_unused, ref<Expr> offset, ref<Expr> value) {
-  assert(!isa<klee::ConstantExpr>(offset) && "constant offset passed to symbolic write8");
+  assert(!isa<ConstantExpr>(offset) && "constant offset passed to symbolic write8");
   unsigned base, size;
   fastRangeCheckOffset(offset, &base, &size);
   flushRangeForWrite(base, size);
@@ -480,7 +482,7 @@ ref<Expr> ObjectState::read(ref<Expr> offset, Expr::Width width) const {
   offset = ZExtExpr::create(offset, Expr::Int32);
 
   // Check for reads at constant offsets.
-  if (klee::ConstantExpr *CE = dyn_cast<klee::ConstantExpr>(offset))
+  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(offset))
     return read(CE->getZExtValue(32), width);
 
   // Treat bool specially, it is the only non-byte sized write we allow.
@@ -494,7 +496,7 @@ ref<Expr> ObjectState::read(ref<Expr> offset, Expr::Width width) const {
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
     ref<Expr> Byte = read8(AddExpr::create(offset, 
-                                           klee::ConstantExpr::create(idx, 
+                                           ConstantExpr::create(idx, 
                                                                 Expr::Int32)));
     Res = i ? ConcatExpr::create(Byte, Res) : Byte;
   }
@@ -525,7 +527,7 @@ void ObjectState::write(const ExecutionState &state, ref<Expr> offset, ref<Expr>
   offset = ZExtExpr::create(offset, Expr::Int32);
 
   // Check for writes at constant offsets.
-  if (klee::ConstantExpr *CE = dyn_cast<klee::ConstantExpr>(offset)) {
+  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(offset)) {
     write(state, CE->getZExtValue(32), value);
     return;
   }
@@ -542,16 +544,16 @@ void ObjectState::write(const ExecutionState &state, ref<Expr> offset, ref<Expr>
   assert(w == NumBytes * 8 && "Invalid write size!");
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(state, AddExpr::create(offset, klee::ConstantExpr::create(idx, Expr::Int32)),
+    write8(state, AddExpr::create(offset, ConstantExpr::create(idx, Expr::Int32)),
            ExtractExpr::create(value, 8 * i, Expr::Int8));
   }
 }
 
 void ObjectState::write(const ExecutionState &state, unsigned offset, ref<Expr> value) {
   // Check for writes of constant values.
-  if (klee::ConstantExpr *CE = dyn_cast<klee::ConstantExpr>(value)) {
+  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
     Expr::Width w = CE->getWidth();
-    if (w <= 64 && klee::bits64::isPowerOfTwo(w)) {
+    if (w <= 64 && bits64::isPowerOfTwo(w)) {
       uint64_t val = CE->getZExtValue();
       switch (w) {
       default: assert(0 && "Invalid write size!");
@@ -638,7 +640,7 @@ PersistentState::PersistentState(const ObjectState *os,
     idxEmptyUpdates(idxArray, nullptr),
     rootCauseLocations(rootCauses, nullptr) {
   // -- For cacheline stuff
-  // 0 <= X <= 2^32
+  // 0 <= X < 2^32
   idxUnbounded = ReadExpr::create(idxEmptyUpdates,
                                   ConstantExpr::create(0, idxArray->range));
   // idxUnbounded = ReadExpr::createTempRead(idxArray, idxArray->range);
@@ -646,35 +648,9 @@ PersistentState::PersistentState(const ObjectState *os,
 
   assert(!(numCacheLines() % nrLinesPerSlice) && "not divisible!");
 
-  #if 0
-  for (unsigned start = 0; start < numCacheLines(); start += nrLinesPerSlice) {
-    ref<Expr> lowerBound = UleExpr::create(ConstantExpr::create(start, idxArray->range), idxUnbounded);
-    unsigned end = start + nrLinesPerSlice;
-    ref<Expr> upperBound = UltExpr::create(idxUnbounded, ConstantExpr::create(end, idxArray->range));
-    ref<Expr> bounds = AndExpr::create(lowerBound, upperBound);
-
-    idxConstraints.push_back(bounds);
-  }
-  #else 
   ref<Expr> lowerBound = UleExpr::create(ConstantExpr::create(0, idxArray->range), idxUnbounded);
   ref<Expr> upperBound = UltExpr::create(idxUnbounded, ConstantExpr::create(numCacheLines(), idxArray->range));
   idxConstraints.push_back(AndExpr::create(lowerBound, upperBound));
-  #endif
-
-  // Asserts X < numCacheLines 
-  // ref<Expr> nrLines = ConstantExpr::create(numCacheLines(), idxArray->range);
-  // // nrLines->dump();
-  // idxUpperBound = UltExpr::create(idxUnbounded, nrLines);
-  // // Asserts 0 <= X
-  // idxLowerBound = UleExpr::create(ConstantExpr::create(0, idxArray->range), idxUnbounded);
-  // // Asserts 0 <= X < numCacheLines
-  // // ConstraintManager constraints;
-  // // constraints.addConstraint(idxUpperBound);
-  // // constraints.addConstraint(idxLowerBound);
-  // // idxBounded = constraints.simplifyExpr(idxUnbounded);
-  // idxBounded = AndExpr::create(idxLowerBound, idxUpperBound);
-  // idxBounded->dump();
-  // assert(idxUnbounded != idxBounded);
 }
 
 PersistentState::PersistentState(const PersistentState &ps)
@@ -710,7 +686,7 @@ void PersistentState::write8(const ExecutionState &state, ref<Expr> offset, ref<
 }
 
 void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state, unsigned offset) {
-  dirtyCacheLineAtOffset(state, klee::ConstantExpr::create(offset, Expr::Int32));
+  dirtyCacheLineAtOffset(state, ConstantExpr::create(offset, Expr::Int32));
 }
 
 void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset) {
@@ -739,7 +715,7 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state, ref<Ex
 }
 
 void PersistentState::persistCacheLineAtOffset(unsigned offset) {
-  persistCacheLineAtOffset(klee::ConstantExpr::create(offset, Expr::Int32));
+  persistCacheLineAtOffset(ConstantExpr::create(offset, Expr::Int32));
 }
 
 void PersistentState::persistCacheLineAtOffset(ref<Expr> offset) {
@@ -794,7 +770,7 @@ std::unordered_set<std::string> PersistentState::getRootCauses(
 }
 
 ref<Expr> PersistentState::isCacheLinePersisted(unsigned cacheLine) const {
-  return isCacheLinePersisted(klee::ConstantExpr::create(cacheLine, Expr::Int32));
+  return isCacheLinePersisted(ConstantExpr::create(cacheLine, Expr::Int32));
 }
 
 ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine) const {
@@ -806,7 +782,7 @@ ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine) const {
 std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solver, 
                                                               ExecutionState &state, 
                                                               unsigned cacheLine) const {
-  return getRootCause(solver, state, klee::ConstantExpr::create(cacheLine, Expr::Int32));
+  return getRootCause(solver, state, ConstantExpr::create(cacheLine, Expr::Int32));
 }
 
 std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solver, 
@@ -866,7 +842,7 @@ bool PersistentState::mustBePersisted(TimingSolver *solver, ExecutionState &stat
 
 ref<Expr> PersistentState::getCacheLine(ref<Expr> offset) const {
   return ZExtExpr::create(UDivExpr::create(offset,
-                                           klee::ConstantExpr::create(cacheLineSize(),
+                                           ConstantExpr::create(cacheLineSize(),
                                                                 offset->getWidth())),
                           Expr::Int32);
 }
@@ -879,24 +855,24 @@ unsigned PersistentState::cacheLineSize() const {
   return getObject()->parent->getCacheAlignment();
 }
 
-ref<klee::ConstantExpr> PersistentState::getPersistedExpr() {
-  static ref<klee::ConstantExpr> persisted = klee::ConstantExpr::create(1, Expr::Int8);
+ref<ConstantExpr> PersistentState::getPersistedExpr() {
+  static ref<ConstantExpr> persisted = ConstantExpr::create(1, Expr::Int8);
   return persisted;
 }
 
-ref<klee::ConstantExpr> PersistentState::getDirtyExpr() {
-  static ref<klee::ConstantExpr> dirty = klee::ConstantExpr::create(0, Expr::Int8);
+ref<ConstantExpr> PersistentState::getDirtyExpr() {
+  static ref<ConstantExpr> dirty = ConstantExpr::create(0, Expr::Int8);
   return dirty;
 }
 
-ref<klee::ConstantExpr> PersistentState::getNullptr() {
-  static ref<klee::ConstantExpr> none = klee::ConstantExpr::create(0, Expr::Int64);
+ref<ConstantExpr> PersistentState::getNullptr() {
+  static ref<ConstantExpr> none = ConstantExpr::create(0, Expr::Int64);
   return none;
 }
 
 ref<Expr> PersistentState::ptrAsExpr(void *ptr) {
   if (!ptr) return getNullptr();
-  return klee::ConstantExpr::create((uint64_t)ptr, Expr::Int64);
+  return ConstantExpr::create((uint64_t)ptr, Expr::Int64);
 }
 
 std::string PersistentState::getLocationInfo(const ExecutionState &state) {

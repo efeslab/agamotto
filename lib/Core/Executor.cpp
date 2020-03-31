@@ -1486,7 +1486,7 @@ void Executor::executeCall(ExecutionState &state,
       // The first operand to the annotation is a pointer, the second
       // is which annotation is being applied.
       auto annotationStr = getAnnotationStringFromAnnotationCall(ki);
-      if (false && annotationStr == "nvmvar") {
+      if (annotationStr == "nvmvar") {
         llvm::Instruction *bitcastInst =
           dyn_cast<Instruction>(ki->inst->getOperand(0));
         KInstruction *bitcastKInst = kmodule->getKInstruction(bitcastInst);
@@ -2890,9 +2890,8 @@ void Executor::updateStates(ExecutionState *current) {
         if (!val.isNull() && 
             val->getWidth() == Context::get().getPointerWidth() &&
             s->addressSpace.resolveOne(*s, solver, val, op, success) &&
-            success && 
-            op.second && 
-            op.second->getKind() == ObjectState::Persistent) 
+            success &&
+            isa<PersistentState>(op.second))
         {
           // This value is a pointer into nvm.
           s->nvmInfo->updateCurrentState(s, s->prevPC, true);
@@ -3252,9 +3251,22 @@ void Executor::terminateStateEarly(ExecutionState &state,
 
 void Executor::terminateStateOnExit(ExecutionState &state) {
   if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
-      (AlwaysOutputSeeds && seedMap.count(&state)))
+      (AlwaysOutputSeeds && seedMap.count(&state))) {
     interpreterHandler->processTestCase(state, 0, 0);
-  terminateState(state);
+  }
+  
+  // (iangneal): Sometimes, a program can forget to call close or unmap.
+  // We need to ensure that the persistence of a program is checked at least
+  // once.
+  ExecutionState *toTerm = &state;
+  if (state.persistentObjects.size()) {
+    for (const MemoryObject *mo : state.persistentObjects) {
+      toTerm = executeCheckPersistence(*toTerm, mo);
+      if (!toTerm) return;
+    }
+  }
+
+  terminateState(*toTerm);
 }
 
 const InstructionInfo & Executor::getLastNonKleeInternalInstruction(const ExecutionState &state,
@@ -4006,33 +4018,41 @@ void Executor::executePersistentMemoryFence(ExecutionState &state) {
   }
 }
 
-void Executor::executeCheckPersistence(ExecutionState &state,
-                                       const MemoryObject *mo) {
+/**
+ * TODO: (iangneal): we can refactor the slice constraint stuff. Currently, 
+ * there's only one set of constraints, so it's a little unnecessary.
+ */
+ExecutionState *Executor::executeCheckPersistence(ExecutionState &state,
+                                                  const MemoryObject *mo) {
   const ObjectState *os = state.addressSpace.findObject(mo);
   assert(os);
-  ObjectState *wos = state.addressSpace.getWriteable(mo, os);
-  PersistentState *ps = dyn_cast<PersistentState>(wos);
+  const PersistentState *ps = dyn_cast<PersistentState>(os);
   assert(ps);
 
-  #if 1
-  ConstraintManager orig = state.constraints;
+  ExecutionState *currState = &state;
 
   for (const ref<Expr> &sliceConstraint : ps->getConstraints()) {
+    if (!currState) break;
+
     // fprintf(stderr, "check slice for %p\n", (void*)mo->address);
     // sliceConstraint->dump();
-    ConstraintManager cm = orig;
-    cm.addConstraint(sliceConstraint);
-    state.constraints = cm;
+    currState->constraints.addConstraint(sliceConstraint);
 
-    StatePair isPersisted = fork(state, ps->isPersistedUnconstrained(), true);
+    StatePair isPersisted = fork(*currState, ps->isPersistedUnconstrained(), true);
+
+    if (isPersisted.first) {
+      isPersisted.first->constraints.removeConstraint(sliceConstraint);
+    }
+    if (isPersisted.second) {
+      isPersisted.second->constraints.removeConstraint(sliceConstraint);
+    } 
 
     // If there's a state where it's not definitely persisted, terminate it.
     ExecutionState *notPersisted = isPersisted.second;
     if (notPersisted) {
       const ObjectState *nos = notPersisted->addressSpace.findObject(mo);
       assert(nos);
-      ObjectState *nwos = notPersisted->addressSpace.getWriteable(mo, nos);
-      PersistentState *nps = dyn_cast<PersistentState>(nwos);
+      const PersistentState *nps = dyn_cast<PersistentState>(nos);
       assert(nps);
 
       // for (const ref<Expr> cons : notPersisted->constraints) {
@@ -4048,37 +4068,14 @@ void Executor::executeCheckPersistence(ExecutionState &state,
       // }
       // klee_warning("addrInfo: '%s'", addrInfo.c_str());
 
-      terminateStateOnPmemError(*notPersisted, nps->getRootCauses(solver, *notPersisted));
+      terminateStateOnPmemError(*notPersisted, 
+                                nps->getRootCauses(solver, *notPersisted));
     }
+
+    currState = isPersisted.first;
   } 
 
-  state.constraints = orig;
-  #else 
-  StatePair isPersisted = fork(state, ps->isPersistedUnconstrained(), true);
-
-  // If there's a state where it's not definitely persisted, terminate it.
-  ExecutionState *notPersisted = isPersisted.second;
-  if (notPersisted) {
-    for (const ref<Expr> cons : notPersisted->constraints) {
-      cons->dump();
-    }
-    klee_warning("Non-persistence detected!");
-    // Should instead do the root cause analysis.
-    std::string addrInfo("\npmem persistence failures:\n");
-    // mo->getAllocInfo(addrInfo);
-    uint64_t id = 1;
-    for (const auto &str : ps->getRootCauses(solver, *notPersisted)) {
-      addrInfo += std::to_string(id++) + ") " + str + std::string("\n");
-    }
-    klee_warning("addrInfo: '%s'", addrInfo.c_str());
-    klee_warning("can we do it twice?");
-    (void)ps->getRootCauses(solver, *notPersisted);
-    klee_warning("i guess");
-
-    terminateStateOnError(*notPersisted, "memory object not persisted",
-                          Executor::PMem, NULL, addrInfo);
-  }
-  #endif 
+  return currState;
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state,
@@ -4206,18 +4203,14 @@ void Executor::runFunctionAsMain(Function *f,
     }
   }
 
-  ExecutionState *state = new ExecutionState(this, kmodule->functionMap[f], modOpts.EnableNvmInfo);
-  // (iangneal): I want to start my stack frame with the main function
-  if (false && modOpts.EnableNvmInfo) {
-    state->stack.back().nvmDesc = NvmFunctionCallDesc(
-        kmodule->functionMap[f]->function);
-  }
+  ExecutionState *state = new ExecutionState(this, 
+                                             kmodule->functionMap[f], 
+                                             modOpts);
 
   if (pathWriter)
     state->pathOS = pathWriter->open();
   if (symPathWriter)
     state->symPathOS = symPathWriter->open();
-
 
   if (statsTracker)
     statsTracker->framePushed(*state, 0);

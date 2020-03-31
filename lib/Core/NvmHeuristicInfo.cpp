@@ -520,7 +520,8 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       return ret;
     } else {
       errs() << *ip << "\n";
-      assert(false && "Assumption violated -- terminator instruction is not a return or branch!");
+      assert(false && "Assumption violated -- terminator instruction is "
+                      "not a return or branch!");
       return ret;
     }
 

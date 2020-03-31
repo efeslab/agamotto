@@ -511,25 +511,6 @@ int close(int fd) {
     return -1;
   }
 
-  // If the file was mmap-ed and not unmapped, we also want to check for 
-  // persistence.
-  if (f->dfile && f->dfile->page_refs) {
-    size_t pgsz = getpagesize();
-
-    unsigned page_end = ceil(f->dfile->size / (double)pgsz);
-    // decrement page_refs in interval [page_start, page_end)
-    // if ref count goes to zero, check that the page is persisted
-    unsigned pageno;
-    for (pageno = 0u; pageno < page_end; pageno++) {
-      // Not sure if we should do anything about the page refs here.
-      void *addr = f->dfile->contents + (pgsz * pageno);
-      if (f->dfile->page_refs[pageno] && addr && klee_pmem_is_pmem(addr, pgsz)) {
-        klee_pmem_check_persisted(addr, pgsz);
-      }
-    }
-  }
-  
-
 #if 0
   if (!f->dfile) {
     /* if a concrete fd */

@@ -337,7 +337,10 @@ private:
 
   /// Asserts the persistence of a given MemoryObject, forking if necessary.
   /// A state in which mo is definitely not persisted will terminate with error.
-  void executeCheckPersistence(ExecutionState &state, const MemoryObject *mo);
+  /// Return: a pointer to the remaining state, or nullptr if all states were
+  ///         killed due to pmem errors.
+  ExecutionState *executeCheckPersistence(ExecutionState &state, 
+                                          const MemoryObject *mo);
 
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included

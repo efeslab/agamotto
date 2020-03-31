@@ -14,6 +14,7 @@
 #include "klee/Expr/Expr.h"
 #include "klee/Internal/ADT/TreeStream.h"
 #include "klee/Internal/System/Time.h"
+#include "klee/Interpreter.h"
 #include "klee/MergeHandler.h"
 
 // FIXME: We do not want to be exposing these? :(
@@ -162,7 +163,9 @@ private:
   ExecutionState() : ptreeNode(0) {}
 
 public:
-  ExecutionState(Executor *executor, KFunction *kf, bool enableNvmHeuristic=false);
+  ExecutionState(Executor *executor, 
+                 KFunction *kf, 
+                 const Interpreter::ModuleOptions &modOpts);
 
   // XXX total hack, just used to make a state so solver can
   // use on structure

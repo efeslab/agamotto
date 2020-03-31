@@ -12,6 +12,7 @@
 #include "klee/Expr/ExprPPrinter.h"
 #include "klee/Expr/ExprVisitor.h"
 #include "klee/Internal/Module/KModule.h"
+#include "klee/Internal/Support/ErrorHandling.h"
 #include "klee/OptionCategories.h"
 
 #include "llvm/IR/Function.h"
@@ -167,4 +168,13 @@ void ConstraintManager::addConstraintInternal(ref<Expr> e) {
 void ConstraintManager::addConstraint(ref<Expr> e) {
   e = simplifyExpr(e);
   addConstraintInternal(e);
+}
+
+void ConstraintManager::removeConstraint(ref<Expr> e) {
+  for (unsigned i = 0; i < constraints.size(); ++i) {
+    if (constraints[i] == e) {
+      constraints.erase(constraints.begin() + i);
+      return;
+    }
+  }
 }
