@@ -94,6 +94,8 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
   unsigned sym_stdin_len = 0;
   int sym_stdout_flag = 0;
   char sym_pmem_filename[128] = {0};//max file length
+  char sym_pmem_init_path[128] = {0};
+  bool sym_pmem_delay_create = false;
   unsigned sym_pmem_size = 0;
   int save_all_writes_flag = 0;
   int fd_fail = 0;
@@ -116,6 +118,14 @@ usage: (klee_init_env) [options] [program arguments]\n\
   -sym-stdin <N>            - Make stdin symbolic with size N.\n\
   -sym-stdout               - Make stdout symbolic.\n\
   -sym-pmem <FILE> <N>      - Provide a symbolic persistent memory file and size.\n\
+  -sym-pmem-init-concrete <INIT_FILE_PATH/0>\n\
+                            - Initialize the persistent memory file to a \n\
+                              concrete value, either based on values from \n\
+                              a real file or to all zeros if provided.\n\
+  -sym-pmem-delay-create    - This delays the creation of the pmem file at runtime\n\
+                              rather than on environment init. Essentially, this allows\n\
+                              us to create a new file which we know to mark symbolic.\n\
+                              Implies that the file will be created with zeroed memory.\n\
   -save-all-writes          - Allow write operations to execute as expected\n\
                               even if they exceed the file size. If set to 0, all\n\
                               writes exceeding the initial file size are discarded.\n\
@@ -211,8 +221,19 @@ usage: (klee_init_env) [options] [program arguments]\n\
       if (sym_pmem_size == 0) {
         __emit_error("The second argument to --sym-pmem (file size) cannot be 0\n");
       }
-	} else if (__streq(argv[k], "--sym-stdout") ||
-               __streq(argv[k], "-sym-stdout")) {
+    } else if (__streq(argv[k], "--sym-pmem-init-concrete") || __streq(argv[k], "-sym-pmem-init-concrete")) {
+      const char *msg = "--sym-pmem-init-concrete expects one string or integer argument <either file name or 0>";
+      if (k + 1 >= argc)
+        __emit_error(msg);
+      k++;
+      strncpy(sym_pmem_init_path, argv[k++], sizeof(sym_pmem_init_path));
+      // We'll parse the specifics later.
+    } else if (__streq(argv[k], "--sym-pmem-delay-create") || __streq(argv[k], "-sym-pmem-delay-create")) {
+      const char *msg = "--sym-pmem-init-concrete expects one string or integer argument <either file name or 0>";
+      k++;
+      sym_pmem_delay_create = true;
+    } else if (__streq(argv[k], "--sym-stdout") ||
+                __streq(argv[k], "-sym-stdout")) {
       sym_stdout_flag = 1;
       k++;
     } else if (__streq(argv[k], "--save-all-writes") ||
@@ -246,7 +267,8 @@ usage: (klee_init_env) [options] [program arguments]\n\
   *argvPtr = final_argv;
 
   klee_init_fds(sym_files, sym_file_len, sym_stdin_len, sym_stdout_flag,
-                save_all_writes_flag, fd_fail, sym_pmem_filename, sym_pmem_size);
+                save_all_writes_flag, fd_fail, sym_pmem_filename, sym_pmem_size,
+                sym_pmem_init_path, sym_pmem_delay_create);
 }
 
 /* The following function represents the main function of the user application

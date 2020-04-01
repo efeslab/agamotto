@@ -108,6 +108,7 @@ namespace klee {
     HANDLER(handleCheckMemoryAccess);
     HANDLER(handleDefineFixedObject);
     HANDLER(handleDefineFixedObjectFromExisting);
+    HANDLER(handleInitConcreteZero);
     HANDLER(handleUndefineFixedObject);
     HANDLER(handleDelete);    
     HANDLER(handleDeleteArray);
@@ -145,6 +146,7 @@ namespace klee {
     HANDLER(handleSubOverflow);
     HANDLER(handleDivRemOverflow);
     HANDLER(handleMarkPersistent);
+    HANDLER(handleIsPmem);
     HANDLER(handleIsPersisted);
     HANDLER(handleIsOrderedBefore);
 #undef HANDLER

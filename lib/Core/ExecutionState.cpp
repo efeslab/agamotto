@@ -18,14 +18,14 @@
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/Support/ErrorHandling.h"
 #include "klee/OptionCategories.h"
+#include "klee/Interpreter.h"
 
 #include "llvm/IR/Function.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include "../Core/UserSearcher.h"
-#include "../Module/NvmFunctionInfo.h"
-#include "../Module/NvmAnalysisUtils.h"
+#include "Executor.h"
 
 #include <cassert>
 #include <iomanip>
@@ -72,9 +72,13 @@ StackFrame::~StackFrame() {
 
 /***/
 
-ExecutionState::ExecutionState(KFunction *kf) :
+ExecutionState::ExecutionState(Executor *executor, 
+                               KFunction *kf, 
+                               const Interpreter::ModuleOptions &modOpts) :
     pc(kf->instructions),
     prevPC(pc),
+
+    nvmInfo(nullptr),
 
     depth(0),
 
@@ -82,8 +86,11 @@ ExecutionState::ExecutionState(KFunction *kf) :
     coveredNew(false),
     forkDisabled(false),
     ptreeNode(0),
-    steppedInstructions(0){
+    steppedInstructions(0) {
   pushFrame(0, kf);
+  if (modOpts.EnableNvmInfo) {
+    nvmInfo = std::make_unique<NvmHeuristicInfo>(executor, kf, this);
+  }
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
@@ -112,6 +119,10 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     prevPC(state.prevPC),
     stack(state.stack),
     incomingBBIndex(state.incomingBBIndex),
+
+    // Copy constructor for NvmHeuristicInfo
+    nvmInfo(state.nvmInfo ? std::make_unique<NvmHeuristicInfo>(*state.nvmInfo)
+                          : nullptr),
 
     addressSpace(state.addressSpace),
     constraints(state.constraints),
@@ -171,8 +182,12 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {
 void ExecutionState::popFrame() {
   StackFrame &sf = stack.back();
   for (std::vector<const MemoryObject*>::iterator it = sf.allocas.begin(),
-         ie = sf.allocas.end(); it != ie; ++it)
+         ie = sf.allocas.end(); it != ie; ++it) {
+    if (persistentObjects.count(*it)) {
+      persistentObjects.erase(*it);
+    }
     addressSpace.unbindObject(*it);
+  }
   stack.pop_back();
 }
 
@@ -344,7 +359,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
     for (unsigned i=0; i<mo->size; i++) {
       ref<Expr> av = wos->read8(i);
       ref<Expr> bv = otherOS->read8(i);
-      wos->write(i, SelectExpr::create(inA, av, bv));
+      wos->write(*this, i, SelectExpr::create(inA, av, bv));
     }
   }
 

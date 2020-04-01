@@ -11,7 +11,7 @@
 #define KLEE_PASSES_H
 
 #include "klee/Config/Version.h"
-#include "NvmFunctionInfo.h"
+#include "../Core/NvmFunctionInfo.h"
 
 #include "llvm/ADT/Triple.h"
 #include "llvm/CodeGen/IntrinsicLowering.h"
@@ -149,6 +149,30 @@ private:
   void switchConvert(CaseItr begin, CaseItr end, llvm::Value *value,
                      llvm::BasicBlock *origBlock,
                      llvm::BasicBlock *defaultBlock);
+};
+
+/** 
+ * (iangneal): This makes doing the NVM analysis a bit easier.
+ */
+class IsolateCallInstsPass : public llvm::FunctionPass {
+public:
+  static char ID; // Pass identification, replacement for typeid
+  IsolateCallInstsPass() : FunctionPass(ID) {}
+
+  bool runOnFunction(llvm::Function &F) override;
+
+private:
+  /**
+   * Takes a basic block and checks if it has any call instructions. On the 
+   * first encountered call, it splits the basic block into three possible 
+   * chunks: the IR before the call, the call alone, and the IR after the call.
+   * 
+   * 
+   * Input: a basic block in the function.
+   * Output: the post-call basic block if one was created. If no modifications
+   * occurred, returns nullptr.
+   */
+  llvm::BasicBlock *splitOnCall(llvm::BasicBlock *BB);
 };
 
 /// InstructionOperandTypeCheckPass - Type checks the types of instruction

@@ -93,6 +93,8 @@ class Executor : public Interpreter {
   // (iangneal): Needed so that we can access the root module for analysis.
   friend class Searcher;
   friend class NvmPathSearcher;
+  friend class NvmHeuristicInfo;
+  friend class NvmInstructionDesc;
 
 public:
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
@@ -166,6 +168,9 @@ private:
   /// The set of legal function addresses, used to validate function
   /// pointers. We use the actual Function* address as the function address.
   std::set<uint64_t> legalFunctions;
+
+  /// (iangneal): For tracking unique pmem errors.
+  std::set<std::string> pmemErrorDescriptions;
 
   /// When non-null the bindings that will be used for calls to
   /// klee_make_symbolic in order replay.
@@ -332,7 +337,10 @@ private:
 
   /// Asserts the persistence of a given MemoryObject, forking if necessary.
   /// A state in which mo is definitely not persisted will terminate with error.
-  void executeCheckPersistence(ExecutionState &state, const MemoryObject *mo);
+  /// Return: a pointer to the remaining state, or nullptr if all states were
+  ///         killed due to pmem errors.
+  ExecutionState *executeCheckPersistence(ExecutionState &state, 
+                                          const MemoryObject *mo);
 
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included
@@ -430,6 +438,13 @@ private:
                              enum TerminateReason termReason,
                              const char *suffix = NULL,
                              const llvm::Twine &longMessage = "");
+  
+  /**
+   * call error handler and terminate state for persistent memory errors.
+   * For each state terminated, outputs the unique errors that this state caused, 
+   * or ignores the location if there are no unique errors.
+   */
+  void terminateStateOnPmemError(ExecutionState &state, const std::unordered_set<std::string> &errors);
 
   // call error handler and terminate state, for execution errors
   // (things that should not be possible, like illegal instruction or

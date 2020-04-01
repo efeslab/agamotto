@@ -14,14 +14,17 @@
 #include "klee/Expr/Expr.h"
 #include "klee/Internal/ADT/TreeStream.h"
 #include "klee/Internal/System/Time.h"
+#include "klee/Interpreter.h"
 #include "klee/MergeHandler.h"
 
 // FIXME: We do not want to be exposing these? :(
 #include "../../lib/Core/AddressSpace.h"
 #include "klee/Internal/Module/KInstIterator.h"
-#include "../../lib/Module/NvmFunctionInfo.h"
+#include "../../lib/Core/NvmFunctionInfo.h"
+#include "../../lib/Core/NvmHeuristicInfo.h"
 
 #include <map>
+#include <memory>
 #include <set>
 #include <vector>
 #include <unordered_set>
@@ -35,6 +38,7 @@ struct KInstruction;
 class MemoryObject;
 class PTreeNode;
 struct InstructionInfo;
+class Executor;
 
 llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const MemoryMap &mm);
 
@@ -97,6 +101,9 @@ public:
 
   // Overall state of the state - Data specific
 
+  /// @brief (iangneal): Information about the current state of NVM and the predicted state
+  std::unique_ptr<NvmHeuristicInfo> nvmInfo;
+
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;
 
@@ -156,7 +163,9 @@ private:
   ExecutionState() : ptreeNode(0) {}
 
 public:
-  ExecutionState(KFunction *kf);
+  ExecutionState(Executor *executor, 
+                 KFunction *kf, 
+                 const Interpreter::ModuleOptions &modOpts);
 
   // XXX total hack, just used to make a state so solver can
   // use on structure

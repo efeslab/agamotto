@@ -1,3 +1,6 @@
 [submodule "klee-uclibc"]
 	path = klee-uclibc
 	url = https://github.com/klee/klee-uclibc.git
+[submodule "deps/andersen-pa"]
+	path = deps/andersen-pa
+	url = git@github.com:efeslab/andersen.git

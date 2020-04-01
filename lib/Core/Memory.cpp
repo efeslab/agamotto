@@ -13,13 +13,15 @@
 #include "MemoryManager.h"
 #include "ObjectHolder.h"
 
-#include "klee/Expr/ArrayCache.h"
+#include "klee/Expr/ArrayCache.h" 
 #include "klee/Expr/Expr.h"
 #include "klee/Expr/ExprPPrinter.h"
 #include "klee/Internal/Support/ErrorHandling.h"
+#include "klee/Internal/Module/KInstruction.h"
 #include "klee/OptionCategories.h"
 #include "klee/Solver/Solver.h"
 #include "klee/util/BitArray.h"
+#include "klee/ExecutionState.h"
 
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
@@ -30,15 +32,17 @@
 #include <cassert>
 #include <sstream>
 
-using namespace llvm;
 using namespace klee;
 
+using llvm::GlobalValue;
+using llvm::Instruction;
+
 namespace {
-  cl::opt<bool>
+  llvm::cl::opt<bool>
   UseConstantArrays("use-constant-arrays",
-                    cl::desc("Use constant arrays instead of updates when possible (default=true)\n"),
-                    cl::init(true),
-                    cl::cat(SolvingCat));
+                    llvm::cl::desc("Use constant arrays instead of updates when possible (default=true)\n"),
+                    llvm::cl::init(true),
+                    llvm::cl::cat(SolvingCat));
 }
 
 /***/
@@ -67,8 +71,10 @@ ObjectHolder &ObjectHolder::operator=(const ObjectHolder &b) {
 int MemoryObject::counter = 0;
 
 MemoryObject::~MemoryObject() {
-  if (parent)
+  if (parent) {
+    // klee_warning("Memory object %p pointing to %p is destructing!", this, (void*)this->address);
     parent->markFreed(this);
+  }
 }
 
 void MemoryObject::getAllocInfo(std::string &result) const {
@@ -431,7 +437,7 @@ ref<Expr> ObjectState::read8(ref<Expr> offset) const {
   return ReadExpr::create(getUpdates(), ZExtExpr::create(offset, Expr::Int32));
 }
 
-void ObjectState::write8(unsigned offset, uint8_t value) {
+void ObjectState::write8(const ExecutionState &_unused, unsigned offset, uint8_t value) {
   //assert(read_only == false && "writing to read-only object!");
   concreteStore[offset] = value;
   setKnownSymbolic(offset, 0);
@@ -440,10 +446,10 @@ void ObjectState::write8(unsigned offset, uint8_t value) {
   markByteUnflushed(offset);
 }
 
-void ObjectState::write8(unsigned offset, ref<Expr> value) {
+void ObjectState::write8(const ExecutionState &state, unsigned offset, ref<Expr> value) {
   // can happen when ExtractExpr special cases
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
-    write8(offset, (uint8_t) CE->getZExtValue(8));
+    write8(state, offset, (uint8_t) CE->getZExtValue(8));
   } else {
     setKnownSymbolic(offset, value.get());
       
@@ -452,7 +458,7 @@ void ObjectState::write8(unsigned offset, ref<Expr> value) {
   }
 }
 
-void ObjectState::write8(ref<Expr> offset, ref<Expr> value) {
+void ObjectState::write8(const ExecutionState &_unused, ref<Expr> offset, ref<Expr> value) {
   assert(!isa<ConstantExpr>(offset) && "constant offset passed to symbolic write8");
   unsigned base, size;
   fastRangeCheckOffset(offset, &base, &size);
@@ -516,20 +522,20 @@ ref<Expr> ObjectState::read(unsigned offset, Expr::Width width) const {
   return Res;
 }
 
-void ObjectState::write(ref<Expr> offset, ref<Expr> value) {
+void ObjectState::write(const ExecutionState &state, ref<Expr> offset, ref<Expr> value) {
   // Truncate offset to 32-bits.
   offset = ZExtExpr::create(offset, Expr::Int32);
 
   // Check for writes at constant offsets.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(offset)) {
-    write(CE->getZExtValue(32), value);
+    write(state, CE->getZExtValue(32), value);
     return;
   }
 
   // Treat bool specially, it is the only non-byte sized write we allow.
   Expr::Width w = value->getWidth();
   if (w == Expr::Bool) {
-    write8(offset, ZExtExpr::create(value, Expr::Int8));
+    write8(state, offset, ZExtExpr::create(value, Expr::Int8));
     return;
   }
 
@@ -538,24 +544,24 @@ void ObjectState::write(ref<Expr> offset, ref<Expr> value) {
   assert(w == NumBytes * 8 && "Invalid write size!");
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(AddExpr::create(offset, ConstantExpr::create(idx, Expr::Int32)),
+    write8(state, AddExpr::create(offset, ConstantExpr::create(idx, Expr::Int32)),
            ExtractExpr::create(value, 8 * i, Expr::Int8));
   }
 }
 
-void ObjectState::write(unsigned offset, ref<Expr> value) {
+void ObjectState::write(const ExecutionState &state, unsigned offset, ref<Expr> value) {
   // Check for writes of constant values.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
     Expr::Width w = CE->getWidth();
-    if (w <= 64 && klee::bits64::isPowerOfTwo(w)) {
+    if (w <= 64 && bits64::isPowerOfTwo(w)) {
       uint64_t val = CE->getZExtValue();
       switch (w) {
       default: assert(0 && "Invalid write size!");
       case  Expr::Bool:
-      case  Expr::Int8:  write8(offset, val); return;
-      case Expr::Int16: write16(offset, val); return;
-      case Expr::Int32: write32(offset, val); return;
-      case Expr::Int64: write64(offset, val); return;
+      case  Expr::Int8:  write8(state, offset, val); return;
+      case Expr::Int16: write16(state, offset, val); return;
+      case Expr::Int32: write32(state, offset, val); return;
+      case Expr::Int64: write64(state, offset, val); return;
       }
     }
   }
@@ -563,7 +569,7 @@ void ObjectState::write(unsigned offset, ref<Expr> value) {
   // Treat bool specially, it is the only non-byte sized write we allow.
   Expr::Width w = value->getWidth();
   if (w == Expr::Bool) {
-    write8(offset, ZExtExpr::create(value, Expr::Int8));
+    write8(state, offset, ZExtExpr::create(value, Expr::Int8));
     return;
   }
 
@@ -572,31 +578,31 @@ void ObjectState::write(unsigned offset, ref<Expr> value) {
   assert(w == NumBytes * 8 && "Invalid write size!");
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(offset + idx, ExtractExpr::create(value, 8 * i, Expr::Int8));
+    write8(state, offset + idx, ExtractExpr::create(value, 8 * i, Expr::Int8));
   }
 } 
 
-void ObjectState::write16(unsigned offset, uint16_t value) {
+void ObjectState::write16(const ExecutionState &state, unsigned offset, uint16_t value) {
   unsigned NumBytes = 2;
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(offset + idx, (uint8_t) (value >> (8 * i)));
+    write8(state, offset + idx, (uint8_t) (value >> (8 * i)));
   }
 }
 
-void ObjectState::write32(unsigned offset, uint32_t value) {
+void ObjectState::write32(const ExecutionState &state, unsigned offset, uint32_t value) {
   unsigned NumBytes = 4;
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(offset + idx, (uint8_t) (value >> (8 * i)));
+    write8(state, offset + idx, (uint8_t) (value >> (8 * i)));
   }
 }
 
-void ObjectState::write64(unsigned offset, uint64_t value) {
+void ObjectState::write64(const ExecutionState &state, unsigned offset, uint64_t value) {
   unsigned NumBytes = 8;
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(offset + idx, (uint8_t) (value >> (8 * i)));
+    write8(state, offset + idx, (uint8_t) (value >> (8 * i)));
   }
 }
 
@@ -624,44 +630,66 @@ void ObjectState::print() const {
 
 /***/
 
-PersistentState::PersistentState(const ObjectState *os, const Array *cacheLines)
+PersistentState::PersistentState(const ObjectState *os, 
+                                 const Array *cacheLines,
+                                 const Array *rootCauses,
+                                 const Array *idxArray)
   : ObjectState(*os),
-    cacheLineUpdates(0, 0),
-    pendingCacheLineUpdates(0, 0) {
-  cacheLineUpdates = UpdateList(cacheLines, 0);
-  pendingCacheLineUpdates = UpdateList(cacheLineUpdates);
+    cacheLineUpdates(cacheLines, nullptr),
+    pendingCacheLineUpdates(cacheLineUpdates),
+    idxEmptyUpdates(idxArray, nullptr),
+    rootCauseLocations(rootCauses, nullptr) {
+  // -- For cacheline stuff
+  // 0 <= X < 2^32
+  idxUnbounded = ReadExpr::create(idxEmptyUpdates,
+                                  ConstantExpr::create(0, idxArray->range));
+  // idxUnbounded = ReadExpr::createTempRead(idxArray, idxArray->range);
+  // idxUnbounded->dump();
+
+  assert(!(numCacheLines() % nrLinesPerSlice) && "not divisible!");
+
+  ref<Expr> lowerBound = UleExpr::create(ConstantExpr::create(0, idxArray->range), idxUnbounded);
+  ref<Expr> upperBound = UltExpr::create(idxUnbounded, ConstantExpr::create(numCacheLines(), idxArray->range));
+  idxConstraints.push_back(AndExpr::create(lowerBound, upperBound));
 }
 
 PersistentState::PersistentState(const PersistentState &ps)
   : ObjectState(ps),
     cacheLineUpdates(ps.cacheLineUpdates),
-    pendingCacheLineUpdates(ps.pendingCacheLineUpdates) {
-}
+    pendingCacheLineUpdates(ps.pendingCacheLineUpdates),
+
+    idxEmptyUpdates(ps.idxEmptyUpdates),
+    idxUnbounded(ps.idxUnbounded),
+    idxConstraints(ps.idxConstraints),
+
+    rootCauseLocations(ps.rootCauseLocations),
+    nextLocId(ps.nextLocId),
+    allRootLocations(ps.allRootLocations) {}
 
 ObjectState *PersistentState::clone() const {
   return new PersistentState(*this);
 }
 
-void PersistentState::write8(unsigned offset, uint8_t value) {
-  ObjectState::write8(offset, value);
-  dirtyCacheLineAtOffset(offset);
+void PersistentState::write8(const ExecutionState &state, unsigned offset, uint8_t value) {
+  ObjectState::write8(state, offset, value);
+  dirtyCacheLineAtOffset(state, offset);
 }
 
-void PersistentState::write8(unsigned offset, ref<Expr> value) {
-  ObjectState::write8(offset, value);
-  dirtyCacheLineAtOffset(offset);
+void PersistentState::write8(const ExecutionState &state, unsigned offset, ref<Expr> value) {
+  ObjectState::write8(state, offset, value);
+  dirtyCacheLineAtOffset(state, offset);
 }
 
-void PersistentState::write8(ref<Expr> offset, ref<Expr> value) {
-  ObjectState::write8(offset, value);
-  dirtyCacheLineAtOffset(offset);
+void PersistentState::write8(const ExecutionState &state, ref<Expr> offset, ref<Expr> value) {
+  ObjectState::write8(state, offset, value);
+  dirtyCacheLineAtOffset(state, offset);
 }
 
-void PersistentState::dirtyCacheLineAtOffset(unsigned offset) {
-  dirtyCacheLineAtOffset(ConstantExpr::create(offset, Expr::Int32));
+void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state, unsigned offset) {
+  dirtyCacheLineAtOffset(state, ConstantExpr::create(offset, Expr::Int32));
 }
 
-void PersistentState::dirtyCacheLineAtOffset(ref<Expr> offset) {
+void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset) {
   /* llvm::errs() << getObject()->name << ":\n"; */
   /* ExprPPrinter::printOne(llvm::errs(), "dirtyCacheLineAtOffset", offset); */
 
@@ -671,6 +699,19 @@ void PersistentState::dirtyCacheLineAtOffset(ref<Expr> offset) {
   ref<Expr> falseExpr = getDirtyExpr();
   cacheLineUpdates.extend(cacheLine, falseExpr);
   pendingCacheLineUpdates.extend(cacheLine, falseExpr);
+
+  // Now update root cause.
+  std::string info = getLocationInfo(state);
+  if (!allRootLocations[info]) {
+    allRootLocations[info] = nextLocId;
+    nextLocId++;
+  }
+
+  // allRootLocations.insert(info);
+  // assert(!sanity_check || sanity_check == allRootLocations.find(info)->c_str());
+
+  rootCauseLocations.extend(cacheLine, 
+      ConstantExpr::create(allRootLocations[info], rootCauseLocations.root->range));
 }
 
 void PersistentState::persistCacheLineAtOffset(unsigned offset) {
@@ -680,8 +721,10 @@ void PersistentState::persistCacheLineAtOffset(unsigned offset) {
 void PersistentState::persistCacheLineAtOffset(ref<Expr> offset) {
   /* llvm::errs() << getObject()->name << ":\n"; */
   /* ExprPPrinter::printOne(llvm::errs(), "persistCacheLineAtOffset", offset); */
-  pendingCacheLineUpdates.extend(getCacheLine(offset),
-                                 getPersistedExpr());
+  ref<Expr> cacheLine = getCacheLine(offset);
+  pendingCacheLineUpdates.extend(cacheLine, getPersistedExpr());
+  // Update the root cause to be empty.
+  rootCauseLocations.extend(cacheLine, getNullptr());
 }
 
 void PersistentState::commitPendingPersists() {
@@ -693,13 +736,37 @@ void PersistentState::commitPendingPersists() {
   cacheLineUpdates = pendingCacheLineUpdates;
 }
 
-ref<Expr> PersistentState::isPersisted() const {
-  // AND together all cache lines.
-  ref<Expr> result = isCacheLinePersisted(0);
-  for (unsigned i = 1; i < numCacheLines(); ++i) {
-    result = AndExpr::create(isCacheLinePersisted(i), result);
+// ref<Expr> PersistentState::isPersisted(ExecutionState &state) const {
+//   state.constraints.addConstraint(idxConstraints.front());
+//   return EqExpr::create(getPersistedExpr(), isCacheLinePersisted(idxUnbounded));
+// }
+
+ref<Expr> PersistentState::isPersistedUnconstrained() const {
+  return EqExpr::create(getPersistedExpr(), isCacheLinePersisted(idxUnbounded));
+}
+
+void PersistentState::clearRootCauses() {
+  allRootLocations.clear();
+}
+
+std::unordered_set<std::string> PersistentState::getRootCauses(
+    TimingSolver *solver, ExecutionState &state) const {
+  std::unordered_set<std::string> causes;
+
+  // Copy the constraint manager to reset the constraints once we are finished.
+  ConstraintManager orig = state.constraints;
+  for (const ref<Expr> &sliceConstraint : idxConstraints) {
+    ConstraintManager cm = orig; // copy
+    cm.addConstraint(sliceConstraint);
+    state.constraints = cm;
+    
+    auto sliceCauses = getRootCause(solver, state, idxUnbounded);
+    causes.insert(sliceCauses.begin(), sliceCauses.end());
   }
-  return EqExpr::create(getPersistedExpr(), result);
+
+  state.constraints = orig;
+  
+  return causes;
 }
 
 ref<Expr> PersistentState::isCacheLinePersisted(unsigned cacheLine) const {
@@ -709,9 +776,68 @@ ref<Expr> PersistentState::isCacheLinePersisted(unsigned cacheLine) const {
 ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine) const {
   ref<Expr> result = ReadExpr::create(cacheLineUpdates,
                                       ZExtExpr::create(cacheLine, Expr::Int32));
-  /* llvm::errs() << getObject()->name << ":\n"; */
-  /* ExprPPrinter::printOne(llvm::errs(), "isCacheLinePersisted", result); */
   return result;
+}
+
+std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solver, 
+                                                              ExecutionState &state, 
+                                                              unsigned cacheLine) const {
+  return getRootCause(solver, state, ConstantExpr::create(cacheLine, Expr::Int32));
+}
+
+std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solver, 
+                                                              ExecutionState &state, 
+                                                              ref<Expr> cacheLine) const {
+  ref<Expr> result = ReadExpr::create(rootCauseLocations,
+                                      ZExtExpr::create(cacheLine, Expr::Int32));
+  
+  std::unordered_set<std::string> possible;
+
+  for (const auto &p : allRootLocations) {
+    ref<Expr> locId = ConstantExpr::create(p.second, rootCauseLocations.root->range);
+    ref<Expr> isCause = EqExpr::create(result, locId);
+    bool mayBeCause = false;
+    bool success = solver->mayBeTrue(state, isCause, mayBeCause);
+    if (success && mayBeCause) {
+      possible.insert(p.first); // copy
+    } else if (!success) {
+      klee_warning("Did not succeed at finding the root cause!");
+    }
+  }
+
+  // If there are no causes, then there must be no updates.
+  if (!possible.size()) {
+    ref<Expr> nullId = ConstantExpr::create(0, rootCauseLocations.root->range);
+    ref<Expr> isNullptr = EqExpr::create(result, getNullptr());
+    bool mustBeNull = false;
+    bool success = solver->mustBeTrue(state, isNullptr, mustBeNull);
+
+    assert(success && "Could not solve!");
+    assert(mustBeNull && "Could not prove null!");
+  }
+
+  return possible;
+}
+
+bool PersistentState::mustBePersisted(TimingSolver *solver, ExecutionState &state) const {
+  bool ret = true;
+  
+  ConstraintManager orig = state.constraints;
+  for (const ref<Expr> &sliceConstraint : idxConstraints) {
+    ConstraintManager cm = orig; // copy
+    cm.addConstraint(sliceConstraint);
+    state.constraints = cm;
+
+    bool mustBe;
+    bool success = solver->mustBeTrue(state, isPersistedUnconstrained(), mustBe);
+    assert(success && "Could not solve!");
+    ret = ret && mustBe;
+    if (!ret) return false;
+  }
+
+  state.constraints = orig;
+  
+  return true;
 }
 
 ref<Expr> PersistentState::getCacheLine(ref<Expr> offset) const {
@@ -737,4 +863,34 @@ ref<ConstantExpr> PersistentState::getPersistedExpr() {
 ref<ConstantExpr> PersistentState::getDirtyExpr() {
   static ref<ConstantExpr> dirty = ConstantExpr::create(0, Expr::Int8);
   return dirty;
+}
+
+ref<ConstantExpr> PersistentState::getNullptr() {
+  static ref<ConstantExpr> none = ConstantExpr::create(0, Expr::Int64);
+  return none;
+}
+
+ref<Expr> PersistentState::ptrAsExpr(void *ptr) {
+  if (!ptr) return getNullptr();
+  return ConstantExpr::create((uint64_t)ptr, Expr::Int64);
+}
+
+std::string PersistentState::getLocationInfo(const ExecutionState &state) {
+  const InstructionInfo *iip = state.prevPC->info;
+
+  std::string infoStr;
+  llvm::raw_string_ostream msg(infoStr);
+  msg << "Persistent Memory Info:\n";
+  msg << "\tName: " << getObject()->name << "\n";
+  msg << "\tAddress: " << getObject()->address << "\n";
+  msg << "\tSize: " << getObject()->size << "\n";
+  if (iip->file != "") {
+    msg << "File: " << iip->file << "\n";
+    msg << "Line: " << iip->line << "\n";
+    msg << "assembly.ll line: " << iip->assemblyLine << "\n";
+  }
+  msg << "Stack: \n";
+  state.dumpStack(msg);
+
+  return infoStr;
 }
