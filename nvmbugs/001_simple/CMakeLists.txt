@@ -20,3 +20,7 @@ klee_add_test_object(TARGET 001_SimpleMod SOURCES
 klee_add_test_object(TARGET 001_SimpleBranchMod SOURCES
   branch_paths.c
 ) 
+
+klee_add_test_object(TARGET 001_SimpleLoop SOURCES
+  simple_loop.c
+) 

@@ -16,7 +16,6 @@
 #include <string>
 #include <deque>
 #include <memory>
-// #include <type_traits>
 
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
