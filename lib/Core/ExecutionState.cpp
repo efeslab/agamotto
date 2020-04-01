@@ -56,8 +56,6 @@ StackFrame::StackFrame(const StackFrame &s)
   : caller(s.caller),
     kf(s.kf),
     callPathNode(s.callPathNode),
-    nvmArgs(s.nvmArgs),
-    nvmDesc(s.nvmDesc),
     allocas(s.allocas),
     minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn),
     varargs(s.varargs) {
@@ -159,19 +157,6 @@ ExecutionState *ExecutionState::branch() {
   falseState->coveredLines.clear();
 
   return falseState;
-}
-
-void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf,
-    const NvmFunctionInfo &nvmInfo) {
-  // klee_warning("NVM push frame!");
-  StackFrame new_frame(caller, kf);
-  const CallInst *ci = dyn_cast<CallInst>(caller->inst);
-  if (!stack.empty() && ci) {
-    new_frame.nvmArgs = nvmInfo.getNvmArgs(stack.back().nvmDesc, ci);
-  }
-  new_frame.nvmDesc = NvmFunctionCallDesc(kf->function, new_frame.nvmArgs);
-
-  stack.push_back(new_frame);
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {
