@@ -389,9 +389,14 @@ class PersistentState : public ObjectState {
 
   public:
 
-    static const uint64_t MaxSize = 4 * (4096);
-    /// Create a new persistent object state from the given non-persistent object state.
-    PersistentState(const ObjectState *os);
+    static constexpr uint64_t MaxSize = 4 * (4096);
+    /// Create a new persistent object state from the given non-persistent
+    /// object state and symbolic bool array of cache lines. Also requires
+    /// a symbolic void* array (int64) for root cause.
+    PersistentState(const ObjectState *os, 
+                    const Array *cacheLines,
+                    const Array *rootCauses,
+                    const Array *idxArray);
 
     ObjectState *clone() const override;
 

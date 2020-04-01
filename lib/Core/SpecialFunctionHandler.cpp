@@ -28,6 +28,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Module.h"
 
+#include <algorithm>
 #include <errno.h>
 #include <sstream>
 #include <sys/mman.h>
@@ -1017,26 +1018,28 @@ void SpecialFunctionHandler::handleMarkPersistent(ExecutionState &state,
   ref<Expr> size = arguments[1];
   uint64_t realSize = 0;
   if (ConstantExpr *ce = dyn_cast<ConstantExpr>(size.get())) {
-    realSize = ce->getZExtValue();
+    realSize = ce->getZExtValue() > PersistentState::MaxSize ? 
+                PersistentState::MaxSize : ce->getZExtValue();
   } else {
     size->dump();
     klee_error("Not sure how to handle symbolic size argument yet!");
   }
 
-  Executor::ExactResolutionList rl;
-  for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
-    ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
-    ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
-    executor.resolveExact(state, ptrExpr, rl, "mark_persistent");
-  }
+  ResolutionList rl;
+  // for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
+  //   ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
+  //   ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
+  //   executor.resolveExact(state, ptrExpr, rl, "mark_persistent");
+  // }
+  assert(!state.addressSpace.resolve(state, executor.solver, addr, rl));
   
-  for (Executor::ExactResolutionList::iterator it = rl.begin(), 
+  for (ResolutionList::iterator it = rl.begin(), 
          ie = rl.end(); it != ie; ++it) {
-    const MemoryObject *mo = it->first.first;
+    const MemoryObject *mo = it->first;
     mo->setName(name);
     // klee_warning("Marking object at %p as persistent", (void*)mo->address);
     
-    ExecutionState *s = it->second;
+    // ExecutionState *s = it->second;
     // FIXME: Type coercion should be done consistently somewhere.
     bool res;
     // bool success __attribute__ ((unused)) =
@@ -1046,20 +1049,20 @@ void SpecialFunctionHandler::handleMarkPersistent(ExecutionState &state,
     //                                              mo->getSizeExpr()),
     //                               res);
     bool success __attribute__ ((unused)) =
-      executor.solver->mustBeTrue(*s, 
-                                  EqExpr::create(ConstantExpr::create(PersistentState::MaxSize,
+      executor.solver->mustBeTrue(state, 
+                                  EqExpr::create(ConstantExpr::create(realSize,
                                                                   Context::get().getPointerWidth()),
                                                  mo->getSizeExpr()),
                                   res);
     assert(success && "FIXME: Unhandled solver failure");
     
     if (res) {
-      executor.executeMarkPersistent(*s, mo);
+      executor.executeMarkPersistent(state, mo);
       // Just return the same address as what we received.
       // -- This may get re-executed, but technically "s" can be a different state.
-      executor.bindLocal(target, *s, addr);
+      executor.bindLocal(target, state, addr);
     } else {      
-      executor.terminateStateOnError(*s, 
+      executor.terminateStateOnError(state, 
                                      "wrong size given to klee_pmem_mark_persistent[_name]", 
                                      Executor::User);
     }

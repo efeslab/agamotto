@@ -56,3 +56,6 @@ klee_add_test_object(TARGET 001_NontemporalErr SOURCES
 klee_add_test_object(TARGET 001_NontemporalNoErr SOURCES
   nontemporal_noerr.c
 )
+klee_add_test_object(TARGET 001_SimpleLoop SOURCES
+  simple_loop.c
+) 
