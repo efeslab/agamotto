@@ -104,15 +104,20 @@ uint64_t NvmValueDesc::hash(void) const {
 }
 
 std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(
-  andersen_sptr_t apa, llvm::CallInst *ci) const 
+  andersen_sptr_t apa, llvm::CallInst *ci, llvm::Function *f=nullptr) const 
 {
   NvmValueDesc newDesc;
   newDesc.caller_values_ = getShared(*this);
   newDesc.call_site_ = ci;
   newDesc.global_nvm_ = global_nvm_;
 
-  Function *f = utils::getCallInstFunction(ci); //->getCalledFunction();
-  assert(f && "Don't know what do with a null function!");
+  if (!f) {
+    f = utils::getCallInstFunction(ci);
+    if (!f) {
+      newDesc.needs_resolution_ = true;
+      return getShared(newDesc);
+    }
+  }
 
   for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
     Value *op = ci->getArgOperand(i);
@@ -141,7 +146,8 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(
   return getShared(newDesc);
 }
 
-std::shared_ptr<NvmValueDesc> NvmValueDesc::doReturn(andersen_sptr_t apa, ReturnInst *i) const {
+std::shared_ptr<NvmValueDesc> NvmValueDesc::doReturn(andersen_sptr_t apa, 
+                                                     ReturnInst *i) const {
   std::shared_ptr<NvmValueDesc> retDesc = caller_values_;
   
   if (Value *retVal = i->getReturnValue()) {
@@ -208,7 +214,19 @@ std::string NvmValueDesc::str(void) const {
   std::stringstream s;
   s << "Value State:\n";
   s << "\tNumber of runtime global nvm values: " << global_nvm_.size();
+  for (Value *v : global_nvm_) {
+    std::string tmp;
+    llvm::raw_string_ostream rs(tmp);
+    v->print(rs);
+    s << "\n\t\t" << tmp;
+  }
   s << "\n\tNumber of runtime local nvm values: " << local_nvm_.size();
+  for (Value *v : local_nvm_) {
+    std::string tmp;
+    llvm::raw_string_ostream rs(tmp);
+    v->print(rs);
+    s << "\n\t\t" << tmp;
+  }
   return s.str();
 }
 
@@ -218,6 +236,7 @@ bool klee::operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs) {
         //  lhs.volMmaps_ == rhs.volMmaps_ &&
          lhs.global_nvm_ == rhs.global_nvm_ &&
          lhs.local_nvm_ == rhs.local_nvm_ &&
+         lhs.varargs_contain_nvm_ == rhs.varargs_contain_nvm_ &&
          lhs.caller_values_ == rhs.caller_values_ &&
          lhs.call_site_ == rhs.call_site_;
 }
@@ -236,9 +255,7 @@ NvmInstructionDesc::NvmInstructionDesc(Executor *executor,
           mod_(executor->kmodule.get()), 
           curr_(location), 
           values_(values), 
-          stackframe_(stackframe) {
-        // weight_ = calculateWeight();
-      }
+          stackframe_(stackframe) {}
 
 NvmInstructionDesc::NvmInstructionDesc(Executor *executor,
                          andersen_sptr_t apa, 
@@ -273,18 +290,31 @@ bool NvmInstructionDesc::isCachelineModifier(ExecutionState *es) {
 
   if (!ptr) return false;
 
-  KInstruction *target = mod_->getKInstruction(dyn_cast<Instruction>(ptr));
-  ref<Expr> addr = es->stack.back().locals[target->dest].value;
+  ptr = ptr->stripPointerCasts()->stripInBoundsOffsets();
+
+  ref<Expr> addr;
+  if (Instruction *iv = dyn_cast<Instruction>(ptr)) {
+    KInstruction *target = mod_->getKInstruction(iv);
+    addr = es->stack.back().locals[target->dest].value;
+  } else if (const GlobalValue *gv = dyn_cast<GlobalValue>(ptr)) {
+    addr = executor_->globalAddresses[gv];
+  } else {
+    errs() << *i << "\n";
+    errs() << *ptr << "\n";
+    errs() << *ptr->getType() << "\n";
+    assert(false && "Don't know what to do!!");
+  }
+  
   if (addr.isNull()) {
     klee_error("null?");
   }
 
-  Executor::ExactResolutionList rl;
-  executor_->resolveExact(*es, addr, rl, "isModifier");
+  ResolutionList rl;
+  assert(!es->addressSpace.resolve(*es, executor_->solver, addr, rl));
 
   // This logic also makes sure that if it isn't persistent memory, we always skip it.
-  for (Executor::ExactResolutionList::iterator it = rl.begin(), ie = rl.end(); it != ie; ++it) {
-    const ObjectState *os = it->first.second;
+  for (ResolutionList::iterator it = rl.begin(), ie = rl.end(); it != ie; ++it) {
+    const ObjectState *os = it->second;
     
     if (isa<PersistentState>(os)) {
       return true;
@@ -296,8 +326,8 @@ bool NvmInstructionDesc::isCachelineModifier(ExecutionState *es) {
 
 uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) {
   // We use this as an incentive to resolve unresolved function pointers.
-  if (!curr_) {
-    errs() << str() << " has weight 1u cuz unknown!\n";
+  if (!curr_ || needsResolution()) {
+    // errs() << str() << " has weight 1u cuz unknown!\n";
     // errs() << "1u\n";
     weight_ = 1u;
     return weight_;
@@ -308,8 +338,14 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) {
   if (CallInst *ci = dyn_cast<CallInst>(curr_->inst)) {
     // Case 1: Contains an mmap call.
     if (values_->isMmapCall(ci)) {
-      errs() << str() << " has weight 2u cuz mmap-class!\n";
+      // errs() << str() << " has weight 2u cuz mmap-class!\n";
       weight_ = 2u;
+      return weight_;
+    }
+
+    if (values_->isImportantVarArg(ci)) {
+      // errs() << str() << " has weight 1u cuz var args contains nvm!\n";
+      weight_ = 1u;
       return weight_;
     }
 
@@ -317,7 +353,7 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) {
     // TODO: also should cover mfences, in theory.
     Function *f = ci->getCalledFunction();
     if (f && f->isDeclaration() && f->getIntrinsicID() == Intrinsic::x86_sse_sfence) {
-      errs() << str() << " has weight 1u cuz sfence!\n";
+      // errs() << str() << " has weight 1u cuz sfence!\n";
       weight_ = 1u;
       return weight_;
     }
@@ -360,16 +396,16 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) {
   std::vector<const Value*> ptsSet;
   bool ret = apa_->getResult().getPointsToSet(ptr, ptsSet);
   assert(ret && "could not get points-to set!");
-  errs() << "(weight stuff)\n";
-  errs() << *ptr << "\n";
+  // errs() << "(weight stuff)\n";
+  // errs() << *ptr << "\n";
   // assert(ptsSet.size() && "this pointer points to nothing?!");
 
   for (const Value *v : ptsSet) {
-    errs() << "\tpoints to " << *v << "\n";
+    // errs() << "\tpoints to " << *v << "\n";
 
     if (values_->isNvm(apa_, v)) {
       if (mustBeDirty) {
-        errs() << "\t\tmust be dirty...\n";
+        // errs() << "\t\tmust be dirty...\n";
         assert(isa<Instruction>(v));
         // Use the execution state to resolve this address.
         KInstruction *target = mod_->getKInstruction(dyn_cast<Instruction>(const_cast<Value*>(v)));
@@ -412,11 +448,11 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) {
         bool ret = checkAllocas(allocaPersisted);
         if (ret) {
           if (!allocaPersisted) {
-            errs() << "weight 1 cuz dirty!\n";
+            // errs() << "weight 1 cuz dirty!\n";
             weight_ = 1u;
             return weight_;
           } else {
-            errs() << "weight 0 cuz clean!\n";
+            // errs() << "weight 0 cuz clean!\n";
             weight_ = 0u;
             return weight_;
           }
@@ -425,8 +461,8 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) {
         ref<Expr> addr = findAddr();
 
         if (addr.isNull()) {
-          errs() << *target->inst << "\n";
-          errs() << "\t NULL\n";
+          // errs() << *target->inst << "\n";
+          // errs() << "\t NULL\n";
           continue;
         }
 
@@ -448,13 +484,13 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) {
         
       }
       // errs() << "1u\n";
-      errs() << str() << " has weight 1u cuz cache-state modifying!\n";
+      // errs() << str() << " has weight 1u cuz cache-state modifying!\n";
       weight_ = 1u;
       return weight_;
     }
   }
 
-  errs() << str() << " has weight 0u cuz default!\n";
+  // errs() << str() << " has weight 0u cuz default!\n";
   weight_ = 0u;
   return weight_;
 }
@@ -466,10 +502,6 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
 
   Instruction *ip = curr_->inst;
   BasicBlock *bb = ip->getParent();
-
-  // if (isa<ReturnInst>(ip)) {
-  //   errs() << "return " << (ip == bb->getTerminator() ? "is terminator\n" : "is not terminator\n");
-  // }
 
   if (ip == bb->getTerminator()) {
     // Figure out the transition to the next basic block.
@@ -567,13 +599,25 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
        * will require some sort of alias analysis for this.
        */
       // this->weight_ += 1;
+
+      if (!runtime_function) {
+        // Return no successors for now.
+        need_resolution = true;
+        return ret;
+      }
+
       Instruction *retLoc = ip->getNextNode();
       // errs() << "ret loc is " << *retLoc << "\n";
       assert(retLoc && "Assumption violated -- call instruction is the last instruction in a basic block!");
       std::shared_ptr<NvmStackFrameDesc> newStack = stackframe_->doCall(ci, retLoc);
+      std::shared_ptr<NvmValueDesc> newValues = values_->doCall(apa_, ci, runtime_function);
+      // We'll have to call update on these values later.
 
-      NvmInstructionDesc desc(executor_, apa_, nullptr, values_, newStack);
+      NvmInstructionDesc desc(executor_, apa_, 
+                              mod_->getKInstruction(&(runtime_function->getEntryBlock().front())), 
+                              newValues, newStack);
       ret.push_back(desc);
+      
       return ret;
     } else {
       // Fallthrough to the default case.
@@ -593,40 +637,53 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
 }
 
 void NvmInstructionDesc::setSuccessors() {
-  errs() << "setting successors for" << *curr_->inst << "\n";
-  for (const NvmInstructionDesc &succ : constructSuccessors()) {
+  //  if (isValid())
+  //    errs() << "setting successors for" << *curr_->inst << "\n";
+  //  else 
+  //    errs() << "not yet valid!\n";
+  // successors_ = ;
+  for (NvmInstructionDesc &succ : constructSuccessors()) {
+    // if (!succ.values_) {
+    //   errs() << "current is " << *curr_->inst << " " << isValid() << "\n";
+    //   errs() << "\tsuccessor is " << *succ.curr_->inst << "\n";
+    // }
     std::shared_ptr<NvmInstructionDesc> sptr = getShared(succ);
-    errs() << "\t" << *sptr->curr_->inst << "\n";
+    assert(sptr);
+    // if (sptr->curr_)
+    //   errs() << "\t" << *sptr->curr_->inst << "\n";
+    // else
+    //   errs() << "\tUnresolved\n"; 
     successors_.push_back(sptr);
+    // successors_.push_back(succ);
     sptr->addPredecessor(*this);
   }
 
-  std::unordered_set<shared_ptr<NvmInstructionDesc>> uniq(successors_.begin(), successors_.end());
+  std::unordered_set<std::shared_ptr<NvmInstructionDesc>> uniq(successors_.begin(), successors_.end());
 
-  if (uniq.size() != successors_.size()) {
-    errs() << str() << "\nSuccessors:\n";
-    for (const auto &s : uniq) {
-      errs() << s->str() << "\n";
-    }
-  }
+  // if (uniq.size() != successors_.size()) {
+  //   errs() << str() << "\nSuccessors:\n";
+  //   for (const auto &s : uniq) {
+  //     errs() << s->str() << "\n";
+  //   }
+  // }
   assert(uniq.size() == successors_.size() && "Duplicate successors generated!");
 
-  isTerminal = successors_.size() == 0;
+  isTerminal = isValid() && !successors_.size();
+  // errs() << "Setting is terminal = " << isTerminal << ", " << isValid() << " " << successors_.size() << "\n";
 }
 
 std::list<std::shared_ptr<NvmInstructionDesc>> 
 NvmInstructionDesc::getSuccessors(
-    const std::unordered_set<std::shared_ptr<NvmInstructionDesc>> &traversed) 
-{
+    const std::unordered_set<NvmInstructionDesc*> &traversed) {
   if (successors_.size() == 0 && !isTerminal) {
     setSuccessors();
-    assert((successors_.size() > 0 || isTerminal) 
+    assert((successors_.size() > 0 || isTerminal || !isValid()) 
           && "Error in successor calculation!");
   }
 
   std::list<std::shared_ptr<NvmInstructionDesc>> currentSuccessors;
-  for (auto sptr : successors_) {
-    if (traversed.find(sptr) == traversed.end()) {
+  for (std::shared_ptr<NvmInstructionDesc> &sptr : successors_) {
+    if (traversed.find(sptr.get()) == traversed.end()) {
       currentSuccessors.push_back(sptr);
     }
   }
@@ -645,8 +702,8 @@ NvmInstructionDesc::getMatchingSuccessors(KInstruction *nextPC) {
   //   (isTerminal ? " (terminal)" : " (not terminal)") <<"\n";
   // errs() << "Looking for " << *nextPC->inst << "\n";
 
-  for (std::shared_ptr<NvmInstructionDesc> p : successors_) {
-    if (p->curr_ == nextPC) ret.push_back(p);
+  for (std::shared_ptr<NvmInstructionDesc> &succ : successors_) {
+    if (succ->curr_ == nextPC) ret.push_back(succ);
     // else {
     //   errs() << "|succ| " <<*p->curr_->inst << " != |next| " << *nextPC->inst << "\n";
     // }
@@ -675,7 +732,7 @@ std::string NvmInstructionDesc::str(void) const {
   }
   if (predecessors_.size()) {
     s << "\npred:";
-    for (auto psp : predecessors_) {
+    for (auto &psp : predecessors_) {
       std::string tmp;
       llvm::raw_string_ostream rs(tmp);
       psp->inst()->print(rs);
@@ -684,7 +741,7 @@ std::string NvmInstructionDesc::str(void) const {
   }
   if (successors_.size()) {
     s << "\nsucc:";
-    for (auto psp : successors_) {
+    for (auto &psp : successors_) {
       std::string tmp;
       llvm::raw_string_ostream rs(tmp);
       psp->inst()->print(rs);
@@ -695,10 +752,11 @@ std::string NvmInstructionDesc::str(void) const {
   return s.str();
 }
 
-std::shared_ptr<NvmInstructionDesc> NvmInstructionDesc::createEntry(Executor *executor, KFunction *mainFn) {
+std::shared_ptr<NvmInstructionDesc> 
+NvmInstructionDesc::createEntry(Executor *executor, KFunction *mainFn) {
   andersen_sptr_t anders = std::make_shared<AndersenAAWrapperPass>();
   assert(!anders->runOnModule(*executor->kmodule->module) && "Analysis pass should return false!");
-  errs() << "creatEntry begin\n";
+  // errs() << "creatEntry begin\n";
   for (const auto &BB : *mainFn->function) {
     for (const auto &I : BB) {
       const Value *toChk;
@@ -711,24 +769,24 @@ std::shared_ptr<NvmInstructionDesc> NvmInstructionDesc::createEntry(Executor *ex
           toChk = &I;
           break;
       }
-      std::vector<const Value*> ptsTo;
-      bool ret = anders->getResult().getPointsToSet(toChk, ptsTo);
+      // std::vector<const Value*> ptsTo;
+      // bool ret = anders->getResult().getPointsToSet(toChk, ptsTo);
 
-      if (!ret) {
-        errs() << I << " (" << *toChk << ")\n\treturned false!\n";
-      } else if (ptsTo.empty()) {
-        errs() << I << " (" << *toChk << ") points to nothing!\n";
-      } else {
-        errs() << I << " (" << *toChk << ") points to\n";
-        for (const Value *v : ptsTo) {
-          errs() << "\t" << *v << "\n";
-        }
-      }
+      // if (!ret) {
+      //   errs() << I << " (" << *toChk << ")\n\treturned false!\n";
+      // } else if (ptsTo.empty()) {
+      //   errs() << I << " (" << *toChk << ") points to nothing!\n";
+      // } else {
+      //   errs() << I << " (" << *toChk << ") points to\n";
+      //   for (const Value *v : ptsTo) {
+      //     errs() << "\t" << *v << "\n";
+      //   }
+      // }
     }
   }
-  errs() << "creatEntry end\n";
+  // errs() << "creatEntry end\n";
   
-  llvm::Instruction *inst = &(mainFn->function->getEntryBlock().front());
+  Instruction *inst = &(mainFn->function->getEntryBlock().front());
   KInstruction *start = mainFn->getKInstruction(inst);
 
   NvmInstructionDesc entryInst = NvmInstructionDesc(executor, anders, start);
@@ -739,8 +797,9 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
   bool instEq = lhs.curr_ == rhs.curr_;
   bool valEq  = lhs.values_ == rhs.values_;
   bool stkEq  = lhs.stackframe_ == rhs.stackframe_;
-  // bool succEq = lhs.successors_ == rhs.successors_;
-  // bool predEq = lhs.predecessors_ == rhs.predecessors_;
+  bool resEq  = lhs.runtime_function == rhs.runtime_function;
+  bool succEq = lhs.successors_ == rhs.successors_;
+  bool predEq = lhs.predecessors_ == rhs.predecessors_;
   // bool wEq    = lhs.weight_ == rhs.weight_;
   // if (lhs.curr_->inst == rhs.curr_->inst) {
     // errs() << *lhs.curr_->inst << " == " << *rhs.curr_->inst <<
@@ -751,10 +810,11 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
   // }
   return instEq &&
          valEq &&
-         stkEq;
-        //  stkEq &&
-        //  succEq &&
-        //  predEq &&
+         stkEq &&
+         resEq &&
+        //  lhs.isTerminal == rhs.isTerminal;
+         succEq &&
+         predEq;
         //  wEq;
 
 }
@@ -763,37 +823,36 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
  * NvmHeuristicInfo
  */
 
-std::unordered_map<std::shared_ptr<NvmInstructionDesc>, uint64_t> NvmHeuristicInfo::priority;
+// std::unordered_map<std::shared_ptr<NvmInstructionDesc>, uint64_t> NvmHeuristicInfo::priority;
 
 NvmHeuristicInfo::NvmHeuristicInfo(Executor *executor, KFunction *mainFn, ExecutionState *es) {
   current_state = NvmInstructionDesc::createEntry(executor, mainFn);
   current_state->calculateWeight(es);
-  errs() << "init: " << current_state->str() << "\n";
+  // errs() << "init: " << current_state->str() << "\n";
   computeCurrentPriority(es);
 }
 
 void NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
   // errs() << "Looking for " << current_state->str();
-  if (priority.count(current_state)) {
+  if (priority.count(current_state.get())) {
     // errs() << "Found!\n";
     return;
   }
   // errs() << "Not Found!\n";
 
-  // fprintf(stderr, "pointer of current state: %p\n", current_state.get());
+  // fprintf(stderr, "pointer of current state: %p\n", current_state->get());
   // priority[current_state] = 0;
   // assert(priority.count(current_state) && "what now");
 
-  std::list<std::shared_ptr<NvmInstructionDesc>> toTraverse;
-  toTraverse.push_back(current_state);
+  std::list<NvmInstructionDesc*> toTraverse;
+  toTraverse.push_back(current_state.get());
 
-  std::unordered_set<std::shared_ptr<NvmInstructionDesc>> traversed;
-  std::unordered_set<std::shared_ptr<NvmInstructionDesc>> terminators;
+  std::unordered_set<NvmInstructionDesc*> traversed, terminators;
 
   // Downward traversal.
   // TODO: Recursion check
   while (toTraverse.size()) {
-    std::shared_ptr<NvmInstructionDesc> instDesc = toTraverse.front();
+    NvmInstructionDesc *instDesc = toTraverse.front();
     toTraverse.pop_front();
     // There are cases when two basic blocks converge that an instruction which
     // used to be unique is no longer. So, we need to check the traversed
@@ -809,7 +868,7 @@ void NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
     //    considered a terminator.
     // if (!instDesc->isValid()) continue;
 
-    // errs() << instDesc->str();
+    // errs() << "traverse " << *instDesc->kinst()->inst << "\n";
     // errs() << toTraverse.size() << " " << traversed.size() << "\n";
 
     // assert(traversed.find(instDesc) == traversed.end() && "Repeat!");
@@ -818,94 +877,125 @@ void NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
     // }
     traversed.insert(instDesc);
     
-    const auto &succ = instDesc->getSuccessors(traversed);
-    if (succ.size()) {
-      for (auto sptr : succ) {
-        toTraverse.push_back(sptr);
+    std::list<std::shared_ptr<NvmInstructionDesc>> succs = instDesc->getSuccessors(traversed);
+    if (succs.size()) {
+      for (std::shared_ptr<NvmInstructionDesc> &sp : succs) {
+        std::list<std::shared_ptr<NvmInstructionDesc>> pred = sp->getPredecessors();
+
+        bool found = false;        
+        for (std::shared_ptr<NvmInstructionDesc> &p : pred) {
+          found = found || (p.get() == instDesc);
+        }
+        assert(found && "The successor should have a predecessor equal to the current");
+
+        toTraverse.push_back(sp.get());
       }
-    } else if (instDesc->isTerminator()) {
-      errs() << "TERMINATOR: " << *instDesc->inst() << "\n";
+    } else if (instDesc->isTerminator() || !instDesc->isValid()) {
+      // Invalid instructions serve as "terminator" points until they are
+      // resolved.
+      // errs() << "TERMINATOR: " << *instDesc->inst() << "\n";
+      instDesc->calculateWeight(es);
       terminators.insert(instDesc);
     } else {
-      // Convergence branches and loops.
+      // Convergent branches and loops.
       // errs() << "OOPS\n";
       // errs() << instDesc->str();
       // assert(false && "what?");
+      if (!instDesc->isValid()) assert(instDesc->isTerminator());
     }
   }
   
   // Base state:
-  for (auto sptr : terminators) {
-    priority[sptr] = sptr->calculateWeight(es);
+  for (const auto &term : terminators) {
+    priority[term] = term->getWeight();
   }
 
   // Now, we propagate up.
-  std::unordered_set<std::shared_ptr<NvmInstructionDesc>> level = terminators;
+  std::unordered_set<NvmInstructionDesc*> level = terminators;
 
   // -- we still need loop detection.
-  std::unordered_set<std::shared_ptr<NvmInstructionDesc>> propagated;
+  std::unordered_set<NvmInstructionDesc*> propagated, skipped;
 
   // errs() << "Propagate up\n";
   while (level.size()) {
-    std::unordered_set<std::shared_ptr<NvmInstructionDesc>> nextLevel;
+    std::unordered_set<NvmInstructionDesc*> nextLevel;
 
     // errs() << "level size: " << level.size() << "\n";
-    for (auto sptr : level) {
+    for (NvmInstructionDesc *succ : level) {
       // errs() << "\t" << "n preds: " << sptr->getPredecessors().size() << "\n";
-      for (auto pred : sptr->getPredecessors()) {
-        if (propagated.find(pred) != propagated.end()) {
-          errs() << "||| skipping " << *pred->inst() << "\n"; 
+      for (const std::shared_ptr<NvmInstructionDesc> &pred : succ->getPredecessors()) {
+        if (propagated.find(pred.get()) != propagated.end()) {
+          // errs() << "||| skipping " << *pred->inst() << "\n"; 
+          skipped.insert(pred.get());
           continue;
         }
 
-        uint64_t current_priority = priority[pred];
-        priority[pred] = max(current_priority, pred->calculateWeight(es) + priority[sptr]);
+        uint64_t current_priority = priority[pred.get()];
+        priority[pred.get()] = max(current_priority, pred->calculateWeight(es) + priority[succ]);
 
-        errs() << "^Updating " << *pred->inst() << " from " << *sptr->inst() << "\n";
-        errs() << "^\tfrom " << current_priority << " to " << priority[pred] << "\n";
+        // errs() << "^Updating " << *pred->inst() << " from " << *sptr->inst() << "\n";
+        // errs() << "^\tfrom " << current_priority << " to " << priority[pred] << "\n";
 
-        nextLevel.insert(pred);
+        nextLevel.insert(pred.get());
       }
 
-      propagated.insert(sptr);
+      propagated.insert(succ);
     }
 
     level = nextLevel;
   }
 
+  //assert(propagated == traversed && "problem!");
+  // propagated should be a strict superset of traversed.
+  for (NvmInstructionDesc *succ : traversed) {
+    assert(propagated.count(succ) && "skipped!");
+  }
+
   // for (const auto &p : priority) {
   //   errs() << p.first->str();
-  //   if (*p.first == *current_state) errs() << "+++HEY+++ " << (p.first.get() == current_state.get())  <<"\n";
+  //   if (*p.first == *current_state) errs() << "+++HEY+++ " << (p.first.get() == current_state->get())  <<"\n";
   // }
-  errs() << priority.size() << " =?= " << NvmInstructionDesc::getNumSharedObjs() << "\n";
+  // errs() << priority.size() << " =?= " << NvmInstructionDesc::getNumSharedObjs() << "\n";
   // priority.at(current_state);
   // dumpState();
   // assert(priority.size() == NvmInstructionDesc::getNumSharedObjs() && "too few!");
-  assert(priority.count(current_state) && "can't find our work!");
-  dumpState();
+  if (!priority.count(current_state.get())) {
+    errs() << current_state->str() << "\n";
+    errs() << "-----\n";
+    dumpState();
+  }
+  assert(priority.count(current_state.get()) && "can't find our work!");
+  // dumpState();
 }
 
 void NvmHeuristicInfo::updateCurrentState(ExecutionState *es, KInstruction *pc, bool isNvm) {
+  // errs() << es << " current used to be " << current_state->str() << "\n";
   current_state = current_state->update(pc, isNvm);
+  // errs() << es << " current is now " << current_state->str() << "\n";
   computeCurrentPriority(es);
 }
 
-void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *nextPC) {
-  klee_warning("dumping");
-  dumpState();
+void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruction *nextPC) {
+  // klee_warning("dumping");
+  // dumpState();
   // errs() << *current_state->kinst()->inst << "\n\t=> " << *nextPC->inst << "\n";
+  if (current_state->needsResolution()) {
+    current_state = current_state->resolve(pc);
+    assert(!current_state->needsResolution());
+    // assert(!priority.count(current_state));
+    errs() << "resolved " << current_state->str() << "\n";
+    computeCurrentPriority(es);
+    assert(current_state->getSuccessors().size());
+    assert(!current_state->isTerminator());
+  }
+
   if (current_state->isTerminator()) {
+    if (nextPC != current_state->kinst()) {
+      errs() << current_state->str();
+    }
     assert(nextPC == current_state->kinst() && "assumption violated");
     return;
   }
-
-  // errs() << "CURRENT " << current_state->str(); 
-  // if (current_state->str().find("exit") != string::npos) {
-  //   errs() << "succs\n";
-  //   for (auto s : current_state->getSuccessors()) {
-  //     errs() << s->str() << "\n";
-  //   }
-  // }
 
   auto candidates = current_state->getMatchingSuccessors(nextPC);
 
@@ -931,7 +1021,7 @@ void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *nextPC) {
     candidates = current_state->getSuccessors();
   }
 
-  std::shared_ptr<NvmInstructionDesc> next = candidates.front();
+  std::shared_ptr<NvmInstructionDesc> &next = candidates.front();
 
   if (!next->isValid()) {
     // We now know what the next instruction is, thanks to the symbolic execution
@@ -943,12 +1033,14 @@ void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *nextPC) {
     errs() << "thing\n";
     // -- this is probably pretty inefficient.
     // This IS inefficient.
-    priority.clear();
+    // priority.clear();
     computeCurrentPriority(es);
   }
 
+  // klee_warning("tick %s\n", current_state->str().c_str());
   current_state = next;
-  // klee_warning("tick.\n%s", current_state->str().c_str());
+  // klee_warning("\tnow %s\n", current_state->str().c_str());
+  computeCurrentPriority(es);
 }
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2: */

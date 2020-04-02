@@ -101,7 +101,6 @@ namespace klee {
    * All we need to do is to store the return instruction, as we will inherit
    * the value state from the return instruction.
    */
-  class NvmStackFrameDesc;
   class NvmStackFrameDesc : public Hashable, public StaticStorage<NvmStackFrameDesc> {
     private:
       typedef std::vector<llvm::Instruction*> stack_t;
@@ -111,6 +110,8 @@ namespace klee {
       NvmStackFrameDesc() {}
 
     public:
+
+      virtual ~NvmStackFrameDesc() = default;
 
       uint64_t hash(void) const override;
 
@@ -160,7 +161,6 @@ namespace klee {
    * ---
    * This is the runtime state.
    */
-  class NvmValueDesc;
   class NvmValueDesc : public Hashable, public StaticStorage<NvmValueDesc> {
     private:
       friend class NvmInstructionDesc;
@@ -182,6 +182,19 @@ namespace klee {
       std::unordered_set<llvm::Value*> global_nvm_;
       std::unordered_set<llvm::Value*> local_nvm_;
 
+      /**
+       * 
+       */
+      bool needs_resolution_ = false;
+
+      /**
+       * Vararg functions break the current assumption about passing around
+       * NVM pointers, as you can't directly track them. So, instead, we figure
+       * out if an NVM value was passed as any of the var args. If so, we mark
+       * calls to llvm.va_{start,copy,end} as interesting to resolve all values.
+       */ 
+      bool varargs_contain_nvm_;
+
       // Storing the caller values makes it easier to update when "executing"
       // a return instruction.
       std::shared_ptr<NvmValueDesc> caller_values_;
@@ -198,7 +211,7 @@ namespace klee {
        * We just return an instance with the global variables and the 
        * propagated state due to the function call arguments.
        */
-      std::shared_ptr<NvmValueDesc> doCall(andersen_sptr_t apa, llvm::CallInst *ci) const;
+      std::shared_ptr<NvmValueDesc> doCall(andersen_sptr_t apa, llvm::CallInst *ci, llvm::Function *f) const;
 
       /** 
        * Set up the value state when doing a return.
@@ -212,8 +225,27 @@ namespace klee {
        */
       std::shared_ptr<NvmValueDesc> updateState(llvm::Value *val, bool nvm) const;
 
+      /**
+       * When we do an indirect function call, we can't propagate local nvm variables
+       * cuz we don't know the arguments yet. This lets us do that.
+       */
+      std::shared_ptr<NvmValueDesc> resolveFunctionPointer(andersen_sptr_t apa, llvm::Function *f);
+
       bool isMmapCall(llvm::CallInst *ci) const {
         return !!mmap_calls_.count(ci);
+      }
+
+      /**
+       * 
+       */
+      bool isImportantVarArg(llvm::CallInst *ci) const {
+        if (!varargs_contain_nvm_) return false;
+
+        llvm::Function *f = ci->getCalledFunction();
+        return (f && f->isDeclaration() &&
+                  (f->getIntrinsicID() == llvm::Intrinsic::vastart ||
+                   f->getIntrinsicID() == llvm::Intrinsic::vacopy ||
+                   f->getIntrinsicID() == llvm::Intrinsic::vaend));
       }
 
       /**
@@ -243,7 +275,6 @@ namespace klee {
       friend bool operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs);
   };
 
-  class NvmInstructionDesc;
   class NvmInstructionDesc : public Hashable, public StaticStorage<NvmInstructionDesc> {
     private:
 
@@ -262,6 +293,9 @@ namespace klee {
       std::list<std::shared_ptr<NvmInstructionDesc>> predecessors_;
       bool isEntry = true;
 
+      llvm::Function *runtime_function = nullptr;
+      bool need_resolution = false;
+
       /**
        * Part of the heuristic calculation. This weight is the "interesting-ness"
        * of an instreuction given the current state of values in the system.
@@ -275,8 +309,9 @@ namespace klee {
        * We will not speculate about the return values of mmap.
        */
       uint64_t weight_ = 0;
-
+      
       NvmInstructionDesc() = delete;
+
       NvmInstructionDesc(Executor *executor,
                          andersen_sptr_t apa,
                          KInstruction *location, 
@@ -310,7 +345,8 @@ namespace klee {
     public:
 
       uint64_t hash(void) const override {
-        return ((uint64_t)curr_) ^ values_->hash() ^ stackframe_->hash();
+        return ((uint64_t)curr_) ^ values_->hash() ^ stackframe_->hash() ^ 
+                std::hash<void*>{}(runtime_function);
       }
 
       bool isTerminator(void) const { return isTerminal; } 
@@ -327,8 +363,10 @@ namespace klee {
        * 
        * By checking against the traversed list, we do some backedge detection.
        */
+      // std::list<std::shared_ptr<NvmInstructionDesc>> getSuccessors(
+      //   const std::unordered_set<std::shared_ptr<NvmInstructionDesc>> &traversed);
       std::list<std::shared_ptr<NvmInstructionDesc>> getSuccessors(
-        const std::unordered_set<std::shared_ptr<NvmInstructionDesc>> &traversed);
+        const std::unordered_set<NvmInstructionDesc*> &traversed);
 
       std::list<std::shared_ptr<NvmInstructionDesc>> getSuccessors(void) {
         return successors_;
@@ -372,7 +410,7 @@ namespace klee {
        * block weights, we go from the ends back up to bubble up the overall
        * priority.
        */
-      const std::list<std::shared_ptr<NvmInstructionDesc>> &getPredecessors() {
+      const std::list<std::shared_ptr<NvmInstructionDesc>> &getPredecessors() const {
         // Predecessors are set externally. This call should only ever occur after
         // all successors have been calculated.
         assert((predecessors_.size() > 0 || isEntry) && "Error in pred calculation!");
@@ -384,34 +422,34 @@ namespace klee {
        * 
        * If the current node dominates one of it's predecessors, 
        */
-      std::list<std::shared_ptr<NvmInstructionDesc>> getUniquePredecessors() {
-        std::list<std::shared_ptr<NvmInstructionDesc>> uniq;
+      // std::list<NvmInstructionDesc> getUniquePredecessors() {
+      //   std::list<std::shared_ptr<NvmInstructionDesc>> uniq;
 
-        if (!curr_) return uniq;
+      //   if (!curr_) return uniq;
 
-        llvm::Instruction *curr = curr_->inst;
-        llvm::Function *cfn = curr->getFunction();
-        llvm::DominatorTree dom(*cfn);
+      //   llvm::Instruction *curr = curr_->inst;
+      //   llvm::Function *cfn = curr->getFunction();
+      //   llvm::DominatorTree dom(*cfn);
 
-        for (std::shared_ptr<NvmInstructionDesc> &pptr : predecessors_) {
-          llvm::Instruction *pred = pptr->curr_->inst;
-          llvm::Function *pfn = pred->getFunction();
+      //   for (std::shared_ptr<NvmInstructionDesc> &pptr : predecessors_) {
+      //     llvm::Instruction *pred = pptr->curr_->inst;
+      //     llvm::Function *pfn = pred->getFunction();
 
-          if (cfn == pfn && dom.dominates(curr, pred)) {
-            // Loop detection. Skip.
-            continue;
-          } else if (isa<llvm::CallInst>(curr) && 
-                     cfn == pfn && 
-                     values_->caller_values_ == pptr->values_) {
-            // Uninteresting recursion, as we have the same set of values.
-            continue;
-          }
+      //     if (cfn == pfn && dom.dominates(curr, pred)) {
+      //       // Loop detection. Skip.
+      //       continue;
+      //     } else if (isa<llvm::CallInst>(curr) && 
+      //                cfn == pfn && 
+      //                values_->caller_values_ == pptr->values_) {
+      //       // Uninteresting recursion, as we have the same set of values.
+      //       continue;
+      //     }
 
-          uniq.push_back(pptr);
-        }
+      //     uniq.push_back(pptr);
+      //   }
 
-        return uniq;
-      }
+      //   return uniq;
+      // }
 
       uint64_t getWeight(void) const { return weight_; };
 
@@ -432,6 +470,27 @@ namespace klee {
         std::shared_ptr<NvmValueDesc> updated = values_->updateState(pc->inst, isNvm);
         NvmInstructionDesc desc(executor_, apa_, curr_, updated, stackframe_);
         return getShared(desc);
+      }
+
+      bool needsResolution(void) const {
+        return need_resolution && !runtime_function;
+      }
+
+      std::shared_ptr<NvmInstructionDesc> resolve(KInstruction *nextPC) const {
+        assert(need_resolution && !runtime_function && "Bad resolve call!");
+        llvm::Function *f = nextPC->inst->getFunction();
+
+        NvmInstructionDesc newDesc = *this; // explicit copy
+        newDesc.runtime_function = f;
+        newDesc.setSuccessors();
+        // auto sptr = getShared(newDesc);
+        // assert(*sptr == newDesc);
+        // assert(sptr.get() != this);
+        // assert(sptr->successors_.size());
+        // assert(sptr->isValid());
+        // assert(!sptr->isTerminal);
+        // assert(!sptr->isTerminator());
+        return getShared(newDesc);
       }
 
       std::list<std::shared_ptr<NvmInstructionDesc>> 
@@ -457,7 +516,7 @@ namespace klee {
        */
 
       // This is the final heuristic value
-      static std::unordered_map<std::shared_ptr<NvmInstructionDesc>, uint64_t> priority;
+      std::unordered_map<NvmInstructionDesc*, uint64_t> priority;
 
       std::shared_ptr<NvmInstructionDesc> current_state;
 
@@ -489,14 +548,19 @@ namespace klee {
        * 
        * In stepState, we also want check if we modified any persistent state.
        */
-      void stepState(ExecutionState *es, KInstruction *nextPC);
+      void stepState(ExecutionState *es, KInstruction *pc, KInstruction *nextPC);
 
       llvm::Instruction *currentInst(void) const {
         return current_state->inst();
       }
 
       uint64_t getCurrentPriority(void) const {
-        return priority.at(current_state); 
+        if (priority.find(current_state.get()) == priority.end()) {
+          llvm::errs() << "Pre-trap\n";
+          llvm::errs() << current_state->str() << "\n"; 
+          dumpState();
+        }
+        return priority.at(current_state.get()); 
       };
 
       uint64_t getCurrentWeight(void) const {
