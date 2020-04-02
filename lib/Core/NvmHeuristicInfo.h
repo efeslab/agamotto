@@ -236,16 +236,40 @@ namespace klee {
       }
 
       /**
+       * It is possible for a function to have var args, with one of these 
+       * arguments being a pointer which points to NVM. Example: snprintf to
+       * NVM.
        * 
+       * We need to mark certain va_arg instructions as important to resolve.
+       * These instructions will be the ones that convert a var arg into a 
+       * pointer value---scalars do not matter to us.
+       * 
+       * Note that va_arg (http://llvm.org/docs/LangRef.html#i-va-arg) is not 
+       * supported on many targets, in that case we will look for a getelementptr
+       * and subsequent load.
        */
-      bool isImportantVarArg(llvm::CallInst *ci) const {
+      bool isImportantVAArg(llvm::Instruction *i) const {
         if (!varargs_contain_nvm_) return false;
 
-        llvm::Function *f = ci->getCalledFunction();
-        return (f && f->isDeclaration() &&
+        if (llvm::isa<llvm::VAArgInst>(i) && 
+            i->getType()->isPtrOrPtrVectorTy()) return true;
+        // TODO: The getelementptr case is more annoying
+        // if (llvm::LoadInstruction *li = llvm::dyn_cast<llvm::LoadInst>(i)) {
+        //   if (llvm::GetElementPtrInst *gi = llvm::dyn_cast<llvm::GetElementPtrInst>(li->getPointerOperand())) {
+        //     if (gi->getPointerOperandType())
+        //   }
+        // }
+
+        // Conservative answer:
+        if (llvm::CallInst *ci = llvm::dyn_cast<llvm::CallInst>(i)) {
+          llvm::Function *f = ci->getCalledFunction();
+          return (f && f->isDeclaration() &&
                   (f->getIntrinsicID() == llvm::Intrinsic::vastart ||
                    f->getIntrinsicID() == llvm::Intrinsic::vacopy ||
                    f->getIntrinsicID() == llvm::Intrinsic::vaend));
+        }
+        
+        return false;
       }
 
       /**
@@ -506,6 +530,7 @@ namespace klee {
       // static void attach(std::shared_ptr<NvmInstructionDesc> current, std::shared_ptr<NvmInstructionDesc> successor);
 
       friend bool operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &rhs);
+      friend bool operator!=(const NvmInstructionDesc &lhs, const NvmInstructionDesc &rhs);
   };
 
 

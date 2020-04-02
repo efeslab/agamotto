@@ -121,24 +121,34 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(
 
   for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
     Value *op = ci->getArgOperand(i);
-    Argument *arg = (f->arg_begin() + i);
-    assert(op && arg && "Unsure what to do!");
+    if (!op->getType()->isPtrOrPtrVectorTy()) continue;
+    assert(op);
 
-    // Scalars don't necessarily point to anything.
-    if (!arg->getType()->isPtrOrPtrVectorTy()) continue; 
-    
+    bool pointsToNvm = false;
     // We actually want the points-to set for this
     std::vector<const Value*> ptsSet;
-    errs() << "doing call instruction stuff\n";
-    errs() << *op << "\n";
+    // errs() << "doing call instruction stuff\n";
+    // errs() << *op << "\n";
     bool ret = apa->getResult().getPointsToSet(op, ptsSet);
     assert(ret && "could not get points-to set!");
     for (const Value *ptsTo : ptsSet) {
-      errs() << "\tpoints to " << *ptsTo << "\n";
       if (isNvm(apa, ptsTo)) {
-        errs() << "\t\twhich is nvm!\n";
-        newDesc.local_nvm_.insert(arg);
+        pointsToNvm = true;
+        break;
       }
+    }
+
+    if (!pointsToNvm) continue;
+
+    if (i >= f->arg_size()) {
+      assert(f->isVarArg() && "argument size mismatch!");
+      newDesc.varargs_contain_nvm_ = true;
+    } else {
+      Argument *arg = (f->arg_begin() + i);
+      assert(arg);
+      // Scalars don't necessarily point to anything.
+      if (!arg->getType()->isPtrOrPtrVectorTy()) continue;
+      newDesc.local_nvm_.insert(arg);
     }
 
   }
@@ -154,10 +164,10 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doReturn(andersen_sptr_t apa,
     std::vector<const Value*> ptsTo;
     bool success = apa->getResult().getPointsToSet(retVal, ptsTo);
     if (success && ptsTo.size()) {
-      errs() << "doRet " << *retVal << "\n";
+      // errs() << "doRet " << *retVal << "\n";
       retDesc = retDesc->updateState(call_site_, isNvm(apa, retVal));
     } else {
-       errs() << "doRet doesn't point to a memory object! " << success << " " << ptsTo.size() << "\n";
+      //  errs() << "doRet doesn't point to a memory object! " << success << " " << ptsTo.size() << "\n";
     }
   }
 
@@ -343,12 +353,6 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) {
       return weight_;
     }
 
-    if (values_->isImportantVarArg(ci)) {
-      // errs() << str() << " has weight 1u cuz var args contains nvm!\n";
-      weight_ = 1u;
-      return weight_;
-    }
-
     // Case 4: Is a memory fence.
     // TODO: also should cover mfences, in theory.
     Function *f = ci->getCalledFunction();
@@ -358,6 +362,13 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) {
       return weight_;
     }
   }
+
+  if (values_->isImportantVAArg(i)) {
+    // errs() << str() << " has weight 1u cuz var args contains nvm!\n";
+    weight_ = 1u;
+    return weight_;
+  }
+
 
   // Second, we see if a memory store/flush points to NVM.
   bool mustBeDirty = false;
@@ -388,7 +399,7 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) {
   }
 
   if (!ptr) {
-    errs() << str() << " has weight 0u cuz no pointer!\n";
+    // errs() << str() << " has weight 0u cuz no pointer!\n";
     weight_ = 0u;
     return weight_;
   }
@@ -644,8 +655,8 @@ void NvmInstructionDesc::setSuccessors() {
   // successors_ = ;
   for (NvmInstructionDesc &succ : constructSuccessors()) {
     // if (!succ.values_) {
-    //   errs() << "current is " << *curr_->inst << " " << isValid() << "\n";
-    //   errs() << "\tsuccessor is " << *succ.curr_->inst << "\n";
+      // errs() << "current is " << *curr_->inst << " " << isValid() << "\n";
+      // errs() << "\tsuccessor is " << *succ.curr_->inst << "\n";
     // }
     std::shared_ptr<NvmInstructionDesc> sptr = getShared(succ);
     assert(sptr);
@@ -798,8 +809,8 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
   bool valEq  = lhs.values_ == rhs.values_;
   bool stkEq  = lhs.stackframe_ == rhs.stackframe_;
   bool resEq  = lhs.runtime_function == rhs.runtime_function;
-  bool succEq = lhs.successors_ == rhs.successors_;
-  bool predEq = lhs.predecessors_ == rhs.predecessors_;
+    // bool succEq = lhs.successors_ == rhs.successors_;
+  // bool predEq = lhs.predecessors_ == rhs.predecessors_;
   // bool wEq    = lhs.weight_ == rhs.weight_;
   // if (lhs.curr_->inst == rhs.curr_->inst) {
     // errs() << *lhs.curr_->inst << " == " << *rhs.curr_->inst <<
@@ -811,12 +822,17 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
   return instEq &&
          valEq &&
          stkEq &&
-         resEq &&
+         resEq;
         //  lhs.isTerminal == rhs.isTerminal;
-         succEq &&
-         predEq;
+        //  succEq;
+          // &&
+        //  predEq;
         //  wEq;
 
+}
+
+bool klee::operator!=(const NvmInstructionDesc &lhs, const NvmInstructionDesc &rhs) {
+  return !(lhs == rhs);
 }
 
 /**
@@ -827,7 +843,8 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
 
 NvmHeuristicInfo::NvmHeuristicInfo(Executor *executor, KFunction *mainFn, ExecutionState *es) {
   current_state = NvmInstructionDesc::createEntry(executor, mainFn);
-  current_state->calculateWeight(es);
+  (void)current_state->calculateWeight(es);
+  (void)current_state->getSuccessors();
   // errs() << "init: " << current_state->str() << "\n";
   computeCurrentPriority(es);
 }
@@ -884,7 +901,9 @@ void NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
 
         bool found = false;        
         for (std::shared_ptr<NvmInstructionDesc> &p : pred) {
-          found = found || (p.get() == instDesc);
+          // Won't be fully equal as adding the successor creates a new instance
+          // that is no longer equal to instDesc;
+          found = found || (p->inst() == instDesc->inst());     
         }
         assert(found && "The successor should have a predecessor equal to the current");
 
@@ -947,9 +966,13 @@ void NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
 
   //assert(propagated == traversed && "problem!");
   // propagated should be a strict superset of traversed.
-  for (NvmInstructionDesc *succ : traversed) {
-    assert(propagated.count(succ) && "skipped!");
-  }
+  // for (NvmInstructionDesc *succ : traversed) {
+  //   if (!propagated.count(succ)) {
+  //     errs() << succ->
+  //     assert(skipped.count(succ) && "vanished!");
+  //   }
+  //   assert(propagated.count(succ) && "skipped!");
+  // }
 
   // for (const auto &p : priority) {
   //   errs() << p.first->str();
