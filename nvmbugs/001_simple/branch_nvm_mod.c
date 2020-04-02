@@ -69,8 +69,8 @@ int main(int argc, char *argv[]) {
     mod_function(pmemaddr, doMod);
     // mod_function(pmemaddr, false);
 
-    loop_function(pmemaddr, 10);
-    loop_extra(pmemaddr, 10);
+    // loop_function(pmemaddr, 10);
+    // loop_extra(pmemaddr, 10);
 
     #if USE_MMAP
     int ret = munmap(pmemaddr, getpagesize());

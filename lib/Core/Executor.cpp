@@ -2867,7 +2867,7 @@ void Executor::updateStates(ExecutionState *current) {
       }
 
       // Now go to the next
-      s->nvmInfo->stepState(s, s->pc);
+      s->nvmInfo->stepState(s, s->prevPC, s->pc);
     }
   }
 
