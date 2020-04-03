@@ -484,6 +484,7 @@ void StatsTracker::writeStatsHeader() {
 #endif
              << "QueryCexCacheHits INTEGER,"
              // (iangneal): For NVM-KLEE
+             << "NvmHeuristicTime INTEGER, "
              << "NvmNumBlocksTotal INTEGER,"
              << "NvmNumBlocksCovered INTEGER,"
              << "NvmNumBlocksUnique INTEGER,"
@@ -527,6 +528,7 @@ void StatsTracker::writeStatsHeader() {
 #endif
              << "QueryCexCacheHits ," 
              // (iangneal): For NVM-KLEE
+             << "NvmHeuristicTime ,"
              << "NvmNumBlocksTotal ,"
              << "NvmNumBlocksCovered ,"
              << "NvmNumBlocksUnique ,"
@@ -534,6 +536,7 @@ void StatsTracker::writeStatsHeader() {
              << "NvmHeuristicStatesKilled ,"
              << "NvmHeuristicStatesDeferred "      
              << ") VALUES ( "
+             << "?, "
              << "?, "
              << "?, "
              << "?, "
