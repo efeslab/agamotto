@@ -42,19 +42,21 @@ uint64_t NvmStackFrameDesc::hash(void) const {
     iter++;
   }
 
+  hash_value ^= std::hash<void*>{}(caller_desc.get());
+
   return hash_value;
 }
 
 std::shared_ptr<NvmStackFrameDesc> NvmStackFrameDesc::doReturn(void) const {
-  NvmStackFrameDesc ns = *this;
-  ns.caller_stack.pop_back();
-  ns.return_stack.pop_back();
-  return getShared(ns);
+  assert(caller_desc && "We returned too far!");
+  return caller_desc;
 }
 
 std::shared_ptr<NvmStackFrameDesc> NvmStackFrameDesc::doCall(
+    const std::shared_ptr<NvmStackFrameDesc> &caller_stack,
     Instruction *caller, Instruction *retLoc) const {
   NvmStackFrameDesc ns = *this;
+  ns.caller_desc = caller_stack;
   ns.caller_stack.push_back(caller);
   ns.return_stack.push_back(retLoc);
   return getShared(ns);
@@ -77,8 +79,13 @@ std::string NvmStackFrameDesc::str(void) const {
 }
 
 bool klee::operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs) {
-   return lhs.caller_stack == rhs.caller_stack && lhs.return_stack == rhs.return_stack;
- }
+   return lhs.caller_desc.get() == rhs.caller_desc.get() && 
+          lhs.return_stack == rhs.return_stack;
+}
+
+bool klee::operator!=(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs) {
+  return !(lhs == rhs);
+}
 
 /**
  * NvmValueDesc
@@ -88,16 +95,16 @@ uint64_t NvmValueDesc::hash(void) const {
   uint64_t hash_value = 0;
 
   for (Value *v : mmap_calls_) {
-    hash_value ^= std::hash<void*>{}((void*)v);
+    hash_value ^= std::hash<void*>{}(v);
   }
   for (Value *v : global_nvm_) {
-    hash_value ^= std::hash<void*>{}((void*)v);
+    hash_value ^= std::hash<void*>{}(v);
   }
   for (Value *v : local_nvm_) {
-    hash_value ^= std::hash<void*>{}((void*)v);
+    hash_value ^= std::hash<void*>{}(v);
   }
 
-  hash_value ^= caller_values_ ? caller_values_->hash() : 0;
+  hash_value ^= std::hash<void*>{}(caller_values_.get());
   hash_value ^= std::hash<void*>{}(call_site_);
 
   return hash_value;
@@ -160,7 +167,9 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doReturn(andersen_sptr_t apa,
                                                      ReturnInst *i) const {
   std::shared_ptr<NvmValueDesc> retDesc = caller_values_;
   
-  if (Value *retVal = i->getReturnValue()) {
+  Value *retVal = i->getReturnValue();
+  if (retVal && retVal->getType()->isPtrOrPtrVectorTy()) {
+    // errs() << *retVal << "\n";
     std::vector<const Value*> ptsTo;
     bool success = apa->getResult().getPointsToSet(retVal, ptsTo);
     if (success && ptsTo.size()) {
@@ -316,7 +325,8 @@ bool NvmInstructionDesc::isCachelineModifier(ExecutionState *es) {
   }
   
   if (addr.isNull()) {
-    klee_error("null?");
+    // hasn't been initialized to anything yet.
+    return false;
   }
 
   ResolutionList rl;
@@ -573,7 +583,13 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
     if (!nf) {
       errs() << *ci << "\n";
       klee_error("Could not get the called function!");
-    } 
+    }
+
+    Function *thisFn = curr_->inst->getFunction();
+    if (thisFn == nf && !ready_to_recurse_) {
+      can_recurse_ = true;
+      return ret;
+    }
 
     if (mod_->functionMap.find(nf) != mod_->functionMap.end()) {
       // Successor is the entry to the next function.
@@ -582,8 +598,9 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       Instruction *retLoc = ip->getNextNode();
       // errs() << "ret loc is " << *retLoc << "\n";
       assert(retLoc && "Assumption violated -- call instruction is the last instruction in a basic block!");
+      assert(stackframe_.get() != nullptr);
 
-      std::shared_ptr<NvmStackFrameDesc> newStack = stackframe_->doCall(ci, retLoc);
+      std::shared_ptr<NvmStackFrameDesc> newStack = stackframe_->doCall(stackframe_, ci, retLoc);
       std::shared_ptr<NvmValueDesc> newValues = values_->doCall(apa_, ci);
 
       NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(nextInst), newValues, newStack);
@@ -620,7 +637,8 @@ std::list<NvmInstructionDesc> NvmInstructionDesc::constructSuccessors(void) {
       Instruction *retLoc = ip->getNextNode();
       // errs() << "ret loc is " << *retLoc << "\n";
       assert(retLoc && "Assumption violated -- call instruction is the last instruction in a basic block!");
-      std::shared_ptr<NvmStackFrameDesc> newStack = stackframe_->doCall(ci, retLoc);
+      assert(stackframe_);
+      std::shared_ptr<NvmStackFrameDesc> newStack = stackframe_->doCall(stackframe_, ci, retLoc);
       std::shared_ptr<NvmValueDesc> newValues = values_->doCall(apa_, ci, runtime_function);
       // We'll have to call update on these values later.
 
@@ -809,6 +827,7 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
   bool valEq  = lhs.values_ == rhs.values_;
   bool stkEq  = lhs.stackframe_ == rhs.stackframe_;
   bool resEq  = lhs.runtime_function == rhs.runtime_function;
+  bool recEq  = lhs.ready_to_recurse_ == rhs.ready_to_recurse_;
     // bool succEq = lhs.successors_ == rhs.successors_;
   // bool predEq = lhs.predecessors_ == rhs.predecessors_;
   // bool wEq    = lhs.weight_ == rhs.weight_;
@@ -822,6 +841,7 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
   return instEq &&
          valEq &&
          stkEq &&
+         recEq &&
          resEq;
         //  lhs.isTerminal == rhs.isTerminal;
         //  succEq;
@@ -991,6 +1011,7 @@ void NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
   // dumpState();
 }
 
+// Public
 void NvmHeuristicInfo::updateCurrentState(ExecutionState *es, KInstruction *pc, bool isNvm) {
   // errs() << es << " current used to be " << current_state->str() << "\n";
   current_state = current_state->update(pc, isNvm);
@@ -998,21 +1019,29 @@ void NvmHeuristicInfo::updateCurrentState(ExecutionState *es, KInstruction *pc, 
   computeCurrentPriority(es);
 }
 
+// Public
 void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruction *nextPC) {
   // klee_warning("dumping");
   // dumpState();
   // errs() << *current_state->kinst()->inst << "\n\t=> " << *nextPC->inst << "\n";
+  assert(current_state->kinst() == pc);
   if (current_state->needsResolution()) {
-    current_state = current_state->resolve(pc);
+    current_state = current_state->resolve(nextPC);
     assert(!current_state->needsResolution());
     // assert(!priority.count(current_state));
     errs() << "resolved " << current_state->str() << "\n";
     computeCurrentPriority(es);
+    assert(current_state->isValid());
     assert(current_state->getSuccessors().size());
     assert(!current_state->isTerminator());
   }
 
-  if (current_state->isTerminator()) {
+  if (current_state->isTerminator() && current_state->isRecursable()) {
+    // Lazy recursion evaluation
+    current_state = current_state->getRecursable();
+    assert(!priority.count(current_state.get()));
+    computeCurrentPriority(es);
+  } else if (current_state->isTerminator()) {
     if (nextPC != current_state->kinst()) {
       errs() << current_state->str();
     }
@@ -1053,7 +1082,7 @@ void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruct
     computeCurrentPriority(es);
   } else if (current_state->isCachelineModifier(es)) {
     // Update the weight if this instruction is known to modify NVM.
-    errs() << "thing\n";
+    // errs() << "thing\n";
     // -- this is probably pretty inefficient.
     // This IS inefficient.
     // priority.clear();

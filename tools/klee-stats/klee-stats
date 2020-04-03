@@ -142,7 +142,7 @@ def getRow(record, stats, pr):
     """Compose data for the current run into a row."""
     I, BFull, BPart, BTot, T, St, Mem, QTot, QCon,\
         _, Treal, SCov, SUnc, _, Ts, Tcex, Tf, Tr, QCexMiss, QCexHits,\
-        NvmBlocks, NvmExec, NvmUniq, NvmCov, NvmKill, NvmDefer = record
+        NvmHTime, NvmBlocks, NvmExec, NvmUniq, NvmCov, NvmKill, NvmDefer = record
     maxMem, avgMem, maxStates, avgStates = stats
 
     # special case for straight-line code: report 100% branch coverage

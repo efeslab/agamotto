@@ -596,14 +596,15 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, 19, stats::queryCexCacheMisses);
   sqlite3_bind_int64(insertStmt, 20, stats::queryCexCacheHits);
   // (iangneal): For NVM-KLEE
-  sqlite3_bind_int64(insertStmt, 21, nvmBlockCoverage.size());
-  sqlite3_bind_int64(insertStmt, 22, getNvmNumBlocksCovered());
-  sqlite3_bind_int64(insertStmt, 23, getNvmNumBlocksUnique());
-  sqlite3_bind_int64(insertStmt, 24, getNvmCoverage());
-  sqlite3_bind_int64(insertStmt, 25, stats::nvmStatesKilledEndTrace + stats::nvmStatesKilledIrrelevant);
-  sqlite3_bind_int64(insertStmt, 26, stats::nvmStatesDeferred);
+  sqlite3_bind_int64(insertStmt, 21, stats::nvmHeuristicTime);
+  sqlite3_bind_int64(insertStmt, 22, nvmBlockCoverage.size());
+  sqlite3_bind_int64(insertStmt, 23, getNvmNumBlocksCovered());
+  sqlite3_bind_int64(insertStmt, 24, getNvmNumBlocksUnique());
+  sqlite3_bind_int64(insertStmt, 25, getNvmCoverage());
+  sqlite3_bind_int64(insertStmt, 26, stats::nvmStatesKilledEndTrace + stats::nvmStatesKilledIrrelevant);
+  sqlite3_bind_int64(insertStmt, 27, stats::nvmStatesDeferred);
 #ifdef KLEE_ARRAY_DEBUG
-  sqlite3_bind_int64(insertStmt, 27, stats::arrayHashTime);
+  sqlite3_bind_int64(insertStmt, 28, stats::arrayHashTime);
 #endif
   int errCode = sqlite3_step(insertStmt);
   if(errCode != SQLITE_DONE) klee_error("Error writing stats data: %s", sqlite3_errmsg(statsFile));
