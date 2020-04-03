@@ -49,6 +49,7 @@ namespace stats {
 
   /// (iangneal): Core NVM stats. We don't want to go through the manager 
   /// for everything...
+  extern Statistic nvmHeuristicTime;
   extern Statistic nvmStatesKilledEndTrace;
   extern Statistic nvmStatesKilledIrrelevant;
   extern Statistic nvmStatesDeferred;

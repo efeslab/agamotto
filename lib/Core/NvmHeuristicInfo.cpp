@@ -6,8 +6,11 @@ using namespace klee;
 
 #include <sstream>
 
+#include "CoreStats.h"
 #include "Executor.h"
 #include "klee/ExecutionState.h"
+#include "klee/TimerStatIncrementer.h"
+
 
 /**
  * StaticStorage
@@ -1013,6 +1016,7 @@ void NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
 
 // Public
 void NvmHeuristicInfo::updateCurrentState(ExecutionState *es, KInstruction *pc, bool isNvm) {
+  TimerStatIncrementer timer(stats::nvmHeuristicTime);
   // errs() << es << " current used to be " << current_state->str() << "\n";
   current_state = current_state->update(pc, isNvm);
   // errs() << es << " current is now " << current_state->str() << "\n";
@@ -1021,6 +1025,7 @@ void NvmHeuristicInfo::updateCurrentState(ExecutionState *es, KInstruction *pc, 
 
 // Public
 void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruction *nextPC) {
+  TimerStatIncrementer timer(stats::nvmHeuristicTime);
   // klee_warning("dumping");
   // dumpState();
   // errs() << *current_state->kinst()->inst << "\n\t=> " << *nextPC->inst << "\n";
