@@ -57,15 +57,27 @@ namespace klee {
 
   typedef std::shared_ptr<AndersenAAWrapperPass> andersen_sptr_t;
 
-  struct Hashable {
-    virtual uint64_t hash(void) const = 0;
+  class Hashable {
+    private:
+      mutable bool hash_initialized_ = false;
+      mutable uint64_t hash_value_ = 0;
+      virtual uint64_t hash(void) const = 0;
+    public:
+      virtual uint64_t getHash(void) const {
+        if (!hash_initialized_) {
+          hash_initialized_ = true;
+          hash_value_ = hash();
+        }
 
-    template <class H>
-    struct HashFn : public std::unary_function<H, uint64_t> {
-      uint64_t operator()(const H &hashable) const {
-        return hashable.hash();
-      } 
-    };
+        return hash_value_;
+      }
+
+      template <class H>
+      struct HashFn : public std::unary_function<H, uint64_t> {
+        uint64_t operator()(const H &hashable) const {
+          return hashable.getHash();
+        } 
+      };
   };
 
   template<class X>
@@ -106,6 +118,7 @@ namespace klee {
       typedef std::vector<llvm::Instruction*> stack_t;
       stack_t caller_stack;
       stack_t return_stack;
+      std::shared_ptr<NvmStackFrameDesc> caller_desc;
 
       NvmStackFrameDesc() {}
 
@@ -128,6 +141,7 @@ namespace klee {
       std::shared_ptr<NvmStackFrameDesc> doReturn(void) const;
 
       std::shared_ptr<NvmStackFrameDesc> doCall(
+          const std::shared_ptr<NvmStackFrameDesc> &caller_stack,
           llvm::Instruction *caller, llvm::Instruction *retLoc) const;
 
       llvm::Instruction *getCaller(void) const {
@@ -145,6 +159,7 @@ namespace klee {
       std::string str(void) const;
 
       friend bool operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
+      friend bool operator!=(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
   };
 
   /**
@@ -321,6 +336,12 @@ namespace klee {
       bool need_resolution = false;
 
       /**
+       * Recursion prevention.
+       */
+      bool ready_to_recurse_ = false;
+      bool can_recurse_ = false;
+
+      /**
        * Part of the heuristic calculation. This weight is the "interesting-ness"
        * of an instreuction given the current state of values in the system.
        * 
@@ -369,7 +390,7 @@ namespace klee {
     public:
 
       uint64_t hash(void) const override {
-        return ((uint64_t)curr_) ^ values_->hash() ^ stackframe_->hash() ^ 
+        return ((uint64_t)curr_) ^ values_->getHash() ^ stackframe_->getHash() ^ 
                 std::hash<void*>{}(runtime_function);
       }
 
@@ -395,6 +416,16 @@ namespace klee {
       std::list<std::shared_ptr<NvmInstructionDesc>> getSuccessors(void) {
         return successors_;
       }
+
+      std::shared_ptr<NvmInstructionDesc> getRecursable() const {
+        assert(can_recurse_ && "Trying to recurse a non-recursable function!");
+        NvmInstructionDesc newDesc = *this;
+        newDesc.ready_to_recurse_ = true;
+        newDesc.setSuccessors();
+        return getShared(newDesc);
+      }
+
+      bool isRecursable() const { return can_recurse_; }
 
       /**
        * 
@@ -503,18 +534,25 @@ namespace klee {
       std::shared_ptr<NvmInstructionDesc> resolve(KInstruction *nextPC) const {
         assert(need_resolution && !runtime_function && "Bad resolve call!");
         llvm::Function *f = nextPC->inst->getFunction();
+        // llvm::errs() << "\tresolving to: " << f->getName() << "\n";
 
         NvmInstructionDesc newDesc = *this; // explicit copy
         newDesc.runtime_function = f;
+        newDesc.need_resolution = false;
+
         newDesc.setSuccessors();
-        // auto sptr = getShared(newDesc);
+        auto sptr = getShared(newDesc);
+
+        assert(sptr->runtime_function == newDesc.runtime_function);
+        assert(sptr->need_resolution == newDesc.need_resolution);
+        sptr->isTerminal = false;
         // assert(*sptr == newDesc);
         // assert(sptr.get() != this);
-        // assert(sptr->successors_.size());
-        // assert(sptr->isValid());
-        // assert(!sptr->isTerminal);
-        // assert(!sptr->isTerminator());
-        return getShared(newDesc);
+        assert(sptr->successors_.size());
+        assert(sptr->isValid());
+        assert(!sptr->isTerminal);
+        assert(!sptr->isTerminator());
+        return sptr;
       }
 
       std::list<std::shared_ptr<NvmInstructionDesc>> 
