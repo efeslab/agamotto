@@ -88,12 +88,14 @@ namespace klee {
       typedef std::unordered_map<X, std::shared_ptr<X>, Hashable::HashFn<X>> object_map_t;
       // typedef std::shared_ptr<object_map_t> shared_map_t;
 
+    protected:
+
       /**
        * This way, we don't end up with a ton of duplicates.
        */
       static object_map_t objects_;
 
-    protected:
+    
       
       /**
        * Creates a shared pointer instance 
@@ -115,12 +117,19 @@ namespace klee {
    */
   class NvmStackFrameDesc : public Hashable, public StaticStorage<NvmStackFrameDesc> {
     private:
-      typedef std::vector<llvm::Instruction*> stack_t;
-      stack_t caller_stack;
-      stack_t return_stack;
       std::shared_ptr<NvmStackFrameDesc> caller_desc;
+      llvm::Instruction *caller_inst;
+      llvm::Instruction *return_inst;
 
-      NvmStackFrameDesc() {}
+      NvmStackFrameDesc() : caller_desc(nullptr),
+                            caller_inst(nullptr),
+                            return_inst(nullptr) {}
+
+      NvmStackFrameDesc(const std::shared_ptr<NvmStackFrameDesc> &caller_stack,
+                        llvm::Instruction *caller, 
+                        llvm::Instruction *retLoc) : caller_desc(caller_stack),
+                                                     caller_inst(caller),
+                                                     return_inst(retLoc) {}
 
     public:
 
@@ -128,14 +137,18 @@ namespace klee {
 
       uint64_t hash(void) const override;
 
-      size_t size(void) const { return caller_stack.size(); };
-
-      llvm::Function *at(unsigned idx) const {
-        return caller_stack[idx]->getFunction();
+      bool isEmpty(void) const {
+        return !caller_inst;
       }
 
-      bool isEmpty(void) const {
-        return !caller_stack.size();
+      bool containsFunction(llvm::Function *f) const {
+        const NvmStackFrameDesc *st = this;
+        while (st && !st->isEmpty()) {
+          if (st->caller_inst->getFunction() == f) return true;
+          st = st->caller_desc.get();
+        }
+
+        return false;
       }
 
       std::shared_ptr<NvmStackFrameDesc> doReturn(void) const;
@@ -145,11 +158,11 @@ namespace klee {
           llvm::Instruction *caller, llvm::Instruction *retLoc) const;
 
       llvm::Instruction *getCaller(void) const {
-        return caller_stack.back();
+        return caller_inst;
       }
 
       llvm::Instruction *getReturnLocation(void) const {
-        return return_stack.back();
+        return return_inst;
       }
       
       static std::shared_ptr<NvmStackFrameDesc> empty() { 
@@ -157,6 +170,10 @@ namespace klee {
       }
 
       std::string str(void) const;
+
+      [[gnu::noinline]] void dump(void) const {
+        llvm::errs() << str() << "\n";
+      }
 
       friend bool operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
       friend bool operator!=(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
@@ -290,21 +307,7 @@ namespace klee {
       /**
        * The "points-to" set points to allocation sites.
        */
-      bool isNvm(andersen_sptr_t apa, const llvm::Value *ptr) const {
-        for (const llvm::Value *v : local_nvm_) {
-          if (llvm::AliasResult::MustAlias == apa->getResult().andersenAlias(v, ptr)) {
-            return true;
-          }
-        }
-
-        for (const llvm::Value *v : global_nvm_) {
-          if (llvm::AliasResult::MustAlias == apa->getResult().andersenAlias(v, ptr)) {
-            return true;
-          }
-        }
-
-        return false;
-      }
+      bool isNvm(andersen_sptr_t apa, const llvm::Value *ptr) const;
 
       // Populate with all the calls to mmap.
       static std::shared_ptr<NvmValueDesc> staticState(llvm::Module *m);
@@ -341,6 +344,12 @@ namespace klee {
       bool ready_to_recurse_ = false;
       bool can_recurse_ = false;
 
+      /** 
+       * Laziness triggers.
+       * - We need to be lazy in a lot of cases for speed.
+       */
+      bool force_special_handler_call_fall_over_ = false;
+
       /**
        * Part of the heuristic calculation. This weight is the "interesting-ness"
        * of an instreuction given the current state of values in the system.
@@ -370,6 +379,9 @@ namespace klee {
       /* Methods for creating successor states. */
 
       /* Helper functions. */
+
+      // The default successor is pc++.
+      NvmInstructionDesc constructDefaultSuccessor(void) const;
 
       // This creates the descriptions of the successor states, but does not
       // retrieve the actual shared successors.
@@ -427,6 +439,48 @@ namespace klee {
 
       bool isRecursable() const { return can_recurse_; }
 
+      std::shared_ptr<NvmInstructionDesc> getForceFallOver() const {
+        assert(!force_special_handler_call_fall_over_ && "bad invocation!");
+        assert(forceFallOverUnset() && "bad invocation!");
+        assert(!getShared(*this)->force_special_handler_call_fall_over_ && "wut");
+        assert(getShared(*this)->forceFallOverUnset() && "wut");
+
+        NvmInstructionDesc newDesc = *this;
+        newDesc.force_special_handler_call_fall_over_ = true;
+        newDesc.successors_.clear();
+        newDesc.setSuccessors();
+
+        assert(!force_special_handler_call_fall_over_ && "bad invocation!");
+        assert(forceFallOverUnset() && "bad invocation!");
+        assert(!getShared(*this)->force_special_handler_call_fall_over_ && "wut");
+        assert(getShared(*this)->forceFallOverUnset() && "wut");
+
+        NvmInstructionDesc cp = newDesc;
+        std::shared_ptr<NvmInstructionDesc> sh = getShared(cp);
+        assert(newDesc.force_special_handler_call_fall_over_);
+        // llvm::errs() << `ed(newDesc)->str() << "\n";
+        // *getShared(newDesc) = newDesc;
+
+        // this in the predecessor should be replaced
+        for(const std::shared_ptr<NvmInstructionDesc> &pred : predecessors_) {
+          for (auto it = pred->successors_.begin();
+               it != pred->successors_.end();
+               it++) {
+            // if (**it == *this) {
+            //   *it = sh;
+            // }
+            if (**it != *this) continue;
+            pred->successors_.remove(*it);
+            pred->successors_.push_back(sh);
+            break;
+          }
+        } 
+
+        return getShared(newDesc);
+      }
+
+      bool forceFallOverUnset() const { return !force_special_handler_call_fall_over_; }
+
       /**
        * 
        */
@@ -471,40 +525,6 @@ namespace klee {
         assert((predecessors_.size() > 0 || isEntry) && "Error in pred calculation!");
         return predecessors_;
       }
-
-      /**
-       * Loopless.
-       * 
-       * If the current node dominates one of it's predecessors, 
-       */
-      // std::list<NvmInstructionDesc> getUniquePredecessors() {
-      //   std::list<std::shared_ptr<NvmInstructionDesc>> uniq;
-
-      //   if (!curr_) return uniq;
-
-      //   llvm::Instruction *curr = curr_->inst;
-      //   llvm::Function *cfn = curr->getFunction();
-      //   llvm::DominatorTree dom(*cfn);
-
-      //   for (std::shared_ptr<NvmInstructionDesc> &pptr : predecessors_) {
-      //     llvm::Instruction *pred = pptr->curr_->inst;
-      //     llvm::Function *pfn = pred->getFunction();
-
-      //     if (cfn == pfn && dom.dominates(curr, pred)) {
-      //       // Loop detection. Skip.
-      //       continue;
-      //     } else if (isa<llvm::CallInst>(curr) && 
-      //                cfn == pfn && 
-      //                values_->caller_values_ == pptr->values_) {
-      //       // Uninteresting recursion, as we have the same set of values.
-      //       continue;
-      //     }
-
-      //     uniq.push_back(pptr);
-      //   }
-
-      //   return uniq;
-      // }
 
       uint64_t getWeight(void) const { return weight_; };
 
@@ -617,14 +637,7 @@ namespace klee {
         return current_state->inst();
       }
 
-      uint64_t getCurrentPriority(void) const {
-        if (priority.find(current_state.get()) == priority.end()) {
-          llvm::errs() << "Pre-trap\n";
-          llvm::errs() << current_state->str() << "\n"; 
-          dumpState();
-        }
-        return priority.at(current_state.get()); 
-      };
+      uint64_t getCurrentPriority(void) const;
 
       uint64_t getCurrentWeight(void) const {
         return current_state->getWeight();
