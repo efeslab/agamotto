@@ -769,6 +769,10 @@ std::unordered_set<std::string> PersistentState::getRootCauses(
   return causes;
 }
 
+ref<Expr> PersistentState::isOffsetPersisted(ref<Expr> offset) const {
+  return isCacheLinePersisted(getCacheLine(offset));
+}
+
 ref<Expr> PersistentState::isCacheLinePersisted(unsigned cacheLine) const {
   return isCacheLinePersisted(ConstantExpr::create(cacheLine, Expr::Int32));
 }

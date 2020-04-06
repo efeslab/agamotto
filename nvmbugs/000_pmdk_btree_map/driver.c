@@ -74,10 +74,11 @@ int main(int argc, const char *argv[]) {
 
     for (uint64_t i = 0; i < n_entries; ++i) {
         TX_BEGIN(pop) {
+            uint64_t reverse = n_entries - 1 - i;
             TOID(uint64_t) val = TX_NEW(uint64_t);
             TX_ADD(val);
-            *D_RW(val) = i; 
-            assert(!btree_map_insert(pop, D_RO(root)->tree, i, val.oid));
+            *D_RW(val) = reverse; 
+            assert(!btree_map_insert(pop, D_RO(root)->tree, reverse, val.oid));
             TX_SET(root, num_nodes, D_RO(root)->num_nodes + 1);
         } TX_END
         printf("Size is now %lu!\n", D_RO(root)->num_nodes);
@@ -88,6 +89,16 @@ int main(int argc, const char *argv[]) {
         uint64_t *ptr = pmemobj_direct(val);
         assert(OID_INSTANCEOF(val, uint64_t) && ptr && *ptr == i);
         printf("\t%lu => %lu!\n", i, *ptr);
+    }
+
+    // want to cause btree_map_rotate_left to be invoked
+    for (uint64_t i = 0; i < n_entries; ++i) {
+      TX_BEGIN(pop) {
+        uint64_t reverse = n_entries - 1 - i;
+        btree_map_remove(pop, D_RO(root)->tree, reverse);
+        TX_SET(root, num_nodes, D_RO(root)->num_nodes - 1);
+      } TX_END
+      printf("Size is now %lu\n", D_RO(root)->num_nodes);
     }
 
     pmemobj_close(pop);

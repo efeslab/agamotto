@@ -92,7 +92,6 @@ btree_map_clear(PMEMobjpool *pop, TOID(struct btree_map) map)
 {
 	int ret = 0;
 	TX_BEGIN(pop) {
-		// btree_map_clear_node(D_RO(map)->root);
 		if (!TOID_IS_NULL(D_RO(map)->root))
 			btree_map_clear_node(D_RO(map)->root);
 

@@ -4001,7 +4001,22 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
       ObjectState *wos = state.addressSpace.getWriteable(mo, os);
       PersistentState *ps = dyn_cast<PersistentState>(wos);
       ref<Expr> offset = mo->getOffsetExpr(address);
-      ps->persistCacheLineAtOffset(offset);
+      // TODO: fork here, instead of relying on bool return value
+      // fork on "isOffsetPersisted"
+      ref<Expr> alreadyPersisted = ps->isOffsetPersisted(offset);
+      StatePair notPersisted = fork(state, Expr::createIsZero(alreadyPersisted) , true);
+      if (notPersisted.first) {
+        // offset not yet persisted, should persist it!
+        auto& goodState = *notPersisted.second;
+        ps->persistCacheLineAtOffset(offset);
+      }
+      if (notPersisted.second) {
+        // offset is already persisted, should error!
+        llvm::errs() << "Unnecessary Flush\n";
+        auto& errState = *notPersisted.second;
+        std::unordered_set<std::string> errors {ps->getLocationInfo(errState)};
+        terminateStateOnPmemError(errState, errors);
+      }
     }
   } else {
     terminateStateEarly(state, "Cannot singly resolve address to memory object");

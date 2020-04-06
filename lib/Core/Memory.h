@@ -452,6 +452,9 @@ class PersistentState : public ObjectState {
 
     bool mustBePersisted(TimingSolver *solver, ExecutionState &state) const;
 
+    std::string getLocationInfo(const ExecutionState &state);
+    ref<Expr> isOffsetPersisted(ref<Expr> offset) const;
+
     static ref<ConstantExpr> getPersistedExpr();
     static ref<ConstantExpr> getDirtyExpr();
     static ref<ConstantExpr> getNullptr();
@@ -472,8 +475,6 @@ class PersistentState : public ObjectState {
     ref<Expr> getCacheLine(ref<Expr> offset) const;
     unsigned numCacheLines() const;
     unsigned cacheLineSize() const;
-
-    std::string getLocationInfo(const ExecutionState &state);
 };
   
 } // End klee namespace

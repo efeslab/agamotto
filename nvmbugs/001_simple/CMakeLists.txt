@@ -20,3 +20,19 @@ klee_add_test_object(TARGET 001_SimpleMod SOURCES
 klee_add_test_object(TARGET 001_SimpleBranchMod SOURCES
   branch_paths.c
 ) 
+
+klee_add_test_object(TARGET 001_DoubleFlushErr SOURCES
+  double_flush_err.c
+)
+
+klee_add_test_object(TARGET 001_DoubleFlushNoErr SOURCES
+  double_flush_no_err.c
+)
+
+klee_add_test_object(TARGET 001_CleanFlushErr SOURCES
+  clean_flush_err.c
+)
+
+klee_add_test_object(TARGET 001_MayFlushErr SOURCES
+  may_flush_err.c
+)
