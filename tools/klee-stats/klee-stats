@@ -43,6 +43,9 @@ Legend = [
     ('QCexCMisses', 'Counterexample cache misses'),
     ('QCexCHits', 'Counterexample cache hits'),
     # (iangneal): For NVM-KLEE
+    ('TNvmHeuristic', 'Time spent in calculating the NVM heuristic values'),
+    ('TNvmGetShared', 'Time spent in memory management code for NVM'),
+    ('TNvmAndersen', 'Time spent in Andersen\'s alias analysis'),
     ('NvmBlocksTotal', 'Number of total NVM-relevant basic blocks'),
     ('NvmBlocksCovered', 'Number of executed NVM-relevant basic blocks'),
     ('NvmBlocksUnique', 'Number of uniquely executed NVM-relevant basic blocks'),
@@ -130,6 +133,9 @@ def getLabels(pr):
                   'TSolver(%)', 'States', 'maxStates', 'Mem(MB)', 'maxMem(MB)')
     elif pr == 'nvm':
         labels = ('Path', 'Instrs', 'Time(s)', 'ICov(%)', 'BCov(%)', 'ICount',
+                  'States', 'maxStates', 'avgStates', 'Mem(MB)',
+                  'maxMem(MB)', 'avgMem(MB)', 'T-NvmHeuristic(%)', 'T-GetShared(%)',
+                  'T-NvmA(%)',
                   'NvmBlocks', 'NvmBlocksExec', 'NvmUnique', 'NvmCov(%)',
                   'NvmStatesKilled', 'NvmStatesDeferred')
     else:
@@ -142,14 +148,14 @@ def getRow(record, stats, pr):
     """Compose data for the current run into a row."""
     I, BFull, BPart, BTot, T, St, Mem, QTot, QCon,\
         _, Treal, SCov, SUnc, _, Ts, Tcex, Tf, Tr, QCexMiss, QCexHits,\
-        NvmHTime, NvmBlocks, NvmExec, NvmUniq, NvmCov, NvmKill, NvmDefer = record
+        NvmHTime, NvmGSTime, NvmATime, NvmBlocks, NvmExec, NvmUniq, NvmCov, NvmKill, NvmDefer = record
     maxMem, avgMem, maxStates, avgStates = stats
 
     # special case for straight-line code: report 100% branch coverage
     if BTot == 0:
         BFull = BTot = 1
 
-    Ts, Tcex, Tf, Tr, T, Treal = [e / 1000000 for e in [Ts, Tcex, Tf, Tr, T, Treal]] #convert from microseconds
+    Ts, Tcex, Tf, Tr, T, Treal, Tnvm, TnvmGS, TnvmA = [e / 1000000 for e in [Ts, Tcex, Tf, Tr, T, Treal, NvmHTime, NvmGSTime, NvmATime]] #convert from microseconds
     Mem = Mem / 1024 / 1024
     AvgQC = int(QCon / max(1, QTot))
 
@@ -173,7 +179,11 @@ def getRow(record, stats, pr):
     elif pr == 'nvm':
         row = (I, Treal, 100 * SCov / (SCov + SUnc),
                100 * (2 * BFull + BPart) / (2 * BTot),
-               SCov + SUnc, NvmBlocks, NvmExec, NvmUniq, 
+               SCov + SUnc, St, maxStates, avgStates,
+               Mem, maxMem, avgMem, 
+               100 * (Tnvm / Treal), 100 * (TnvmGS / Treal),
+               100 * (TnvmA / Treal), 
+               NvmBlocks, NvmExec, NvmUniq, 
                100.0 * NvmCov, NvmKill, NvmDefer)
     else:
         row = (I, Treal, 100 * SCov / (SCov + SUnc),
