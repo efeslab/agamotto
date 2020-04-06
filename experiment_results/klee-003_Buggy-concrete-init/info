@@ -1,0 +1,24 @@
+./klee --nvm-check-type=none --disable-verify=true --libc=uclibc --link-llvm-lib=../nvmbugs/pmdk/install/lib/pmdk_debug/libpmemobj.so.bc --link-llvm-lib=../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc --posix-runtime --env-file=pmdk.env 003_Buggy.bc --sym-pmem PMEM 8388608 PMEM --sym-pmem-init-concrete ./concrete_buggy.pmem 10
+PID: 40221
+Using monotonic steady clock with 1/1000000000s resolution
+Started: 2020-04-05 20:54:23
+BEGIN searcher description
+<InterleavedSearcher> containing 2 searchers:
+RandomPathSearcher
+WeightedRandomSearcher::CoveringNew
+</InterleavedSearcher>
+END searcher description
+Finished: 2020-04-05 21:01:03
+Elapsed: 00:06:40
+KLEE: done: explored paths = 2
+KLEE: done: avg. constructs per query = 317
+KLEE: done: total queries = 1279
+KLEE: done: valid queries = 1249
+KLEE: done: invalid queries = 30
+KLEE: done: query cex = 1279
+
+KLEE: done: total instructions = 479356643
+KLEE: done: completed paths = 2
+	KLEE-NVM: done: paths terminated (uninteresting, no tests) = 0
+	KLEE-NVM: done: paths terminated (after last relevant block, gen tests) = 0
+KLEE: done: generated tests = 2

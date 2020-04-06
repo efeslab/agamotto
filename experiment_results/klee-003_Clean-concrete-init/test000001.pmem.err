@@ -1,0 +1,614 @@
+Error: persistent memory violation!
+File: runtime/POSIX/mman.c
+Line: 189
+assembly.ll line: 108540
+Stack: 
+	#000108540 in munmap_sym (=140582529372160, =8388608, =157788096) at runtime/POSIX/mman.c:189
+	#100108613 in munmap (=140582529372160, =8388608) at runtime/POSIX/mman.c:204
+	#200048702 in util_unmap_part (=67578584) at ../../src/../src/common/set.c:488
+	#300050861 in util_replica_close (=168704960, =0) at ../../src/../src/common/set.c:2914
+	#400050641 in util_poolset_close (=168704960, =0) at ../../src/../src/common/set.c:634
+	#500091766 in obj_pool_cleanup (=140582529372160) at obj.c:1960
+	#600093397 in pmemobj_close (=140582529372160) at obj.c:2000
+	#700013378 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:95
+	#800010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#900003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1000003461 in main (=8, =54522752)
+Errors: 
+1) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+File: obj.c
+Line: 1026
+assembly.ll line: 91251
+Stack: 
+	#000091251 in obj_replica_init_local (=140582529372160, =1, =8388608) at obj.c:1026
+	#100088781 in obj_replica_init (=140582529372160, =168704960, =0, =0) at obj.c:1169
+	#200092532 in obj_replicas_init (=168704960) at obj.c:1659
+	#300092186 in obj_open_common (=152591624, =154943760, =0, =1) at obj.c:1752
+	#400092123 in pmemobj_openU (=152591624, =154943760) at obj.c:1826
+	#500092088 in pmemobj_open (=152591624, =154943760) at obj.c:1839
+	#600012689 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:36
+	#700010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#800003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900003461 in main (=8, =54522752)
+
+2) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 12520
+Stack: 
+	#000012520 in memcpy (=140582529378864, =140582529379128, =80) at libc/string/memcpy.c:29
+	#100072106 in heap_boot (=140582529378864, =140582532526080, =5234688, =140582529378336, =140582529372160, =140582529379128, =181153952, =168704960) at heap.c:1469
+	#200081155 in palloc_boot (=140582529378864, =140582532526080, =5234688, =140582529378336, =140582529372160, =140582529379128, =181153952, =168704960) at palloc.c:877
+	#300080974 in pmalloc_boot (=140582529372160) at pmalloc.c:208
+	#400080758 in lane_recover_and_section_boot (=140582529372160) at lane.c:399
+	#500089618 in obj_runtime_init_common (=140582529372160) at obj.c:859
+	#600089153 in obj_runtime_init (=140582529372160, =0, =1, =1024) at obj.c:1234
+	#700092305 in obj_open_common (=152591624, =154943760, =0, =1) at obj.c:1789
+	#800092123 in pmemobj_openU (=152591624, =154943760) at obj.c:1826
+	#900092088 in pmemobj_open (=152591624, =154943760) at obj.c:1839
+	#1000012689 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:36
+	#1100010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1200003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300003461 in main (=8, =54522752)
+
+3) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000144346 in _mm_stream_si128.773 (=140582529382128, =0)
+	#100144167 in memset_movnt1x64b.762 (=140582529382080, =0) at ../../src/../src/libpmem/x86_64/memset/memset_nt_sse2.h:89
+	#200143105 in memset_movnt_sse2_clwb (=140582529382080, =0, =64) at ../../src/../src/libpmem/x86_64/memset/memset_nt_sse2.h:162
+	#300141207 in memset_nodrain_sse2_clwb (=140582529382080, =0, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:171
+	#400167415 in pmem_memset (=140582529382080, =0, =64, =2) at pmem.c:670
+	#500090981 in obj_norep_memset (=140582529372160, =140582529382080, =0, =64, =2) at obj.c:471
+	#600078551 in pmemops_memset.1259 (=140582529379128, =140582529382080, =0, =64, =2) at ./pmemops.h:126
+	#700086497 in ulog_clobber_entry (=140582529382080, =140582529379128) at ulog.c:424
+	#800086268 in operation_add_buffer (=116743296, =140582533305680, =140582533305680, =8, =13835058055282163712) at memops.c:469
+	#900104406 in pmemobj_tx_add_snapshot (=54524672, =260539488) at tx.c:1167
+	#1000103986 in pmemobj_tx_add_common (=54524672, =260502432) at tx.c:1270
+	#1100103700 in pmemobj_tx_add_range_direct (=140582533305680, =8) at tx.c:1382
+	#1200013213 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:82
+	#1300010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1400003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500003461 in main (=8, =54522752)
+
+4) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000144346 in _mm_stream_si128.773 (=140582529382320, =0)
+	#100144167 in memset_movnt1x64b.762 (=140582529382272, =0) at ../../src/../src/libpmem/x86_64/memset/memset_nt_sse2.h:89
+	#200143105 in memset_movnt_sse2_clwb (=140582529382272, =0, =64) at ../../src/../src/libpmem/x86_64/memset/memset_nt_sse2.h:162
+	#300141207 in memset_nodrain_sse2_clwb (=140582529382272, =0, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:171
+	#400167415 in pmem_memset (=140582529382272, =0, =64, =2) at pmem.c:670
+	#500090981 in obj_norep_memset (=140582529372160, =140582529382272, =0, =64, =2) at obj.c:471
+	#600078551 in pmemops_memset.1259 (=140582529379128, =140582529382272, =0, =64, =2) at ./pmemops.h:126
+	#700086497 in ulog_clobber_entry (=140582529382272, =140582529379128) at ulog.c:424
+	#800086268 in operation_add_buffer (=116743296, =140582533305680, =140582533305680, =8, =13835058055282163712) at memops.c:469
+	#900104406 in pmemobj_tx_add_snapshot (=54524672, =260136864) at tx.c:1167
+	#1000103986 in pmemobj_tx_add_common (=54524672, =259655072) at tx.c:1270
+	#1100103700 in pmemobj_tx_add_range_direct (=140582533305680, =8) at tx.c:1382
+	#1200013213 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:82
+	#1300010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1400003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500003461 in main (=8, =54522752)
+
+5) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+File: obj.c
+Line: 1272
+assembly.ll line: 89235
+Stack: 
+	#000089235 in obj_runtime_init (=140582529372160, =0, =1, =1024) at obj.c:1272
+	#100092305 in obj_open_common (=152591624, =154943760, =0, =1) at obj.c:1789
+	#200092123 in pmemobj_openU (=152591624, =154943760) at obj.c:1826
+	#300092088 in pmemobj_open (=152591624, =154943760) at obj.c:1839
+	#400012689 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:36
+	#500010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#600003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003461 in main (=8, =54522752)
+
+6) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+File: obj.c
+Line: 1147
+assembly.ll line: 88703
+Stack: 
+	#000088703 in obj_replica_init (=140582529372160, =168704960, =0, =0) at obj.c:1147
+	#100092532 in obj_replicas_init (=168704960) at obj.c:1659
+	#200092186 in obj_open_common (=152591624, =154943760, =0, =1) at obj.c:1752
+	#300092123 in pmemobj_openU (=152591624, =154943760) at obj.c:1826
+	#400092088 in pmemobj_open (=152591624, =154943760) at obj.c:1839
+	#500012689 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:36
+	#600010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#700003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800003461 in main (=8, =54522752)
+
+7) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529382064, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529382016, =265485120) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529382016, =265485120, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529382016, =265485120, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529382016, =265485120, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529382016, =265485120, =64, =3) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529382016, =265485120, =64, =3) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529382016, =265485120, =64, =3) at ./pmemops.h:112
+	#800086907 in ulog_entry_buf_create (=140582529381312, =640, =20, =140582533305680, =140582533305680, =8, =13835058055282163712, =140582529379128) at ulog.c:511
+	#900086290 in operation_add_buffer (=116743296, =140582533305680, =140582533305680, =8, =13835058055282163712) at memops.c:472
+	#1000104406 in pmemobj_tx_add_snapshot (=54524672, =260539488) at tx.c:1167
+	#1100103986 in pmemobj_tx_add_common (=54524672, =260502432) at tx.c:1270
+	#1200103700 in pmemobj_tx_add_range_direct (=140582533305680, =8) at tx.c:1382
+	#1300013213 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:82
+	#1400010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1500003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003461 in main (=8, =54522752)
+
+8) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+File: heap.c
+Line: 1595
+assembly.ll line: 72972
+Stack: 
+	#000072972 in heap_cleanup (=140582529378864) at heap.c:1595
+	#100081175 in palloc_heap_cleanup (=140582529378864) at palloc.c:934
+	#200081262 in pmalloc_cleanup (=140582529372160) at pmalloc.c:233
+	#300081251 in lane_section_cleanup (=140582529372160) at lane.c:423
+	#400091756 in obj_pool_cleanup (=140582529372160) at obj.c:1955
+	#500093397 in pmemobj_close (=140582529372160) at obj.c:2000
+	#600013378 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:95
+	#700010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#800003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900003461 in main (=8, =54522752)
+
+9) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+File: sync.c
+Line: 89
+assembly.ll line: 82600
+Stack: 
+	#000082600 in _get_value (=4, =140582529379208, =140582529379216, =0, =98679944) at sync.c:89
+	#100082491 in get_mutex (=140582529372160, =140582529379208) at sync.c:120
+	#200081623 in pmemobj_mutex_lock (=140582529372160, =140582529379208) at sync.c:230
+	#300096206 in pmemobj_mutex_lock_nofail (=140582529372160, =140582529379208) at ./sync.h:113
+	#400096123 in pmemobj_root_construct (=140582529372160, =24, =0, =0) at obj.c:2888
+	#500096491 in pmemobj_root (=140582529372160, =24) at obj.c:2916
+	#600012712 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:46
+	#700010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#800003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900003461 in main (=8, =54522752)
+
+10) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529380656, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529380608, =265479680) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529380608, =265479680, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529380608, =265479680, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529380608, =265479680, =64, =8) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529380608, =265479680, =64, =8) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529380608, =265479680, =64, =8) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529380608, =265479680, =64, =8) at ./pmemops.h:112
+	#800078483 in ulog_clobber (=140582529380608, =116742792, =140582529379128) at ulog.c:714
+	#900077681 in operation_process_persistent_redo (=116742528) at memops.c:668
+	#1000076247 in operation_process (=116742528) at memops.c:795
+	#1100075993 in operation_finish (=116742528, =0) at memops.c:826
+	#1200075699 in palloc_exec_actions (=140582529378864, =116742528, =199172096, =3) at palloc.c:570
+	#1300083462 in palloc_publish (=140582529378864, =199172096, =3, =116742528) at palloc.c:666
+	#1400102965 in pmemobj_tx_commit () at tx.c:989
+	#1500103537 in pmemobj_tx_process () at tx.c:1081
+	#1600013240 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1800003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003461 in main (=8, =54522752)
+
+11) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529382256, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529382208, =265478656) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529382208, =265478656, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529382208, =265478656, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529382208, =265478656, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529382208, =265478656, =64, =3) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529382208, =265478656, =64, =3) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529382208, =265478656, =64, =3) at ./pmemops.h:112
+	#800086907 in ulog_entry_buf_create (=140582529381312, =832, =19, =140582533305680, =140582533305680, =8, =13835058055282163712, =140582529379128) at ulog.c:511
+	#900086290 in operation_add_buffer (=116743296, =140582533305680, =140582533305680, =8, =13835058055282163712) at memops.c:472
+	#1000104406 in pmemobj_tx_add_snapshot (=54524672, =260136864) at tx.c:1167
+	#1100103986 in pmemobj_tx_add_common (=54524672, =259655072) at tx.c:1270
+	#1200103700 in pmemobj_tx_add_range_direct (=140582533305680, =8) at tx.c:1382
+	#1300013213 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:82
+	#1400010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1500003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003461 in main (=8, =54522752)
+
+12) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529381808, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529381760, =266493376) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529381760, =266493376, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529381760, =266493376, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529381760, =266493376, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529381760, =266493376, =64, =3) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529381760, =266493376, =64, =3) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529381760, =266493376, =64, =3) at ./pmemops.h:112
+	#800086907 in ulog_entry_buf_create (=140582529381312, =384, =21, =140582533305680, =140582533305680, =8, =13835058055282163712, =140582529379128) at ulog.c:511
+	#900086290 in operation_add_buffer (=116743296, =140582533305680, =140582533305680, =8, =13835058055282163712) at memops.c:472
+	#1000104406 in pmemobj_tx_add_snapshot (=54524672, =261814752) at tx.c:1167
+	#1100103986 in pmemobj_tx_add_common (=54524672, =261766560) at tx.c:1270
+	#1200103700 in pmemobj_tx_add_range_direct (=140582533305680, =8) at tx.c:1382
+	#1300013213 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:82
+	#1400010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1500003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003461 in main (=8, =54522752)
+
+13) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+File: lane.c
+Line: 366
+assembly.ll line: 80594
+Stack: 
+	#000080594 in lane_cleanup (=140582529372160) at lane.c:366
+	#100091758 in obj_pool_cleanup (=140582529372160) at obj.c:1956
+	#200093397 in pmemobj_close (=140582529372160) at obj.c:2000
+	#300013378 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:95
+	#400010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#500003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#600003461 in main (=8, =54522752)
+
+14) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529381744, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529381696, =266492864) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529381696, =266492864, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529381696, =266492864, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529381696, =266492864, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529381696, =266492864, =64, =3) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529381696, =266492864, =64, =3) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529381696, =266492864, =64, =3) at ./pmemops.h:112
+	#800086907 in ulog_entry_buf_create (=140582529381312, =320, =21, =140582533310312, =140582533310312, =4, =13835058055282163712, =140582529379128) at ulog.c:511
+	#900086290 in operation_add_buffer (=116743296, =140582533310312, =140582533310312, =4, =13835058055282163712) at memops.c:472
+	#1000104406 in pmemobj_tx_add_snapshot (=54524672, =266533344) at tx.c:1167
+	#1100103986 in pmemobj_tx_add_common (=54524672, =266532096) at tx.c:1270
+	#1200103700 in pmemobj_tx_add_range_direct (=140582533310312, =4) at tx.c:1382
+	#1300015271 in tree_map_recolor (=17406336041591695133, =3936848, =17406336041591695133, =3939152, =1) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:186
+	#1400014345 in tree_map_insert (=140582529372160, =17406336041591695133, =3936848, =9, =17406336041591695133, =3939536) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:220
+	#1500013191 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:81
+	#1600010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1700003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003461 in main (=8, =54522752)
+
+15) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+File: libc/string/memset.c
+Line: 28
+assembly.ll line: 12559
+Stack: 
+	#000012559 in memset (=140582529378848, =0, =1504) at libc/string/memset.c:28
+	#100092517 in obj_replicas_init (=168704960) at obj.c:1652
+	#200092186 in obj_open_common (=152591624, =154943760, =0, =1) at obj.c:1752
+	#300092123 in pmemobj_openU (=152591624, =154943760) at obj.c:1826
+	#400092088 in pmemobj_open (=152591624, =154943760) at obj.c:1839
+	#500012689 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:36
+	#600010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#700003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800003461 in main (=8, =54522752)
+
+16) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529381424, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529381376, =266486272) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529381376, =266486272, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529381376, =266486272, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529381376, =266486272, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529381376, =266486272, =64, =3) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529381376, =266486272, =64, =3) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529381376, =266486272, =64, =3) at ./pmemops.h:112
+	#800086907 in ulog_entry_buf_create (=140582529381312, =0, =21, =140582533311080, =140582533311080, =4, =13835058055282163712, =140582529379128) at ulog.c:511
+	#900086290 in operation_add_buffer (=116743296, =140582533311080, =140582533311080, =4, =13835058055282163712) at memops.c:472
+	#1000104406 in pmemobj_tx_add_snapshot (=54524672, =266529312) at tx.c:1167
+	#1100103986 in pmemobj_tx_add_common (=54524672, =266527968) at tx.c:1270
+	#1200103700 in pmemobj_tx_add_range_direct (=140582533311080, =4) at tx.c:1382
+	#1300015163 in tree_map_recolor (=17406336041591695133, =3936848, =17406336041591695133, =3939664, =1) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:184
+	#1400014345 in tree_map_insert (=140582529372160, =17406336041591695133, =3936848, =9, =17406336041591695133, =3939536) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:220
+	#1500013191 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:81
+	#1600010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1700003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003461 in main (=8, =54522752)
+
+17) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+File: obj.c
+Line: 1936
+assembly.ll line: 91986
+Stack: 
+	#000091986 in obj_pool_lock_cleanup (=140582529372160) at obj.c:1936
+	#100091754 in obj_pool_cleanup (=140582529372160) at obj.c:1953
+	#200093397 in pmemobj_close (=140582529372160) at obj.c:2000
+	#300013378 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:95
+	#400010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#500003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#600003461 in main (=8, =54522752)
+
+18) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529381616, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529381568, =266489600) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529381568, =266489600, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529381568, =266489600, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529381568, =266489600, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529381568, =266489600, =64, =3) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529381568, =266489600, =64, =3) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529381568, =266489600, =64, =3) at ./pmemops.h:112
+	#800086907 in ulog_entry_buf_create (=140582529381312, =192, =21, =140582533309800, =140582533309800, =4, =13835058055282163712, =140582529379128) at ulog.c:511
+	#900086290 in operation_add_buffer (=116743296, =140582533309800, =140582533309800, =4, =13835058055282163712) at memops.c:472
+	#1000104406 in pmemobj_tx_add_snapshot (=54524672, =266531328) at tx.c:1167
+	#1100103986 in pmemobj_tx_add_common (=54524672, =266528160) at tx.c:1270
+	#1200103700 in pmemobj_tx_add_range_direct (=140582533309800, =4) at tx.c:1382
+	#1300015163 in tree_map_recolor (=17406336041591695133, =3936848, =17406336041591695133, =3939152, =1) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:184
+	#1400014345 in tree_map_insert (=140582529372160, =17406336041591695133, =3936848, =9, =17406336041591695133, =3939536) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:220
+	#1500013191 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:81
+	#1600010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1700003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003461 in main (=8, =54522752)
+
+19) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529381936, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529381888, =265483584) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529381888, =265483584, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529381888, =265483584, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529381888, =265483584, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529381888, =265483584, =64, =3) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529381888, =265483584, =64, =3) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529381888, =265483584, =64, =3) at ./pmemops.h:112
+	#800086907 in ulog_entry_buf_create (=140582529381312, =512, =20, =140582533310864, =140582533310864, =16, =13835058055282163712, =140582529379128) at ulog.c:511
+	#900086290 in operation_add_buffer (=116743296, =140582533310864, =140582533310864, =16, =13835058055282163712) at memops.c:472
+	#1000104406 in pmemobj_tx_add_snapshot (=54524672, =265765248) at tx.c:1167
+	#1100103986 in pmemobj_tx_add_common (=54524672, =265763360) at tx.c:1270
+	#1200103700 in pmemobj_tx_add_range_direct (=140582533310864, =16) at tx.c:1382
+	#1300016049 in tree_map_rotate (=17406336041591695133, =3936848, =17406336041591695133, =3938896, =0) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:146
+	#1400015647 in tree_map_recolor (=17406336041591695133, =3936848, =17406336041591695133, =3939408, =1) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:196
+	#1500014345 in tree_map_insert (=140582529372160, =17406336041591695133, =3936848, =8, =17406336041591695133, =3939280) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:220
+	#1600013191 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:81
+	#1700010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1800003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003461 in main (=8, =54522752)
+
+20) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529381680, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529381632, =266491968) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529381632, =266491968, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529381632, =266491968, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529381632, =266491968, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529381632, =266491968, =64, =3) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529381632, =266491968, =64, =3) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529381632, =266491968, =64, =3) at ./pmemops.h:112
+	#800086907 in ulog_entry_buf_create (=140582529381312, =256, =21, =140582533310824, =140582533310824, =4, =13835058055282163712, =140582529379128) at ulog.c:511
+	#900086290 in operation_add_buffer (=116743296, =140582533310824, =140582533310824, =4, =13835058055282163712) at memops.c:472
+	#1000104406 in pmemobj_tx_add_snapshot (=54524672, =266531168) at tx.c:1167
+	#1100103986 in pmemobj_tx_add_common (=54524672, =266529504) at tx.c:1270
+	#1200103700 in pmemobj_tx_add_range_direct (=140582533310824, =4) at tx.c:1382
+	#1300015203 in tree_map_recolor (=17406336041591695133, =3936848, =17406336041591695133, =3939152, =1) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:185
+	#1400014345 in tree_map_insert (=140582529372160, =17406336041591695133, =3936848, =9, =17406336041591695133, =3939536) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:220
+	#1500013191 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:81
+	#1600010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1700003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003461 in main (=8, =54522752)
+
+21) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+File: obj.c
+Line: 1042
+assembly.ll line: 91294
+Stack: 
+	#000091294 in obj_replica_init_local (=140582529372160, =1, =8388608) at obj.c:1042
+	#100088781 in obj_replica_init (=140582529372160, =168704960, =0, =0) at obj.c:1169
+	#200092532 in obj_replicas_init (=168704960) at obj.c:1659
+	#300092186 in obj_open_common (=152591624, =154943760, =0, =1) at obj.c:1752
+	#400092123 in pmemobj_openU (=152591624, =154943760) at obj.c:1826
+	#500092088 in pmemobj_open (=152591624, =154943760) at obj.c:1839
+	#600012689 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:36
+	#700010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#800003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900003461 in main (=8, =54522752)
+
+22) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529380720, =0)
+	#100152286 in memmove_movnt2x64b.553 (=140582529380608, =150759552) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:102
+	#200151631 in memmove_movnt_sse_fw.548 (=140582529380608, =150759552, =128) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:186
+	#300150453 in memmove_movnt_sse2_clwb (=140582529380608, =150759552, =128) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529380608, =150759552, =128, =8) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529380608, =150759552, =128, =8) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529380608, =150759552, =128, =8) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529380608, =150759552, =128, =8) at ./pmemops.h:112
+	#800078423 in ulog_store (=140582529380608, =150759552, =32, =640, =116742792, =140582529379128) at ulog.c:372
+	#900077664 in operation_process_persistent_redo (=116742528) at memops.c:661
+	#1000076247 in operation_process (=116742528) at memops.c:795
+	#1100075993 in operation_finish (=116742528, =0) at memops.c:826
+	#1200075699 in palloc_exec_actions (=140582529378864, =116742528, =199172096, =3) at palloc.c:570
+	#1300083462 in palloc_publish (=140582529378864, =199172096, =3, =116742528) at palloc.c:666
+	#1400102965 in pmemobj_tx_commit () at tx.c:989
+	#1500103537 in pmemobj_tx_process () at tx.c:1081
+	#1600013240 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1800003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003461 in main (=8, =54522752)
+
+23) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529382192, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529382144, =265330304) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529382144, =265330304, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529382144, =265330304, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529382144, =265330304, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529382144, =265330304, =64, =3) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529382144, =265330304, =64, =3) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529382144, =265330304, =64, =3) at ./pmemops.h:112
+	#800086907 in ulog_entry_buf_create (=140582529381312, =768, =19, =140582533309312, =140582533309312, =16, =13835058055282163712, =140582529379128) at ulog.c:511
+	#900086290 in operation_add_buffer (=116743296, =140582533309312, =140582533309312, =16, =13835058055282163712) at memops.c:472
+	#1000104406 in pmemobj_tx_add_snapshot (=54524672, =264924544) at tx.c:1167
+	#1100103986 in pmemobj_tx_add_common (=54524672, =264922016) at tx.c:1270
+	#1200103700 in pmemobj_tx_add_range_direct (=140582533309312, =16) at tx.c:1382
+	#1300016049 in tree_map_rotate (=17406336041591695133, =3936848, =17406336041591695133, =3937616, =0) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:146
+	#1400015647 in tree_map_recolor (=17406336041591695133, =3936848, =17406336041591695133, =3938640, =1) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:196
+	#1500014345 in tree_map_insert (=140582529372160, =17406336041591695133, =3936848, =7, =17406336041591695133, =3939024) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:220
+	#1600013191 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:81
+	#1700010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1800003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003461 in main (=8, =54522752)
+
+24) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529381488, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529381440, =266486720) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529381440, =266486720, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529381440, =266486720, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529381440, =266486720, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529381440, =266486720, =64, =3) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529381440, =266486720, =64, =3) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529381440, =266486720, =64, =3) at ./pmemops.h:112
+	#800086907 in ulog_entry_buf_create (=140582529381312, =64, =21, =140582533311592, =140582533311592, =4, =13835058055282163712, =140582529379128) at ulog.c:511
+	#900086290 in operation_add_buffer (=116743296, =140582533311592, =140582533311592, =4, =13835058055282163712) at memops.c:472
+	#1000104406 in pmemobj_tx_add_snapshot (=54524672, =266529152) at tx.c:1167
+	#1100103986 in pmemobj_tx_add_common (=54524672, =266529440) at tx.c:1270
+	#1200103700 in pmemobj_tx_add_range_direct (=140582533311592, =4) at tx.c:1382
+	#1300015203 in tree_map_recolor (=17406336041591695133, =3936848, =17406336041591695133, =3939664, =1) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:185
+	#1400014345 in tree_map_insert (=140582529372160, =17406336041591695133, =3936848, =9, =17406336041591695133, =3939536) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:220
+	#1500013191 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:81
+	#1600010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1700003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003461 in main (=8, =54522752)
+
+25) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529381552, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529381504, =266487424) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529381504, =266487424, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529381504, =266487424, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529381504, =266487424, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529381504, =266487424, =64, =3) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529381504, =266487424, =64, =3) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529381504, =266487424, =64, =3) at ./pmemops.h:112
+	#800086907 in ulog_entry_buf_create (=140582529381312, =128, =21, =140582533311336, =140582533311336, =4, =13835058055282163712, =140582529379128) at ulog.c:511
+	#900086290 in operation_add_buffer (=116743296, =140582533311336, =140582533311336, =4, =13835058055282163712) at memops.c:472
+	#1000104406 in pmemobj_tx_add_snapshot (=54524672, =266532064) at tx.c:1167
+	#1100103986 in pmemobj_tx_add_common (=54524672, =266530784) at tx.c:1270
+	#1200103700 in pmemobj_tx_add_range_direct (=140582533311336, =4) at tx.c:1382
+	#1300015271 in tree_map_recolor (=17406336041591695133, =3936848, =17406336041591695133, =3939664, =1) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:186
+	#1400014345 in tree_map_insert (=140582529372160, =17406336041591695133, =3936848, =9, =17406336041591695133, =3939536) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:220
+	#1500013191 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:81
+	#1600010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1700003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003461 in main (=8, =54522752)
+
+26) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000144346 in _mm_stream_si128.773 (=140582529381872, =0)
+	#100144167 in memset_movnt1x64b.762 (=140582529381824, =0) at ../../src/../src/libpmem/x86_64/memset/memset_nt_sse2.h:89
+	#200143105 in memset_movnt_sse2_clwb (=140582529381824, =0, =64) at ../../src/../src/libpmem/x86_64/memset/memset_nt_sse2.h:162
+	#300141207 in memset_nodrain_sse2_clwb (=140582529381824, =0, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:171
+	#400167415 in pmem_memset (=140582529381824, =0, =64, =2) at pmem.c:670
+	#500090981 in obj_norep_memset (=140582529372160, =140582529381824, =0, =64, =2) at obj.c:471
+	#600078551 in pmemops_memset.1259 (=140582529379128, =140582529381824, =0, =64, =2) at ./pmemops.h:126
+	#700086497 in ulog_clobber_entry (=140582529381824, =140582529379128) at ulog.c:424
+	#800086268 in operation_add_buffer (=116743296, =140582533305680, =140582533305680, =8, =13835058055282163712) at memops.c:469
+	#900104406 in pmemobj_tx_add_snapshot (=54524672, =261814752) at tx.c:1167
+	#1000103986 in pmemobj_tx_add_common (=54524672, =261766560) at tx.c:1270
+	#1100103700 in pmemobj_tx_add_range_direct (=140582533305680, =8) at tx.c:1382
+	#1200013213 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:82
+	#1300010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1400003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500003461 in main (=8, =54522752)
+
+27) Persistent Memory Info:
+	Name: pmem_file_data
+	Address: 140582529372160
+	Size: 16384
+Stack: 
+	#000152512 in _mm_stream_si128.563 (=140582529382000, =0)
+	#100152346 in memmove_movnt1x64b.554 (=140582529381952, =265484416) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:118
+	#200151651 in memmove_movnt_sse_fw.548 (=140582529381952, =265484416, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:193
+	#300150453 in memmove_movnt_sse2_clwb (=140582529381952, =265484416, =64) at ../../src/../src/libpmem/x86_64/memcpy/memcpy_nt_sse2.h:300
+	#400140793 in memmove_nodrain_sse2_clwb (=140582529381952, =265484416, =64, =2) at ../../src/../src/libpmem/x86_64/init.c:166
+	#500167346 in pmem_memcpy (=140582529381952, =265484416, =64, =3) at pmem.c:646
+	#600090889 in obj_norep_memcpy (=140582529372160, =140582529381952, =265484416, =64, =3) at obj.c:442
+	#700034821 in pmemops_memcpy.1276 (=140582529379128, =140582529381952, =265484416, =64, =3) at ./pmemops.h:112
+	#800086907 in ulog_entry_buf_create (=140582529381312, =576, =20, =140582533310312, =140582533310312, =4, =13835058055282163712, =140582529379128) at ulog.c:511
+	#900086290 in operation_add_buffer (=116743296, =140582533310312, =140582533310312, =4, =13835058055282163712) at memops.c:472
+	#1000104406 in pmemobj_tx_add_snapshot (=54524672, =265727008) at tx.c:1167
+	#1100103986 in pmemobj_tx_add_common (=54524672, =265726656) at tx.c:1270
+	#1200103700 in pmemobj_tx_add_range_direct (=140582533310312, =4) at tx.c:1382
+	#1300014399 in tree_map_insert (=140582529372160, =17406336041591695133, =3936848, =8, =17406336041591695133, =3939280) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_clean.c:222
+	#1400013191 in __klee_posix_wrapped_main (=3, =156631488) at nvmbugs/003_pmdk_rbtree_map/driver.c:81
+	#1500010904 in __user_main (=8, =54522752, =54522824) at runtime/POSIX/klee_init_env.c:281
+	#1600003294 in __uClibc_main (=52270600, =8, =54522752, =69825928, =69825800, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1700003461 in main (=8, =54522752)
+

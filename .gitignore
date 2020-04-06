@@ -16,6 +16,9 @@ cscope.*
 *.status
 *.swp
 
+# Experiment Results
+*.ll
+
 .DS_Store
 
 # In source build files

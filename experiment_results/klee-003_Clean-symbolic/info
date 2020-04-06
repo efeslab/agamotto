@@ -1,0 +1,4 @@
+./klee --nvm-check-type=none --disable-verify=true --libc=uclibc --link-llvm-lib=../nvmbugs/pmdk/install/lib/pmdk_debug/libpmemobj.so.bc --link-llvm-lib=../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc --posix-runtime --env-file=pmdk.env 003_Clean.bc --sym-pmem PMEM 16777216 PMEM --sym-pmem-delay-create 10
+PID: 9515
+Using monotonic steady clock with 1/1000000000s resolution
+Started: 2020-04-05 20:33:34

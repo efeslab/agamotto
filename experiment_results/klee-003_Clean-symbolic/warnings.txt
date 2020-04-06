@@ -1,0 +1,246 @@
+KLEE: WARNING: Symbol 'errno' is multiply defined (modules __uClibc_main.os and _stdio.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'stderr' is multiply defined (modules __uClibc_main.os and _stdio.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'stderr' is multiply defined (modules __uClibc_main.os and 003_Clean.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '__exe_env' is multiply defined (modules __uClibc_main.os and fd_init.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '__exe_fs' is multiply defined (modules __uClibc_main.os and fd_init.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '__locale_mmap' is multiply defined (modules __uClibc_main.os and locale_data.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '__C_ctype_b' is multiply defined (modules __uClibc_main.os and __C_ctype_b.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '__C_ctype_tolower' is multiply defined (modules __uClibc_main.os and __C_ctype_tolower.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '__C_ctype_toupper' is multiply defined (modules __uClibc_main.os and __C_ctype_toupper.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'h_errno' is multiply defined (modules __uClibc_main.os and errno.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'stdout' is multiply defined (modules __uClibc_main.os and fprintf.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'errno' is multiply defined (modules __uClibc_main.os and _wchar_utf8sntowcs.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '_stdio_openlist' is multiply defined (modules __uClibc_main.os and fgetc_unlocked.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '__environ' is multiply defined (modules __uClibc_main.os and getenv.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '_pobj_cache_invalidate' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmemobj.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '_pobj_cached_pool' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmemobj.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '__exe_env' is multiply defined (modules __uClibc_main.os and mman.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '__curlocale_var' is multiply defined (modules __uClibc_main.os and __ctype_b_loc.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '_string_syserrmsgs' needs appending linkage (0 => 6).
+KLEE: WARNING: Symbol 'Free' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'Mmap_align' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'Mmap_hint' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'Mmap_mapfile' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'Mmap_no_random' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'Pagesize' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'Strdup' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'Zalloc' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '_Malloc' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '_Realloc' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'fn_malloc' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'fn_realloc' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'fs_delete' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'fs_new' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'fs_read' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'llvm.global_ctors' needs appending linkage (6 => 6).
+KLEE: WARNING: Symbol 'llvm.global_dtors' needs appending linkage (6 => 6).
+KLEE: WARNING: Symbol 'llvm.used' needs appending linkage (6 => 6).
+KLEE: WARNING: Symbol 'os_access' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_auto_flush' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_chmod' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_clock_gettime' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_cond_broadcast' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_cond_destroy' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_cond_init' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_cond_signal' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_cond_timedwait' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_cond_wait' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_cpu_set' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_cpu_zero' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_execv' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_fdopen' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_flock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_fopen' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_fsync' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_fsync_dir' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_ftruncate' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_getenv' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_mkstemp' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_mutex_destroy' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_mutex_init' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_mutex_lock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_mutex_timedlock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_mutex_trylock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_mutex_unlock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_once' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_open' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_part_deep_common' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_posix_fallocate' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_rand_r' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_range_deep_common' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_rwlock_destroy' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_rwlock_init' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_rwlock_rdlock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_rwlock_timedrdlock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_rwlock_timedwrlock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_rwlock_tryrdlock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_rwlock_trywrlock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_rwlock_unlock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_rwlock_wrlock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_semaphore_destroy' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_semaphore_init' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_semaphore_post' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_semaphore_trywait' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_semaphore_wait' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_setenv' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_spin_destroy' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_spin_init' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_spin_lock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_spin_trylock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_spin_unlock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_stat' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_strsignal' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_thread_atfork' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_thread_create' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_thread_join' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_thread_self' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_thread_setaffinity_np' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_tls_get' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_tls_key_create' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_tls_key_delete' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_tls_set' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_unlink' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_unsetenv' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'os_writev' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'out' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'out_err' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'out_fatal' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'out_fini' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'out_get_errormsg' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'out_init' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'out_log' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'out_nonl' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'out_set_print_func' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'out_set_vsnprintf_func' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'set_func_malloc' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'set_func_realloc' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_aligned_free' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_aligned_malloc' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_checksum' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_checksum_compute' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_checksum_seq' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_compare_file_inodes' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_concat_str' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_ddax_region_find' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_fd_get_type' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_fgets' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_create' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_device_dax_alignment' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_dir_close' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_dir_next' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_dir_open' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_dir_remove' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_exists' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_get_size' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_get_type' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_map_whole' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_mkdir' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_open' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_pread' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_pwrite' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_file_zero' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_getexecname' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_init' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_is_absolute_path' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_is_zeroed' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_localtime' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_map' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_map_hint' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_map_hint_unused' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_map_sync' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_map_tmpfile' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_mmap_fini' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_mmap_init' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_parse_size' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_part_realpath' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_range_find' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_range_is_pmem' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_range_none' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_range_register' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_range_ro' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_range_rw' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_range_unregister' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_readline' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_safe_strcpy' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_set_alloc_funcs' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_stat_get_type' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_strerror' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_tmpfile' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_unlink' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_unlink_flock' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_unmap' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol 'util_write_all' is multiply defined (modules __uClibc_main.os and ../nvmbugs/pmdk/install/lib/pmdk_debug/libpmem.so.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '__tsync' is multiply defined (modules __uClibc_main.os and multiprocess_init.bc). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '__time_tm' is multiply defined (modules __uClibc_main.os and __time_tm.os). Deleting one copy from module __uClibc_main.os (0).
+KLEE: WARNING: Symbol '_string_syssigmsgs' needs appending linkage (0 => 6).
+KLEE: WARNING: Symbol '_time_tzinfo' needs appending linkage (0 => 6).
+KLEE: WARNING: Skipping verification!
+KLEE: WARNING ONCE: function "cpuid" has inline asm
+KLEE: WARNING: undefined reference to function: __isoc99_sscanf
+KLEE: WARNING: undefined reference to function: _atomic_mutex_lock
+KLEE: WARNING: undefined reference to function: _atomic_mutex_unlock
+KLEE: WARNING: undefined reference to function: _get_mutex_data
+KLEE: WARNING: undefined reference to function: ceil
+KLEE: WARNING: undefined reference to function: dlclose
+KLEE: WARNING: undefined reference to function: dlerror
+KLEE: WARNING: undefined reference to function: dlopen
+KLEE: WARNING: undefined reference to function: dlsym
+KLEE: WARNING: undefined reference to function: fts_close
+KLEE: WARNING: undefined reference to function: fts_open
+KLEE: WARNING: undefined reference to function: fts_read
+KLEE: WARNING: undefined reference to function: klee_define_fixed_object_from_existing
+KLEE: WARNING: undefined reference to function: klee_error
+KLEE: WARNING: undefined reference to function: klee_init_concrete_zero
+KLEE: WARNING: undefined reference to function: klee_pmem_is_pmem
+KLEE: WARNING: undefined reference to function: klee_undefine_fixed_object
+KLEE: WARNING: undefined reference to function: llvm.x86.avx.vzeroupper
+KLEE: WARNING: undefined reference to function: llvm.x86.sse2.clflush
+KLEE: WARNING: undefined reference to function: madvise
+KLEE: WARNING: undefined reference to function: msync
+KLEE: WARNING: undefined reference to function: pread
+KLEE: WARNING: undefined reference to function: pthread_atfork
+KLEE: WARNING: undefined reference to function: pthread_mutex_timedlock
+KLEE: WARNING: undefined reference to function: pthread_mutex_trylock
+KLEE: WARNING: undefined reference to function: pthread_rwlock_destroy
+KLEE: WARNING: undefined reference to function: pthread_rwlock_init
+KLEE: WARNING: undefined reference to function: pthread_rwlock_rdlock
+KLEE: WARNING: undefined reference to function: pthread_rwlock_timedrdlock
+KLEE: WARNING: undefined reference to function: pthread_rwlock_timedwrlock
+KLEE: WARNING: undefined reference to function: pthread_rwlock_tryrdlock
+KLEE: WARNING: undefined reference to function: pthread_rwlock_trywrlock
+KLEE: WARNING: undefined reference to function: pthread_rwlock_unlock
+KLEE: WARNING: undefined reference to function: pthread_rwlock_wrlock
+KLEE: WARNING: undefined reference to function: pthread_setaffinity_np
+KLEE: WARNING: undefined reference to function: pthread_spin_destroy
+KLEE: WARNING: undefined reference to function: pthread_spin_init
+KLEE: WARNING: undefined reference to function: pthread_spin_lock
+KLEE: WARNING: undefined reference to function: pthread_spin_trylock
+KLEE: WARNING: undefined reference to function: pthread_spin_unlock
+KLEE: WARNING: undefined reference to function: pwrite
+KLEE: WARNING: undefined reference to function: sched_yield
+KLEE: WARNING: undefined reference to function: sem_destroy
+KLEE: WARNING: undefined reference to function: sem_init
+KLEE: WARNING: undefined reference to function: sem_post
+KLEE: WARNING: undefined reference to function: sem_trywait
+KLEE: WARNING: undefined reference to function: sem_wait
+KLEE: WARNING: undefined reference to function: writev
+KLEE: WARNING ONCE: calling external: syscall(16, 0, 21505, 133058880) at runtime/POSIX/fd.c:1196 10
+KLEE: WARNING ONCE: calling external: getpagesize() at libc/unistd/sysconf.c:241 14
+KLEE: WARNING ONCE: secure_getenv: iangneal: secure_getenv returns bad strings, emulating with regular getenv.
+KLEE: WARNING ONCE: calling external: getpid() at ../../src/../src/common/out.c:235 2
+KLEE: WARNING ONCE: calling external: pthread_rwlock_init(132629504, 0) at ../../src/../src/common/os_thread_posix.c:161 2
+KLEE: WARNING ONCE: Alignment of memory from call "malloc" is not modelled. Using alignment of 8.
+KLEE: WARNING ONCE: calling __klee_posix_wrapped_main with extra arguments.
+KLEE: WARNING ONCE: Alignment of memory from call "" is not modelled. Using alignment of 8.
+KLEE: WARNING ONCE: calling external: __isoc99_sscanf(134287152, 132122064, 134269868, 134269872, 134269874, 134269876, 134269877, 134269878, 134269879, 134269880, 134269881, 134269882, 134269883) at ../../src/../src/common/uuid.c:98 6
+KLEE: WARNING: mmap: real mmap path! (start=(nil), length=10485760/10485760, prot=1, flags=34, fd=-1, offset=0) => 0x7fb77e2ca000 (140426072596480)
+KLEE: WARNING: munmap: munmap(start=0x7fb77e2ca000, length=10485760)
+KLEE: WARNING: munmap: munmap done.
+
+KLEE: WARNING ONCE: calling external: ceil(4607182418800017408) at runtime/POSIX/mman.c:176 34
+KLEE: WARNING ONCE: Alignment of memory from call "" is not modelled. Using alignment of 8.
+KLEE: WARNING: mprotect: treating mprotect as a no-op (SUCCESS)
+KLEE: WARNING ONCE: calling external: geteuid() at runtime/POSIX/fd.c:812 20
+KLEE: WARNING ONCE: calling external: getgid() at runtime/POSIX/fd.c:813 21
+KLEE: WARNING ONCE: calling external: printf(131362944, 140426083082240) at nvmbugs/003_pmdk_rbtree_map/driver.c:46 23
+KLEE: WARNING ONCE: calling os_mutex_init with extra arguments.
