@@ -194,7 +194,7 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doReturn(andersen_sptr_t apa,
 std::shared_ptr<NvmValueDesc> NvmValueDesc::updateState(Value *val, bool isNvm) const {
   NvmValueDesc vd = *this;
   // Since the set is sparse, they're only contained if isNvm.
-  if (isNvm) {
+  if (isNvm && val->getType()->isPtrOrPtrVectorTy()) {
     if (isa<GlobalValue>(val)) {
       vd.global_nvm_.insert(val);
     } else {
@@ -210,9 +210,11 @@ bool NvmValueDesc::isNvm(andersen_sptr_t apa, const llvm::Value *ptr) const {
     TimerStatIncrementer timer(stats::nvmAndersenTime);
     std::vector<const llvm::Value*> localSet, ptrSet, interSet;
     bool ret = apa->getResult().getPointsToSet(v, localSet);
+    if (!ret) errs() << *v << "\n";
     assert(ret && "could not get points-to set!");
 
     ret = apa->getResult().getPointsToSet(ptr, ptrSet);
+    if (!ret) errs() << *ptr << "\n";
     assert(ret && "could not get points-to set!");
 
     interSet.resize(std::max(localSet.size(), ptrSet.size()));
@@ -239,9 +241,11 @@ bool NvmValueDesc::isNvm(andersen_sptr_t apa, const llvm::Value *ptr) const {
     // }
     std::vector<const llvm::Value*> localSet, ptrSet, interSet;
     bool ret = apa->getResult().getPointsToSet(v, localSet);
+    if (!ret) errs() << *v << "\n";
     assert(ret && "could not get points-to set!");
 
     ret = apa->getResult().getPointsToSet(ptr, ptrSet);
+    if (!ret) errs() << *ptr << "\n";
     assert(ret && "could not get points-to set!");
 
     interSet.resize(std::max(localSet.size(), ptrSet.size()));
