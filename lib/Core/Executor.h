@@ -439,6 +439,7 @@ private:
                              const char *suffix = NULL,
                              const llvm::Twine &longMessage = "");
   
+  void emitPmemError(ExecutionState &state, const std::unordered_set<std::string> &errors);
   /**
    * call error handler and terminate state for persistent memory errors.
    * For each state terminated, outputs the unique errors that this state caused, 

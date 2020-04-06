@@ -453,7 +453,8 @@ class PersistentState : public ObjectState {
     bool mustBePersisted(TimingSolver *solver, ExecutionState &state) const;
 
     std::string getLocationInfo(const ExecutionState &state);
-    ref<Expr> isOffsetPersisted(ref<Expr> offset) const;
+    // check from PENDING cache line updates if it's clean or not
+    ref<Expr> isOffsetAlreadyPersisted(ref<Expr> offset) const;
 
     static ref<ConstantExpr> getPersistedExpr();
     static ref<ConstantExpr> getDirtyExpr();

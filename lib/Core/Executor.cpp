@@ -3374,8 +3374,7 @@ void Executor::terminateStateOnError(ExecutionState &state,
     haltExecution = true;
 }
 
-void Executor::terminateStateOnPmemError(ExecutionState &state,
-                                         const std::unordered_set<std::string> &errors) {
+void Executor::emitPmemError(ExecutionState &state, const std::unordered_set<std::string> &errors) {
   Instruction * lastInst;
   const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
 
@@ -3414,7 +3413,12 @@ void Executor::terminateStateOnPmemError(ExecutionState &state,
 
     interpreterHandler->processTestCase(state, msg.str().c_str(), suffix_buf.c_str());
   }  
+}
 
+void Executor::terminateStateOnPmemError(ExecutionState &state,
+                                         const std::unordered_set<std::string> &errors) {
+
+  emitPmemError(state, errors);
   terminateState(state);
 
   if (shouldExitOn(TerminateReason::PMem)) {
@@ -4001,21 +4005,29 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
       ObjectState *wos = state.addressSpace.getWriteable(mo, os);
       PersistentState *ps = dyn_cast<PersistentState>(wos);
       ref<Expr> offset = mo->getOffsetExpr(address);
-      // TODO: fork here, instead of relying on bool return value
-      // fork on "isOffsetPersisted"
-      ref<Expr> alreadyPersisted = ps->isOffsetPersisted(offset);
+
+      ref<Expr> alreadyPersisted = ps->isOffsetAlreadyPersisted(offset);
       StatePair notPersisted = fork(state, Expr::createIsZero(alreadyPersisted) , true);
       if (notPersisted.first) {
-        // offset not yet persisted, should persist it!
-        auto& goodState = *notPersisted.second;
+        auto& goodState = *notPersisted.first;
+        wos = goodState.addressSpace.getWriteable(mo, os);
+        assert(wos && "Could not get writeable ObjectState from notPersisted.first");
+        ps = dyn_cast<PersistentState>(wos);
+        assert(ps && "Could not get PersistentState from notPersisted.first");
         ps->persistCacheLineAtOffset(offset);
+        llvm::errs() << "Good Flush\n";
       }
       if (notPersisted.second) {
         // offset is already persisted, should error!
-        llvm::errs() << "Unnecessary Flush\n";
         auto& errState = *notPersisted.second;
+        wos = errState.addressSpace.getWriteable(mo, os);
+        assert(wos && "Could not get writeable ObjectState from notPersisted.second");
+        ps = dyn_cast<PersistentState>(wos);
+        assert(ps && "Could not get PersistentState from notPersisted.second");
+        llvm::errs() << "Unnecessary Flush\n";
         std::unordered_set<std::string> errors {ps->getLocationInfo(errState)};
-        terminateStateOnPmemError(errState, errors);
+        // avoid masking later bugs; emit error, but continue
+        emitPmemError(errState, errors);
       }
     }
   } else {
