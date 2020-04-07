@@ -20,8 +20,7 @@
 // FIXME: We do not want to be exposing these? :(
 #include "../../lib/Core/AddressSpace.h"
 #include "klee/Internal/Module/KInstIterator.h"
-#include "../../lib/Core/NvmFunctionInfo.h"
-#include "../../lib/Core/NvmHeuristicInfo.h"
+#include "../../lib/Core/NvmHeuristics.h"
 
 #include <map>
 #include <memory>

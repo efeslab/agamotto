@@ -1450,6 +1450,8 @@ void Executor::executeCall(ExecutionState &state,
       break;
     }
     case Intrinsic::x86_clflushopt:
+      klee_warning_once(
+        0, "For our purposes, clflushopt ~ clwb, so implementing as fallthrough");
     case Intrinsic::x86_clwb: {
       llvm::Value *v = ki->inst->getOperand(0);
       v = v->stripPointerCasts();
