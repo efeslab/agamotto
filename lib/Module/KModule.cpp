@@ -481,11 +481,6 @@ unsigned KModule::getConstantID(Constant *c, KInstruction* ki) {
   return id;
 }
 
-NvmFunctionInfo *KModule::getNvmFunctionInfo() {
-  if (nvmInfo) return &nvmInfo;
-  return nullptr;
-}
-
 /***/
 
 KConstant::KConstant(llvm::Constant* _ct, unsigned _id, KInstruction* _ki) {

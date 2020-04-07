@@ -360,7 +360,7 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *ex
   // We need the current basic block and the function description to determine
   // the heuristic value.
   // const NvmFunctionCallDesc &desc = execState->stack.back().nvmDesc;
-  const BasicBlock *bb = execState->pc->inst->getParent();
+  // const BasicBlock *bb = execState->pc->inst->getParent();
 
   size_t gen = calculateGeneration(current, execState);
 
@@ -372,16 +372,16 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *ex
   //nvm_info_.findInfo(desc)->dumpInfo();
   // const NvmFunctionCallInfo *callInfo = nvmInfo->findInfo(desc);
   // size_t importance = execState->nvmInfo->getCurrentPriority();
-  size_t importance = execState->nvmInfo->getCurrentWeight();
-  if (importance) {
+  // size_t importance = execState->nvmInfo->getCurrentWeight();
+  // if (importance) {
     // errs() << *execState->nvmInfo->currentInst() << " has weight " << importance << "\n";
-    generateTest[execState] = true;
+    // generateTest[execState] = true;
     //errs() << format("Previous coverage: %d\n", (int)(nvm_info_.computeCoverageRatio(covered) * 100.0));
-    covered.insert(bb);
+    // covered.insert(bb);
     //errs() << format("\tnow: %d\n", (int)(nvm_info_.computeCoverageRatio(covered) * 100.0));
     // exec_.interpreterHandler->setNvmCoverage(nvm_info_.computeCoverageRatio(covered));
     // executor.statsTracker->markNvmBasicBlockVisited(bb);
-  }
+  // }
 
   // size_t priority = nvmInfo->findInfo(desc)->getSuccessorFactor(bb);
   size_t priority = execState->nvmInfo->getCurrentPriority();
