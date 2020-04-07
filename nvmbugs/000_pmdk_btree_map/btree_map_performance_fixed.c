@@ -32,6 +32,8 @@
 
 /*
  * btree_map.c -- textbook implementation of btree /w preemptive splitting
+ * (stolerbs) thie implementation removes the redundant add in btree_map_rotate_left
+ * and has proper TX_ADD usage (correct persistence, correct performance)
  */
 
 #include <assert.h>
@@ -350,7 +352,7 @@ btree_map_rotate_left(TOID(struct tree_map_node) lsb,
 
 	/* rotate the node children */
 	//(stolerbs) This is a performance bug, according to citation 30 in PMTest
-  printf("\tSkipping TX_ADD(node)\n");
+	printf("\tSkipping TX_ADD(node)\n");
 	//TX_ADD(node);
 	/* rotate the node children */
 	memmove(D_RW(node)->slots + 1, D_RO(node)->slots,

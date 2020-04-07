@@ -32,6 +32,7 @@
 
 /*
  * rbtree.c -- red-black tree implementation /w sentinel nodes
+ * (stolerbs) this implementation does TX_ADD instead of TX_SET in 3 locations
  */
 
 #include <assert.h>
@@ -143,6 +144,7 @@ tree_map_rotate(TOID(struct tree_map) map,
 
 	NODE_P(child) = NODE_P(node);
 
+	//(stolerbs) This is the bug (loc 1)
 	TX_ADD(NODE_P(node));
 	NODE_PARENT_AT(node, NODE_LOCATION(node)) = child;
 
@@ -348,6 +350,7 @@ tree_map_remove(PMEMobjpool *pop, TOID(struct tree_map) map, uint64_t key)
 		if (TOID_EQUALS(NODE_P(x), r)) {
 			TX_SET(r, slots[RB_LEFT], x);
 		} else {
+			//(stolerbs) This is the bug (loc 2)
 			TX_ADD(y);
 			NODE_PARENT_AT(y, NODE_LOCATION(y)) = x;
 		}
@@ -364,6 +367,7 @@ tree_map_remove(PMEMobjpool *pop, TOID(struct tree_map) map, uint64_t key)
 			TX_SET(D_RW(n)->slots[RB_LEFT], parent, y);
 			TX_SET(D_RW(n)->slots[RB_RIGHT], parent, y);
 
+			//(stolerbs) This is the bug (loc 3)
 			TX_ADD(NODE_P(n));
 			NODE_PARENT_AT(n, NODE_LOCATION(n)) = y;
 		}

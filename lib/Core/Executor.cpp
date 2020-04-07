@@ -4010,6 +4010,8 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
       StatePair notPersisted = fork(state, Expr::createIsZero(alreadyPersisted) , true);
       if (notPersisted.first) {
         auto& goodState = *notPersisted.first;
+        os = goodState.addressSpace.findObject(mo);
+        assert(os && "Could not get ObjectState from notPersisted.first");
         wos = goodState.addressSpace.getWriteable(mo, os);
         assert(wos && "Could not get writeable ObjectState from notPersisted.first");
         ps = dyn_cast<PersistentState>(wos);
@@ -4020,6 +4022,8 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
       if (notPersisted.second) {
         // offset is already persisted, should error!
         auto& errState = *notPersisted.second;
+        os = errState.addressSpace.findObject(mo);
+        assert(os && "Could not get ObjectState from notPersisted.second");
         wos = errState.addressSpace.getWriteable(mo, os);
         assert(wos && "Could not get writeable ObjectState from notPersisted.second");
         ps = dyn_cast<PersistentState>(wos);

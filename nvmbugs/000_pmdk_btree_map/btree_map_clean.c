@@ -32,6 +32,8 @@
 
 /*
  * btree_map.c -- textbook implementation of btree /w preemptive splitting
+ * (stolerbs) thie implementation has the redundant add in btree_map_rotate_left
+ * but has proper TX_ADD usage (correct persistence, incorrect performance)
  */
 
 #include <assert.h>
@@ -348,7 +350,7 @@ btree_map_rotate_left(TOID(struct tree_map_node) lsb,
 	TX_ADD_FIELD(parent, items[p - 1]);
 	D_RW(parent)->items[p - 1] = D_RO(lsb)->items[D_RO(lsb)->n - 1];
 
-  printf("\tCalling TX_ADD(node)\n");
+	printf("\tCalling TX_ADD(node)\n");
 	TX_ADD(node);
 	/* rotate the node children */
 	memmove(D_RW(node)->slots + 1, D_RO(node)->slots,

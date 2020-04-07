@@ -23,7 +23,7 @@ int main() {
 
   // CacheLine 0 might be clean, or might be dirty!
   // if this results in error, then check persist must also fail
-  // since 'a' cannot be on the smae cache line as 0, which got flushed
+  // since 'a' cannot be on the same cache line as 0, which got flushed
   _mm_clflush(&pmemaddr[0]);
 
   _mm_sfence();

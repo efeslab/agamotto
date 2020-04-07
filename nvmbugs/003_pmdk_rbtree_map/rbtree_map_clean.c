@@ -32,6 +32,7 @@
 
 /*
  * rbtree.c -- red-black tree implementation /w sentinel nodes
+ * (stolerbs) this implementation uses TX_SET in 3 locations properly
  */
 
 #include <assert.h>

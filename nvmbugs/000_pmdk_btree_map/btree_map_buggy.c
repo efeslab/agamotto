@@ -32,6 +32,9 @@
 
 /*
  * btree_map.c -- textbook implementation of btree /w preemptive splitting
+ * (stolerbs) thie implementation has the redundant add in btree_map_rotate_left
+ * and is lacking proper TX_ADD usage (incorrect persistence, incorrect
+ * performance)
  */
 
 #include <assert.h>
