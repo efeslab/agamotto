@@ -95,25 +95,20 @@ namespace klee {
 
       llvm::Instruction *getReturnLocation(void) const { return return_inst; }
 
-      bool NvmStackFrameDesc::containsFunction(llvm::Function *f) const;
+      bool containsFunction(llvm::Function *f) const;
 
-      std::shared_ptr<NvmStackFrameDesc> doReturn(void) const {
-        assert(caller_desc && "We returned too far!");
-        return caller_desc;
-      }
+      std::shared_ptr<NvmStackFrameDesc> doReturn(void) const;
 
       std::shared_ptr<NvmStackFrameDesc> doCall(const std::shared_ptr<NvmStackFrameDesc> &caller_stack,
                                                 llvm::Instruction *caller, 
-                                                llvm::Instruction *retLoc) const {
-        return std::make_shared<NvmStackFrameDesc>(caller_stack, caller, retLoc);
-      }
+                                                llvm::Instruction *retLoc) const;
 
       std::string str(void) const;
 
       void dump(void) const { llvm::errs() << str() << "\n"; }
 
       static std::shared_ptr<NvmStackFrameDesc> empty() { 
-        return std::make_shared<NvmStackFrameDesc>(void); 
+        return std::make_shared<NvmStackFrameDesc>(NvmStackFrameDesc()); 
       }
 
       friend bool operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
@@ -283,8 +278,8 @@ namespace klee {
       std::shared_ptr<NvmValueDesc> values_;
       std::shared_ptr<NvmStackFrameDesc> stackframe_;
 
-      std::unordered_set<std::shared_ptr<NvmInstructionDesc>> successors_;
-      std::unordered_set<std::shared_ptr<NvmInstructionDesc>> predecessors_;
+      std::list<std::shared_ptr<NvmInstructionDesc>> successors_;
+      std::list<std::shared_ptr<NvmInstructionDesc>> predecessors_;
 
       llvm::Function *runtime_function_ = nullptr;
       bool need_resolution_ = false;
@@ -313,9 +308,10 @@ namespace klee {
        * 
        * We will not speculate about the return values of mmap.
        */
+      bool weight_init_ = false;
       uint64_t weight_ = 0;
       uint64_t priority_ = 0;
-      
+
       NvmInstructionDesc() = delete;
 
       NvmInstructionDesc(Executor *executor,
@@ -343,14 +339,26 @@ namespace klee {
        * This differs between static and dynamic as static has no concept of 
        * unresolved functions.
        */
-      virtual uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) const;
+      virtual uint64_t calculateWeight(ExecutionState *es) const;
 
     public:
 
-      /* inline getters */
-      bool isTerminator(void) const { !!return successors_.size(); } 
+      struct HashFn : public std::unary_function<NvmInstructionDesc, uint64_t> {
+        uint64_t operator()(const NvmInstructionDesc &desc) const {
+          return std::hash<void*>{}(desc.curr_) ^ 
+                 std::hash<void*>{}(desc.values_.get()) ^
+                 std::hash<void*>{}(desc.stackframe_.get());
+        } 
+      };
 
-      bool isEntry(void) const { return !!predecessors_.size(); }
+      typedef std::unordered_set<NvmInstructionDesc, HashFn> UnorderedSet;
+
+      virtual ~NvmInstructionDesc() = default;
+
+      /* inline getters */
+      bool isTerminator(void) const { return !successors_.size(); } 
+
+      bool isEntry(void) const { return !predecessors_.size(); }
 
       bool isValid(void) const { return !!curr_; }
 
@@ -358,28 +366,30 @@ namespace klee {
 
       bool forceFallOverUnset(void) const { return !force_special_handler_call_fall_over_; }
 
-      uint64_t getWeight(void) const { return weight_; };
+      uint64_t getWeight(void) const { return weight_; }
+
+      uint64_t getPriority(void) const { return priority_; }
 
       llvm::Instruction *inst(void) const { return curr_->inst; }
 
       KInstruction *kinst(void) const { return curr_; }
 
-      bool needsResolution(void) const { return need_resolution && !runtime_function; }
+      bool needsResolution(void) const { return need_resolution_ && !runtime_function_; }
 
       /**
        * This allows the process to be forward and backward. After we find all
        * block weights, we go from the ends back up to bubble up the overall
        * priority.
        */
-      const std::unordered_set<std::shared_ptr<NvmInstructionDesc>> &getPredecessors() const {
+      std::list<std::shared_ptr<NvmInstructionDesc>> &getPredecessors() {
         // Predecessors are set externally. This call should only ever occur after
         // all successors have been calculated.
-        assert((predecessors_.size() > 0 || is_entry_) && "Error in pred calculation!");
         return predecessors_;
       }
 
-      std::unordered_set<std::shared_ptr<NvmInstructionDesc>> 
-        getSuccessors(void) const { return successors_; }
+      std::list<std::shared_ptr<NvmInstructionDesc>> &getSuccessors() { 
+        return successors_; 
+      }
 
       /* out-line getters */
 
@@ -392,8 +402,10 @@ namespace klee {
        * and construct the states we actually care about.
        * 
        * Does all the loop checking, recursion checking, etc.
+       * 
+       * Does some modifications
        */
-      virtual std::unordered_set<NvmInstructionDesc> constructScions(void) const;
+      virtual NvmInstructionDesc::UnorderedSet constructScions(void);
 
       /**
        * Creates a version of the instruction description with recursable 
@@ -414,8 +426,9 @@ namespace klee {
        */
 
       std::shared_ptr<NvmInstructionDesc> update(KInstruction *pc, bool isNvm) {
-        std::shared_ptr<NvmValueDesc> updated = values_->updateState(pc->inst, isNvm);
-        return std::make_shared<NvmInstructionDesc>(executor_, apa_, curr_, updated, stackframe_);
+        std::shared_ptr<NvmValueDesc> up = values_->updateState(pc->inst, isNvm);
+        NvmInstructionDesc nd(executor_, apa_, curr_, up, stackframe_);
+        return std::make_shared<NvmInstructionDesc>(nd);
       }
 
       std::shared_ptr<NvmInstructionDesc> resolve(KInstruction *nextPC) const;
@@ -425,11 +438,15 @@ namespace klee {
       /**
        * Try to update the weight. Return true if the current weight was changed
        * during this process.
+       * 
+       * Also updates priority (gives us the base case).
        */
       bool updateWeight(ExecutionState *es) {
         uint64_t new_weight = calculateWeight(es);
-        bool changed = weight_ == new_weight;
+        bool changed = weight_ == new_weight || !weight_init_;
+        priority_ = (priority_ - weight_) + new_weight;
         weight_ = new_weight;
+        weight_init_ = true;
         return changed;
       }
 
@@ -465,7 +482,7 @@ namespace klee {
 
       static bool replace(std::shared_ptr<NvmInstructionDesc> &pptr,
                           std::shared_ptr<NvmInstructionDesc> &optr,
-                          std::shared_ptr<NvmInstructionDesc> &nptr)
+                          std::shared_ptr<NvmInstructionDesc> &nptr);
       
       /**
        * Create the first NvmInstructionDesc instance. This is the only entry
@@ -502,7 +519,8 @@ namespace klee {
        * we don't affect other states.
        */
       std::shared_ptr<NvmInstructionDesc> last_state_; // For SFH
-      std::unordered_set<std::shared_ptr<NvmInstructionDesc>> current_states_;
+      // List to allow mutability
+      std::list<std::shared_ptr<NvmInstructionDesc>> current_states_;
       uint64_t current_priority_ = 0;
 
       /**
@@ -519,18 +537,15 @@ namespace klee {
         return current_priority_; 
       }
 
-      uint64_t getCurrentWeight(void) const {
-        return current_state->getWeight();
-      }
-
-      bool isCurrentTerminator(void) const { 
-        return current_state->isTerminator();
+      bool isCurrentTerminator(void) const {
+        if (last_state_) return last_state_->isTerminator();
+        return current_states_.size() == 0;
       }
 
       /**
        * Checks that the current PC is in the set of currently considered 
        * instructions. This can be used in PersistentState when a modification
-       * to NVM co
+       * to NVM occurs.
        */
       void assertIsImportantInstruction(KInstruction *pc) const;
 

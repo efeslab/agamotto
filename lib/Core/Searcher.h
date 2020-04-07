@@ -21,6 +21,8 @@
 #include <set>
 #include <vector>
 #include <functional>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <tuple>
 

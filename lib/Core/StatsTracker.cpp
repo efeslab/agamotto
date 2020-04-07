@@ -332,16 +332,16 @@ void StatsTracker::done() {
 }
 
 void StatsTracker::markNvmBasicBlockVisited(const llvm::BasicBlock *visited) {
-  NvmFunctionInfo *info = executor.kmodule->getNvmFunctionInfo();
-  if (!info) return;
+  // NvmFunctionInfo *info = executor.kmodule->getNvmFunctionInfo();
+  // if (!info) return;
   
-  if (nvmBlockCoverage.empty()) {
-    for (const auto *bb : info->getAllInterestingBB()) {
-      nvmBlockCoverage[bb] = 0;
-    }
-  } 
+  // if (nvmBlockCoverage.empty()) {
+  //   for (const auto *bb : info->getAllInterestingBB()) {
+  //     nvmBlockCoverage[bb] = 0;
+  //   }
+  // } 
 
-  ++nvmBlockCoverage[visited];
+  // ++nvmBlockCoverage[visited];
 }
 
 void StatsTracker::stepInstruction(ExecutionState &es) {
