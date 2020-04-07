@@ -10,7 +10,7 @@
 #include <klee/klee.h>
 
 /* copying 4k at a time to pmem for this example */
-#define BUF_LEN 4096
+#define BUF_LEN 4096*4
 
 int mod_function(char *addr) {
     addr[0] = 2;

@@ -12,6 +12,12 @@ set(CLEAN_SRC
     btree_map.h
 )
 
+set(PERF_SRC
+    driver.c
+    btree_map_performance_fixed.c
+    btree_map.h
+)
+
 include_directories(${PMDK_INCLUDE_DIR})
 link_directories(${PMDK_LIB_DIR})
 
@@ -27,6 +33,7 @@ add_custom_target(LINK_CLEAN COMMAND llvm-link-8 -o ${CLEAN_EXEC}.linked.bc ${CL
 add_dependencies(LINK_CLEAN EXTRACT_CLEAN)
 
 klee_add_test_executable(TARGET 000_Buggy SOURCES ${BUGGY_SRC} EXTRA_LIBS pmemobj pmem)
+klee_add_test_executable(TARGET 000_Performance_Fixed SOURCES ${PERF_SRC} EXTRA_LIBS pmemobj pmem)
 # target_link_libraries(000_Buggy pmemobj pmem)
 
 set(TEST_SRC

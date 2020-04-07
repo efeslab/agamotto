@@ -32,6 +32,9 @@
 
 /*
  * btree_map.c -- textbook implementation of btree /w preemptive splitting
+ * (stolerbs) thie implementation has the redundant add in btree_map_rotate_left
+ * and is lacking proper TX_ADD usage (incorrect persistence, incorrect
+ * performance)
  */
 
 #include <assert.h>
@@ -92,7 +95,6 @@ btree_map_clear(PMEMobjpool *pop, TOID(struct btree_map) map)
 {
 	int ret = 0;
 	TX_BEGIN(pop) {
-		// btree_map_clear_node(D_RO(map)->root);
 		if (!TOID_IS_NULL(D_RO(map)->root))
 			btree_map_clear_node(D_RO(map)->root);
 
