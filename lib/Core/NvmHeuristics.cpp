@@ -11,13 +11,6 @@ using namespace klee;
 #include "klee/ExecutionState.h"
 #include "klee/TimerStatIncrementer.h"
 
-
-/**
- * NvmStackFrameDesc
- * 
- * (iangneal): should be essentially ported.
- */
-
 /* #region NvmStackFrameDesc */
 
 bool NvmStackFrameDesc::containsFunction(llvm::Function *f) const {
@@ -80,11 +73,7 @@ bool klee::operator!=(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs
 
 /* #endregion */
 
-/**
- * NvmValueDesc
- * 
- * (iangneal): should be essentially ported as well.
- */
+/* #region NvmValueDesc */
 
 std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(andersen_sptr_t apa, 
                                                    CallInst *ci, 
@@ -357,22 +346,26 @@ bool klee::operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs) {
          callerEq;
 }
 
-/**
- * NvmInstructionDesc
- */
+/* #endregion */
+
+/* #region NvmInstructionDesc */
 
 
 NvmInstructionDesc::NvmInstructionDesc(Executor *executor,
                                        andersen_sptr_t apa,
                                        KInstruction *location, 
                                        std::shared_ptr<NvmValueDesc> values, 
-                                       std::shared_ptr<NvmStackFrameDesc> stackframe) 
+                                       std::shared_ptr<NvmStackFrameDesc> stackframe,
+                                       const std::unordered_set<llvm::Instruction*> &currpath) 
         : executor_(executor),
           apa_(apa), 
           mod_(executor->kmodule.get()), 
           curr_(location), 
           values_(values), 
-          stackframe_(stackframe) {}
+          stackframe_(stackframe),
+          path_(currpath) {
+  path_.insert(curr_->inst);
+}
 
 NvmInstructionDesc::NvmInstructionDesc(Executor *executor,
                                        andersen_sptr_t apa, 
@@ -382,7 +375,9 @@ NvmInstructionDesc::NvmInstructionDesc(Executor *executor,
           mod_(executor->kmodule.get()), 
           curr_(entry), 
           values_(NvmValueDesc::staticState(mod_->module.get())), 
-          stackframe_(NvmStackFrameDesc::empty()) {}
+          stackframe_(NvmStackFrameDesc::empty()) {
+  path_.insert(curr_->inst);
+}
 
 bool NvmInstructionDesc::isCachelineModifier(ExecutionState *es) const {
   Instruction *i = curr_->inst;
@@ -523,7 +518,8 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) const {
 
 NvmInstructionDesc NvmInstructionDesc::constructDefaultScion(void) const {
   Instruction *ni = curr_->inst->getNextNode();
-  NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), values_, stackframe_);
+  NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), 
+                          values_, stackframe_, path_);
   return desc;
 }
 
@@ -550,7 +546,8 @@ NvmInstructionDesc::constructScions(void) {
       std::shared_ptr<NvmValueDesc> new_values = values_->doReturn(apa_, ri);
       std::shared_ptr<NvmStackFrameDesc> ns = stackframe_->doReturn();
 
-      NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), new_values, ns);
+      NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), 
+                              new_values, ns, path_);
       ret.insert(desc);
       return ret;
 
@@ -560,7 +557,9 @@ NvmInstructionDesc::constructScions(void) {
         Instruction *ni = &(sbb->front());
         llvm::DominatorTree dom(*ip->getFunction());
         if (!dom.dominates(ni, ip)) {
-          NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), values_, stackframe_);
+          NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), 
+                                  values_, stackframe_, path_);
+          desc.addToPath(curr_->inst);
           ret.insert(desc);
         }
       }
@@ -579,7 +578,8 @@ NvmInstructionDesc::constructScions(void) {
       }
       
       for (Instruction *ni : uniqueTargets) {
-        NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), values_, stackframe_);
+        NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), 
+                                values_, stackframe_, path_);
         ret.insert(desc);
       }
 
@@ -620,7 +620,8 @@ NvmInstructionDesc::constructScions(void) {
       std::shared_ptr<NvmStackFrameDesc> newStack = stackframe_->doCall(stackframe_, ci, retLoc);
       std::shared_ptr<NvmValueDesc> newValues = values_->doCall(apa_, ci);
 
-      NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(nextInst), newValues, newStack);
+      NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(nextInst), 
+                              newValues, newStack, path_);
       ret.insert(desc);
     }
     
@@ -668,7 +669,7 @@ NvmInstructionDesc::constructScions(void) {
 
       NvmInstructionDesc desc(executor_, apa_, 
                               mod_->getKInstruction(&(runtime_function_->getEntryBlock().front())), 
-                              newValues, newStack);
+                              newValues, newStack, path_);
       ret.insert(desc);
 
       // We always want the default, because the instruction could be handled by
@@ -849,7 +850,8 @@ NvmInstructionDesc::createEntry(Executor *executor, KFunction *mainFn) {
   andersen_sptr_t anders = std::make_shared<AndersenAAWrapperPass>();
   {
     TimerStatIncrementer timer(stats::nvmAndersenTime);
-    assert(!anders->runOnModule(*executor->kmodule->module) && "Analysis pass should return false!");
+    assert(!anders->runOnModule(*executor->kmodule->module) && 
+           "Analysis pass should return false!");
   }
   
   Instruction *inst = &(mainFn->function->getEntryBlock().front());
@@ -858,6 +860,8 @@ NvmInstructionDesc::createEntry(Executor *executor, KFunction *mainFn) {
   return std::make_shared<NvmInstructionDesc>(NvmInstructionDesc(executor, anders, start));
 }
 
+// If we don't do path equals, we can make stuff converge if everything else is
+// the same.
 bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &rhs) {
   bool instEq = lhs.curr_ == rhs.curr_;
   bool valEq  = *lhs.values_ == *rhs.values_;
@@ -865,12 +869,14 @@ bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
   bool resEq  = lhs.runtime_function_ == rhs.runtime_function_;
   bool recEq  = lhs.ready_to_recurse_ == rhs.ready_to_recurse_;
   bool fallEq = lhs.force_special_handler_call_fall_over_ == rhs.force_special_handler_call_fall_over_;
+  // bool pathEq = lhs.path_ == rhs.path_;
 
   return instEq &&
          valEq &&
          stkEq &&
          recEq &&
          fallEq &&
+        //  pathEq &&
          resEq;
 }
 
@@ -888,7 +894,7 @@ NvmHeuristicInfo::doComputation(ExecutionState *es,
                                 NvmInstructionDesc::SharedList initial) {
   std::list<
     std::pair<
-      std::shared_ptr<NvmInstructionDesc>,
+      NvmInstructionDesc::Shared,
       NvmInstructionDesc::UnorderedSet
     >
   > toTraverse;
@@ -955,6 +961,13 @@ NvmHeuristicInfo::doComputation(ExecutionState *es,
           // a duplicate, so we don't want to add it.
           if (attached) {
             toTraverse.emplace_back(succ_sptr, succ_sptr->constructScions());
+          } else {
+            // If not attached, we should make sure we converge the paths.
+            for (NvmInstructionDesc::Shared &c : current.first->getSuccessors()) {
+              if (*c == *succ_sptr) {
+                c->addToPath(*succ_sptr);
+              }
+            }
           }
         }
         
@@ -1033,12 +1046,12 @@ NvmHeuristicInfo::NvmHeuristicInfo(Executor *executor, KFunction *mainFn, Execut
   assert(current_states_.size());
   for (auto &c : current_states_) {
     NvmInstructionDesc::SharedUnorderedSet uniq(c->getSuccessors().begin(), c->getSuccessors().end());
-    assert(uniq.size() == c->getSuccessors().size() && "dups!");
-    errs() << "@@@@@@@@@@@@@@@@@\n";
-    for (auto &cs : c->getSuccessors()) {
-      errs() << cs->str() << "\n";
-    }
-    errs() << "@@@@@@@@@@@@@@@@@\n";
+    // assert(uniq.size() == c->getSuccessors().size() && "dups!");
+    // errs() << "@@@@@@@@@@@@@@@@@\n";
+    // for (auto &cs : c->getSuccessors()) {
+    //   errs() << cs->str() << "\n";
+    // }
+    // errs() << "@@@@@@@@@@@@@@@@@\n";
   }
 
   if (!current_states_.size()) {
@@ -1073,7 +1086,7 @@ void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruct
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
 
   if (current_states_.size()) {
-    errs() << "stepState: \n";
+    errs() << "[" << es << "] stepState [" << *pc->inst << "]: \n";
     for (auto &c : current_states_) {
       errs() << c->str() << "\n";
     } 
@@ -1085,7 +1098,8 @@ void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruct
       return;
     }
     
-    assert(last_state_->isTerminator());
+    // Doesn't have to be terminator if we become unreachable
+    // assert(last_state_->isTerminator());
     return;
   }
 
@@ -1098,27 +1112,43 @@ void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruct
     }
   }
 
-  if (!foundState) return;
-  
-  if (foundState->needsResolution()) {
-    foundState = foundState->resolve(nextPC);
-    assert(!foundState->needsResolution());
-
-    computeCurrentPriority(es);
+  if (!foundState) {
+    // Try trim successors
+    std::list<NvmInstructionDesc::Shared> trimmed;
+    current_priority_ = 0;
+    for (NvmInstructionDesc::Shared &c : current_states_) {
+      if (c->pathContains(pc->inst)) {
+        trimmed.push_back(c);
+        current_priority_ = max(current_priority_, c->getPriority());
+      } else {
+        errs() << "&\n";
+        c->dumpPath(pc->inst);
+        errs() << "&\n";
+      }
+    }
+    current_states_ = trimmed;
     
-    assert(foundState->getSuccessors().size());
-    assert(!foundState->isTerminator());
-  }
+  } else {
+    if (foundState->needsResolution()) {
+      foundState = foundState->resolve(nextPC);
+      assert(!foundState->needsResolution());
 
-  if (foundState->isTerminator() && foundState->isRecursable()) {
-    // Lazy recursion evaluation
-    foundState = foundState->getRecursable();
-    computeCurrentPriority(es);
-    assert(!foundState->isTerminator());
-  }
+      computeCurrentPriority(es);
+      
+      assert(foundState->getSuccessors().size());
+      assert(!foundState->isTerminator());
+    }
 
-  last_state_ = foundState;
-  current_states_ = foundState->getSuccessors();
+    if (foundState->isTerminator() && foundState->isRecursable()) {
+      // Lazy recursion evaluation
+      foundState = foundState->getRecursable();
+      computeCurrentPriority(es);
+      assert(!foundState->isTerminator());
+    }
+
+    last_state_ = foundState;
+    current_states_ = foundState->getSuccessors();
+  }
 }
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2: */

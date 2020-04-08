@@ -131,6 +131,7 @@ namespace klee {
    * ---
    * This is the runtime state.
    */
+  /* #region NvmValueDesc */
   class NvmValueDesc final {
     private:
       friend class NvmInstructionDesc;
@@ -253,6 +254,7 @@ namespace klee {
 
       friend bool operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs);
   };
+  /* #endregion */
 
   /**
    * Sparse.
@@ -285,6 +287,11 @@ namespace klee {
 
       std::list<std::shared_ptr<NvmInstructionDesc>> successors_;
       std::list<std::shared_ptr<NvmInstructionDesc>> predecessors_;
+
+      // This is the set of valid instructions between this state and it's
+      // predecessors. We leave this as an unordered set to accomodate loops,
+      // which may iterate many times.
+      std::unordered_set<llvm::Instruction*> path_;
 
       llvm::Function *runtime_function_ = nullptr;
       bool need_resolution_ = false;
@@ -323,7 +330,8 @@ namespace klee {
                          andersen_sptr_t apa,
                          KInstruction *location, 
                          std::shared_ptr<NvmValueDesc> values, 
-                         std::shared_ptr<NvmStackFrameDesc> stackframe);
+                         std::shared_ptr<NvmStackFrameDesc> stackframe,
+                         const std::unordered_set<llvm::Instruction*> &currpath);
 
       NvmInstructionDesc(Executor *executor,
                          andersen_sptr_t apa, 
@@ -402,6 +410,31 @@ namespace klee {
         return successors_; 
       }
 
+      void addToPath(llvm::Instruction* prior) {
+        path_.insert(prior);
+      }
+
+      void addToPath(NvmInstructionDesc &other) {
+        assert(curr_ == other.curr_);
+        path_.insert(other.path_.begin(), other.path_.end());
+      }
+
+      bool pathContains(llvm::Instruction *i) {
+        return path_.count(i);
+      }
+
+      void dumpPath(llvm::Instruction *i) {
+        for (auto *ip : path_) {
+          llvm::errs() << "\tpath inst" << *ip;
+          if (ip == i) {
+            llvm::errs() << "equals";
+          } else {
+            llvm::errs() << "does not equal";
+          }
+          llvm::errs() << *i << "\n";
+        }
+      }
+
       /* out-line getters */
 
       bool isCachelineModifier(ExecutionState *es) const;
@@ -438,7 +471,7 @@ namespace klee {
 
       std::shared_ptr<NvmInstructionDesc> update(KInstruction *pc, bool isNvm) {
         std::shared_ptr<NvmValueDesc> up = values_->updateState(pc->inst, isNvm);
-        NvmInstructionDesc nd(executor_, apa_, curr_, up, stackframe_);
+        NvmInstructionDesc nd(executor_, apa_, curr_, up, stackframe_, path_);
         return std::make_shared<NvmInstructionDesc>(nd);
       }
 
