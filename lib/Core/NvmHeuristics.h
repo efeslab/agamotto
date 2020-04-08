@@ -71,6 +71,7 @@ namespace klee {
    * All we need to do is to store the return instruction, as we will inherit
    * the value state from the return instruction.
    */
+  /* #region NvmStackFrameDesc definition */
   class NvmStackFrameDesc final {
     private:
       std::shared_ptr<NvmStackFrameDesc> caller_desc;
@@ -114,6 +115,7 @@ namespace klee {
       friend bool operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
       friend bool operator!=(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
   };
+  /* #endregion */
 
   /**
    * This class represents the state of all values at any point during  
@@ -137,15 +139,18 @@ namespace klee {
       std::unordered_set<llvm::Value*> mmap_calls_;
 
       /**
-       * We need three sets of values for a context-sensitive history:
-       * 1) Global Variable State
-       *  - We need this as they are accessable to all function contexts.
-       * 2) Local Context State
-       *  - The local context is likely to be the most influential. Also 
-       *    includes the arguments to the function.
+       * We conservatively assume that any modification site that points to one
+       * of the "mmap" calls is an NVM-modifying instruction
+       * 
+       * We count do global and local to avoid propagating unnecessary 
        */
-      std::unordered_set<llvm::Value*> global_nvm_;
-      std::unordered_set<llvm::Value*> local_nvm_;
+      std::unordered_set<llvm::Value*> not_local_nvm_, not_global_nvm_;
+
+      bool mayPointTo(andersen_sptr_t apa, const llvm::Value *a, const llvm::Value *b) const;
+
+      bool pointsToIsEq(andersen_sptr_t apa, const llvm::Value *a, const llvm::Value *b) const;
+
+      bool matchesKnownVolatile(andersen_sptr_t apa, const llvm::Value *posNvm) const;
 
       /**
        * Vararg functions break the current assumption about passing around
@@ -153,7 +158,7 @@ namespace klee {
        * out if an NVM value was passed as any of the var args. If so, we mark
        * calls to llvm.va_{start,copy,end} as interesting to resolve all values.
        */ 
-      bool varargs_contain_nvm_;
+      // bool varargs_contain_nvm_;
 
       // Storing the caller values makes it easier to update when "executing"
       // a return instruction.
@@ -212,26 +217,26 @@ namespace klee {
        * and subsequent load.
        */
       bool isImportantVAArg(llvm::Instruction *i) const {
-        if (!varargs_contain_nvm_) return false;
+        // if (!varargs_contain_nvm_) return false;
 
-        if (llvm::isa<llvm::VAArgInst>(i) && 
-            i->getType()->isPtrOrPtrVectorTy()) return true;
-        // TODO: The getelementptr case is more annoying
-        // if (llvm::LoadInstruction *li = llvm::dyn_cast<llvm::LoadInst>(i)) {
-        //   if (llvm::GetElementPtrInst *gi = llvm::dyn_cast<llvm::GetElementPtrInst>(li->getPointerOperand())) {
-        //     if (gi->getPointerOperandType())
-        //   }
+        // if (llvm::isa<llvm::VAArgInst>(i) && 
+        //     i->getType()->isPtrOrPtrVectorTy()) return true;
+        // // TODO: The getelementptr case is more annoying
+        // // if (llvm::LoadInstruction *li = llvm::dyn_cast<llvm::LoadInst>(i)) {
+        // //   if (llvm::GetElementPtrInst *gi = llvm::dyn_cast<llvm::GetElementPtrInst>(li->getPointerOperand())) {
+        // //     if (gi->getPointerOperandType())
+        // //   }
+        // // }
+
+        // // Conservative answer:
+        // // By catching vaend, we will get all va_arg calls.
+        // if (llvm::CallInst *ci = llvm::dyn_cast<llvm::CallInst>(i)) {
+        //   llvm::Function *f = ci->getCalledFunction();
+        //   return (f && f->isDeclaration() &&
+        //           (f->getIntrinsicID() == llvm::Intrinsic::vastart ||
+        //            f->getIntrinsicID() == llvm::Intrinsic::vacopy ||
+        //            f->getIntrinsicID() == llvm::Intrinsic::vaend));
         // }
-
-        // Conservative answer:
-        // By catching vaend, we will get all va_arg calls.
-        if (llvm::CallInst *ci = llvm::dyn_cast<llvm::CallInst>(i)) {
-          llvm::Function *f = ci->getCalledFunction();
-          return (f && f->isDeclaration() &&
-                  (f->getIntrinsicID() == llvm::Intrinsic::vastart ||
-                   f->getIntrinsicID() == llvm::Intrinsic::vacopy ||
-                   f->getIntrinsicID() == llvm::Intrinsic::vaend));
-        }
         
         return false;
       }
@@ -351,7 +356,10 @@ namespace klee {
         } 
       };
 
+      typedef std::shared_ptr<NvmInstructionDesc> Shared;
       typedef std::unordered_set<NvmInstructionDesc, HashFn> UnorderedSet;
+      typedef std::unordered_set<std::shared_ptr<NvmInstructionDesc>> SharedUnorderedSet;
+      typedef std::list<std::shared_ptr<NvmInstructionDesc>> SharedList;
 
       virtual ~NvmInstructionDesc() = default;
 
@@ -366,7 +374,10 @@ namespace klee {
 
       bool forceFallOverUnset(void) const { return !force_special_handler_call_fall_over_; }
 
-      uint64_t getWeight(void) const { return weight_; }
+      uint64_t getWeight(void) const { 
+        assert(weight_init_);
+        return weight_;
+      }
 
       uint64_t getPriority(void) const { return priority_; }
 
@@ -518,17 +529,23 @@ namespace klee {
        * We occasionally want to update these states. We do these in-place, so
        * we don't affect other states.
        */
-      std::shared_ptr<NvmInstructionDesc> last_state_; // For SFH
+      std::shared_ptr<NvmInstructionDesc> last_state_ = nullptr; // For SFH
       // List to allow mutability
       std::list<std::shared_ptr<NvmInstructionDesc>> current_states_;
       uint64_t current_priority_ = 0;
+
+      /**
+       * Returns the new current state
+       */
+      NvmInstructionDesc::SharedList doComputation(ExecutionState *es, 
+                                                   NvmInstructionDesc::SharedList initial);
 
       /**
        * We halt propagation at the current instructions, because we don't want
        * to taint the earlier tree, as other ExecutionStates may use those as
        * their blank slate of evaluation.
        */
-      bool computeCurrentPriority(ExecutionState *es);
+      void computeCurrentPriority(ExecutionState *es);
 
     public:
       NvmHeuristicInfo(Executor *executor, KFunction *mainFn, ExecutionState *es);
