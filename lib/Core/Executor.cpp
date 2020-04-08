@@ -4019,8 +4019,8 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
         ps->persistCacheLineAtOffset(offset);
         llvm::errs() << "Good Flush\n";
       }
-      if (notPersisted.second) {
-        // offset is already persisted, should error!
+      // offset must already persisted, should error!
+      if (notPersisted.second && !notPersisted.first) {
         auto& errState = *notPersisted.second;
         os = errState.addressSpace.findObject(mo);
         assert(os && "Could not get ObjectState from notPersisted.second");
