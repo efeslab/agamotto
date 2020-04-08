@@ -1085,12 +1085,12 @@ void NvmHeuristicInfo::updateCurrentState(ExecutionState *es, KInstruction *pc, 
 void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruction *nextPC) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
 
-  if (current_states_.size()) {
-    errs() << "[" << es << "] stepState [" << *pc->inst << "]: \n";
-    for (auto &c : current_states_) {
-      errs() << c->str() << "\n";
-    } 
-  }
+  // if (current_states_.size()) {
+  //   errs() << "[" << es << "] stepState [" << *pc->inst << "]: \n";
+  //   for (auto &c : current_states_) {
+  //     errs() << c->str() << "\n";
+  //   } 
+  // }
 
   if (!current_states_.size()) {
     if (!last_state_) {
@@ -1120,11 +1120,12 @@ void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruct
       if (c->pathContains(pc->inst)) {
         trimmed.push_back(c);
         current_priority_ = max(current_priority_, c->getPriority());
-      } else {
-        errs() << "&\n";
-        c->dumpPath(pc->inst);
-        errs() << "&\n";
-      }
+      } 
+      // else {
+      //   errs() << "&\n";
+      //   c->dumpPath(pc->inst);
+      //   errs() << "&\n";
+      // }
     }
     current_states_ = trimmed;
     
