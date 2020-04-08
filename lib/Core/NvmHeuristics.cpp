@@ -18,6 +18,8 @@ using namespace klee;
  * (iangneal): should be essentially ported.
  */
 
+/* #region NvmStackFrameDesc */
+
 bool NvmStackFrameDesc::containsFunction(llvm::Function *f) const {
   const NvmStackFrameDesc *st = this;
   while (st && !st->isEmpty()) {
@@ -64,14 +66,19 @@ std::string NvmStackFrameDesc::str(void) const {
 }
 
 bool klee::operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs) {
-   return lhs.caller_desc.get() == rhs.caller_desc.get() && 
-          lhs.caller_inst == rhs.caller_inst &&
-          lhs.return_inst == rhs.return_inst;
+  bool callerEq = (!lhs.caller_desc && !rhs.caller_desc) || 
+                  (lhs.caller_desc && rhs.caller_desc &&
+                    (*lhs.caller_desc == *rhs.caller_desc));
+  return callerEq && 
+         lhs.caller_inst == rhs.caller_inst &&
+         lhs.return_inst == rhs.return_inst;
 }
 
 bool klee::operator!=(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs) {
   return !(lhs == rhs);
 }
+
+/* #endregion */
 
 /**
  * NvmValueDesc
@@ -86,7 +93,8 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(andersen_sptr_t apa,
   NvmValueDesc newDesc;
   newDesc.caller_values_ = std::make_shared<NvmValueDesc>(*this);
   newDesc.call_site_ = ci;
-  newDesc.global_nvm_ = global_nvm_;
+  newDesc.mmap_calls_ = mmap_calls_;
+  newDesc.not_global_nvm_ = not_global_nvm_;
 
   if (!f) {
     f = utils::getCallInstFunction(ci);
@@ -100,7 +108,7 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(andersen_sptr_t apa,
     if (!op->getType()->isPtrOrPtrVectorTy()) continue;
     assert(op);
 
-    bool pointsToNvm = false;
+    bool pointsToNvm = true;
     // We actually want the points-to set for this
     std::vector<const Value*> ptsSet;
     // errs() << "doing call instruction stuff\n";
@@ -110,24 +118,25 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(andersen_sptr_t apa,
       bool ret = apa->getResult().getPointsToSet(op, ptsSet);
       assert(ret && "could not get points-to set!");
       for (const Value *ptsTo : ptsSet) {
-        if (isNvm(apa, ptsTo)) {
-          pointsToNvm = true;
+        if (!isNvm(apa, ptsTo)) {
+          pointsToNvm = false;
           break;
         }
       }
     }
 
-    if (!pointsToNvm) continue;
+    if (pointsToNvm) continue;
 
     if (i >= f->arg_size()) {
-      assert(f->isVarArg() && "argument size mismatch!");
-      newDesc.varargs_contain_nvm_ = true;
+      // assert(f->isVarArg() && "argument size mismatch!");
+      // newDesc.varargs_contain_nvm_ = true;
+      break;
     } else {
       Argument *arg = (f->arg_begin() + i);
       assert(arg);
       // Scalars don't necessarily point to anything.
       if (!arg->getType()->isPtrOrPtrVectorTy()) continue;
-      newDesc.local_nvm_.insert(arg);
+      newDesc.not_local_nvm_.insert(arg);
     }
 
   }
@@ -156,77 +165,130 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doReturn(andersen_sptr_t apa,
   return retDesc;
 }
 
+bool NvmValueDesc::mayPointTo(andersen_sptr_t apa, const Value *a, const Value *b) const {
+  TimerStatIncrementer timer(stats::nvmAndersenTime);
+
+  std::vector<const Value*> aSet, bSet, interSet;
+  bool ret = apa->getResult().getPointsToSet(a, aSet);
+  if (!ret) errs() << *a << "\n";
+  assert(ret && "could not get points-to set!");
+
+  ret = apa->getResult().getPointsToSet(b, bSet);
+  if (!ret) errs() << *b << "\n";
+  assert(ret && "could not get points-to set!");
+
+  interSet.resize(std::max(aSet.size(), bSet.size()));
+
+  auto it = std::set_intersection(aSet.begin(), aSet.end(),
+                                  bSet.begin(), bSet.end(),
+                                  interSet.begin());
+  
+  interSet.resize(it - interSet.begin());
+
+  if (interSet.size()) {
+    return true;
+  }
+
+  return false;
+}
+
+bool NvmValueDesc::pointsToIsEq(andersen_sptr_t apa, const Value *a, const Value *b) const {
+  TimerStatIncrementer timer(stats::nvmAndersenTime);
+
+  std::vector<const Value*> aSet, bSet, interSet;
+  bool ret = apa->getResult().getPointsToSet(a, aSet);
+  if (!ret) errs() << *a << "\n";
+  assert(ret && "could not get points-to set!");
+
+  ret = apa->getResult().getPointsToSet(b, bSet);
+  if (!ret) errs() << *b << "\n";
+  assert(ret && "could not get points-to set!");
+
+  interSet.resize(std::max(aSet.size(), bSet.size()));
+
+  auto it = std::set_difference(aSet.begin(), aSet.end(),
+                                bSet.begin(), bSet.end(),
+                                interSet.begin());
+  
+  interSet.resize(it - interSet.begin());
+
+  if (!interSet.size()) {
+    return true;
+  }
+
+  return false;
+}
+
+bool NvmValueDesc::matchesKnownVolatile(andersen_sptr_t apa, const Value *posNvm) const {
+  if (isa<GlobalValue>(posNvm)) {
+    for (const Value *vol : not_global_nvm_) {
+      if (pointsToIsEq(apa, posNvm, vol)) {
+        // errs() << "known is " << *vol << "\n";
+        return true;
+      }
+    }
+  } else {
+    for (const Value *vol : not_local_nvm_) {
+      if (pointsToIsEq(apa, posNvm, vol)) {
+        // errs() << "known is " << *vol << "\n";
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
 std::shared_ptr<NvmValueDesc> NvmValueDesc::updateState(Value *val, 
                                                         bool isNvm) const 
 {
   NvmValueDesc vd = *this;
-  // Since the set is sparse, they're only contained if isNvm.
-  if (isNvm && val->getType()->isPtrOrPtrVectorTy()) {
-    if (isa<GlobalValue>(val)) {
-      vd.global_nvm_.insert(val);
-    } else {
-      vd.local_nvm_.insert(val);
-    }
+
+  if (!isNvm && val->getType()->isPtrOrPtrVectorTy()) {
+    // errs() << "UPDATE " << *val << "\n";
+    if (isa<GlobalValue>(val)) vd.not_global_nvm_.insert(val);
+    else vd.not_local_nvm_.insert(val);
   }
 
   return std::make_shared<NvmValueDesc>(vd);
 }
 
 bool NvmValueDesc::isNvm(andersen_sptr_t apa, const Value *ptr) const {
-  //TODO: remove redundancy
-  for (const Value *v : local_nvm_) {
-    TimerStatIncrementer timer(stats::nvmAndersenTime);
-    std::vector<const Value*> localSet, ptrSet, interSet;
-    bool ret = apa->getResult().getPointsToSet(v, localSet);
-    if (!ret) errs() << *v << "\n";
-    assert(ret && "could not get points-to set!");
 
-    ret = apa->getResult().getPointsToSet(ptr, ptrSet);
-    if (!ret) errs() << *ptr << "\n";
-    assert(ret && "could not get points-to set!");
+  TimerStatIncrementer timer(stats::nvmAndersenTime);
 
-    interSet.resize(std::max(localSet.size(), ptrSet.size()));
+  std::vector<const Value*> ptsSet;
+  bool ret = apa->getResult().getPointsToSet(ptr, ptsSet);
+  if (!ret) errs() << *ptr << "\n";
+  assert(ret && "could not get points-to set!");
 
-    auto it = std::set_intersection(localSet.begin(), localSet.end(),
-                                    ptrSet.begin(), ptrSet.end(),
-                                    interSet.begin());
-    
-    interSet.resize(it - interSet.begin());
-
-    if (interSet.size()) {
-      return true;
-    }
-
-    // if (llvm::AliasResult::MayAlias == apa->getResult().andersenAlias(v, ptr)) {
-    //   return true;
-    // }
+  if (!mmap_calls_.size()) {
+    errs() << "\t!!!!cannot point because no calls!\n"; 
   }
 
-  for (const Value *v : global_nvm_) {
-    TimerStatIncrementer timer(stats::nvmAndersenTime);
+  for (const Value *mm : mmap_calls_) {
+    if (mayPointTo(apa, ptr, mm)) {
+      // errs() << "\t++++may point to NVM!\n\t\t";
+      // errs() << *ptr << "\n\t\t" << *mm << "\n";
+      /**
+       * We are saying, if this could point to any NVM, we must prove that 
+       * for every value it points to, they must all be known to be volatile.
+       * Otherwise, they could still be NVM.
+       */
+      std::vector<const Value*> ptsSet;
+      bool ret = apa->getResult().getPointsToSet(ptr, ptsSet);
+      if (!ret) errs() << *ptr << "\n";
+      assert(ret && "could not get points-to set!");
+      for (const Value *q : ptsSet) {
+        if (!matchesKnownVolatile(apa, q)) return true;
+      }
 
-    std::vector<const Value*> localSet, ptrSet, interSet;
-    bool ret = apa->getResult().getPointsToSet(v, localSet);
-    if (!ret) errs() << *v << "\n";
-    assert(ret && "could not get points-to set!");
-
-    ret = apa->getResult().getPointsToSet(ptr, ptrSet);
-    if (!ret) errs() << *ptr << "\n";
-    assert(ret && "could not get points-to set!");
-
-    interSet.resize(std::max(localSet.size(), ptrSet.size()));
-
-    auto it = std::set_intersection(localSet.begin(), localSet.end(),
-                                    ptrSet.begin(), ptrSet.end(),
-                                    interSet.begin());
-    
-    interSet.resize(it - interSet.begin());
-
-    if (interSet.size()) {
-      return true;
+    } else {
+      // errs() << "\t----may NOT point to NVM!\n\t\t";
+      // errs() << *ptr << "\n\t\t" << *mm << "\n";
     }
   }
-
+  
   return false;
 }
 
@@ -260,15 +322,22 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::staticState(llvm::Module *m) {
 std::string NvmValueDesc::str(void) const {
   std::stringstream s;
   s << "Value State:\n";
-  s << "\tNumber of runtime global nvm values: " << global_nvm_.size();
-  for (Value *v : global_nvm_) {
+  s << "\n\tNumber of nvm allocation sites: " << mmap_calls_.size();
+  for (Value *v : mmap_calls_) {
     std::string tmp;
     llvm::raw_string_ostream rs(tmp);
     v->print(rs);
     s << "\n\t\t" << tmp;
   }
-  s << "\n\tNumber of runtime local nvm values: " << local_nvm_.size();
-  for (Value *v : local_nvm_) {
+  s << "\n\tNumber of known global runtime non-nvm values: " << not_global_nvm_.size();
+  for (Value *v : not_global_nvm_) {
+    std::string tmp;
+    llvm::raw_string_ostream rs(tmp);
+    v->print(rs);
+    s << "\n\t\t" << tmp;
+  }
+  s << "\n\tNumber of known local runtime non-nvm values: " << not_local_nvm_.size();
+  for (Value *v : not_local_nvm_) {
     std::string tmp;
     llvm::raw_string_ostream rs(tmp);
     v->print(rs);
@@ -278,19 +347,20 @@ std::string NvmValueDesc::str(void) const {
 }
 
 bool klee::operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs) {
+  bool callerEq = (!lhs.caller_values_ && !rhs.caller_values_) ||
+                  (lhs.caller_values_ && rhs.caller_values_ &&
+                    (*lhs.caller_values_ == *rhs.caller_values_));
   return lhs.mmap_calls_ == rhs.mmap_calls_ &&
-         lhs.global_nvm_ == rhs.global_nvm_ &&
-         lhs.local_nvm_ == rhs.local_nvm_ &&
-         lhs.varargs_contain_nvm_ == rhs.varargs_contain_nvm_ &&
-         lhs.caller_values_ == rhs.caller_values_ &&
-         lhs.call_site_ == rhs.call_site_;
+         lhs.not_global_nvm_ == rhs.not_global_nvm_ &&
+         lhs.not_local_nvm_ == rhs.not_local_nvm_ &&
+         lhs.call_site_ == rhs.call_site_ &&
+         callerEq;
 }
 
 /**
  * NvmInstructionDesc
- * 
- * (iangneal): working on this
  */
+
 
 NvmInstructionDesc::NvmInstructionDesc(Executor *executor,
                                        andersen_sptr_t apa,
@@ -408,7 +478,7 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) const {
   Value *ptr = nullptr;
   if (StoreInst *si = dyn_cast<StoreInst>(i)) {
     // Case 2: store
-    ptr = si->getPointerOperand();
+    ptr = si->getPointerOperand()->stripInBoundsOffsets();
   } else if (CallInst *ci = dyn_cast<CallInst>(i)) {
     // Case 3: flush
     Function *f = ci->getCalledFunction();
@@ -435,9 +505,16 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) const {
     assert(ret && "could not get points-to set!");
   }
 
+  // if (!ptsSet.size()) {
+  //   errs() << "ptsSet is empty for " << *ptr << "\n";
+  // }
+
   for (const Value *v : ptsSet) {
     if (values_->isNvm(apa_, v)) {
+      // errs() << *i << " modifies " << *ptr << " which points to " << *v << " which IS NVM!!!\n";
       return kDirtiesCacheline;
+    } else {
+      // errs() << *i << " modifies " << *ptr << " which points to " << *v << " which isn't NVM\n";
     }
   }
 
@@ -669,13 +746,7 @@ std::string NvmInstructionDesc::str(void) const {
   s << "\n----INST----\n";
   s << stackframe_->str();
   s << "\n" << values_->str();
-  s << "\n"; 
-  if (curr_) {
-    std::string tmp;
-    llvm::raw_string_ostream rs(tmp);
-    curr_->inst->print(rs);
-    s << tmp;
-  }
+  
   if (predecessors_.size()) {
     s << "\npred:";
     for (auto &psp : predecessors_) {
@@ -684,6 +755,13 @@ std::string NvmInstructionDesc::str(void) const {
       psp->inst()->print(rs);
       s << "\n\t" << tmp;
     }
+  }
+  if (curr_) {
+    s << "\ncurr:";
+    std::string tmp;
+    llvm::raw_string_ostream rs(tmp);
+    curr_->inst->print(rs);
+    s << "\n\t" << tmp;
   }
   if (successors_.size()) {
     s << "\nsucc:";
@@ -694,7 +772,10 @@ std::string NvmInstructionDesc::str(void) const {
       s << "\n\t" << tmp;
     }
   }
-  s << "\tFORCE=" << force_special_handler_call_fall_over_ << "\n";
+  s << "\n\tWEIGHT=" << weight_;
+  s << "\n\tPRIORITY=" << priority_;
+  s << "\n\tRECURSE?=" << ready_to_recurse_;
+  s << "\n\tSFH?=" << force_special_handler_call_fall_over_;
   s << "\n----****----\n";
   return s.str();
 }
@@ -704,14 +785,16 @@ bool NvmInstructionDesc::attach(std::shared_ptr<NvmInstructionDesc> &pptr,
 {
   assert(pptr->getWeight() && "not sparse!");
   assert(sptr->getWeight() && "not sparse!");
-  size_t pcount = std::count(pptr->successors_.begin(), 
-                             pptr->successors_.end(),
-                             pptr);
-  size_t scount = std::count(sptr->predecessors_.begin(),
-                             sptr->predecessors_.end(),
-                             sptr);
-  assert(pcount == scount && "asymmetry!");
-  bool contained = !!pcount;
+  size_t pcount = 0, scount = 0;
+  for (auto &s : pptr->getSuccessors()) {
+    if (*s == *sptr) pcount++;
+  }
+  for (auto &p : sptr->getPredecessors()) {
+    if (*p == *pptr) scount++;
+  }
+
+  assert(pcount <= 1 && scount <=1 && "added too many times!");
+  bool contained = pcount > 0 || scount > 0;
 
   if (!contained) {
     pptr->successors_.push_back(sptr);
@@ -726,12 +809,15 @@ bool NvmInstructionDesc::detach(std::shared_ptr<NvmInstructionDesc> &pptr,
 {
   assert(pptr->getWeight() && "not sparse!");
   assert(sptr->getWeight() && "not sparse!");
-  auto piter = std::find(pptr->successors_.begin(), 
-                         pptr->successors_.end(),
-                         pptr);
-  auto siter = std::find(sptr->predecessors_.begin(),
-                         sptr->predecessors_.end(),
-                         sptr);
+  NvmInstructionDesc::SharedList::iterator piter = pptr->successors_.begin();
+  NvmInstructionDesc::SharedList::iterator siter = sptr->predecessors_.begin();
+  for (; piter != pptr->successors_.end(); ++piter) {
+    if (**piter == *sptr) break;
+  }
+  for (; siter != sptr->predecessors_.end(); ++siter) {
+    if (**siter == *pptr) break;
+  }
+
   bool pcon = piter != pptr->successors_.end();
   bool scon = siter != sptr->predecessors_.end();
   assert(pcon == scon && "asymmetry!");
@@ -774,8 +860,8 @@ NvmInstructionDesc::createEntry(Executor *executor, KFunction *mainFn) {
 
 bool klee::operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &rhs) {
   bool instEq = lhs.curr_ == rhs.curr_;
-  bool valEq  = lhs.values_ == rhs.values_;
-  bool stkEq  = lhs.stackframe_ == rhs.stackframe_;
+  bool valEq  = *lhs.values_ == *rhs.values_;
+  bool stkEq  = *lhs.stackframe_ == *rhs.stackframe_;
   bool resEq  = lhs.runtime_function_ == rhs.runtime_function_;
   bool recEq  = lhs.ready_to_recurse_ == rhs.ready_to_recurse_;
   bool fallEq = lhs.force_special_handler_call_fall_over_ == rhs.force_special_handler_call_fall_over_;
@@ -797,17 +883,9 @@ bool klee::operator!=(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
  */
 
 // Private
-bool NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
-  
-  bool changed = false;
-  for (std::shared_ptr<NvmInstructionDesc> &sptr : current_states_) {
-    uint64_t prevWeight = sptr->getWeight();
-    changed = changed || sptr->updateWeight(es);
-    assert(prevWeight >= sptr->getWeight() && "assumptions violated!");
-  }
-
-  if (!changed) return false;
-
+NvmInstructionDesc::SharedList
+NvmHeuristicInfo::doComputation(ExecutionState *es,
+                                NvmInstructionDesc::SharedList initial) {
   std::list<
     std::pair<
       std::shared_ptr<NvmInstructionDesc>,
@@ -815,18 +893,25 @@ bool NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
     >
   > toTraverse;
 
-  std::unordered_set<std::shared_ptr<NvmInstructionDesc>> terminators;
+  NvmInstructionDesc::SharedUnorderedSet terminators;
 
-  for (std::shared_ptr<NvmInstructionDesc> &sptr : current_states_) {
-    toTraverse.emplace_back(sptr, sptr->constructScions());
-    if (sptr->getWeight()) terminators.insert(sptr);
+  NvmInstructionDesc::SharedList current_states;
+
+  for (std::shared_ptr<NvmInstructionDesc> &sptr : initial) {
+    sptr->updateWeight(es);
+    if (!sptr->getWeight()) {
+      toTraverse.emplace_back(nullptr, sptr->constructScions());
+    } else {
+      toTraverse.emplace_back(sptr, sptr->constructScions());
+      current_states.push_back(sptr);
+    }
   }
 
   // Downward traversal.
   // TODO: Recursion check
   while (toTraverse.size()) {
     std::pair<
-      std::shared_ptr<NvmInstructionDesc>,
+      NvmInstructionDesc::Shared,
       NvmInstructionDesc::UnorderedSet
     > current = toTraverse.front();
 
@@ -843,55 +928,46 @@ bool NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
     NvmInstructionDesc::UnorderedSet next_scions;
 
     for (NvmInstructionDesc desc : current.second) {
+      // errs() << "\ttraverse " << *desc.inst() << "\n";
       (void)desc.updateWeight(es);
+      // errs() << "\t\tweight " << desc.getWeight() << "\n";
       if (desc.getWeight()) {
+        // errs() << "got one!\n";
+        // errs() << *desc.inst() << "\n";
         // This successor produced a second! So, it is not a terminator, and
         // they need to be attached.
         terminators.erase(current.first);
         auto succ_sptr = std::make_shared<NvmInstructionDesc>(desc);
+        assert(desc.getWeight() == succ_sptr->getWeight());
         // We assume this is a terminator until it's first true successor is 
         // found.
         terminators.insert(succ_sptr);
-        NvmInstructionDesc::attach(current.first, succ_sptr);
-        // Since this is a new successor, it is also attached to this list
-        toTraverse.emplace_back(succ_sptr, succ_sptr->constructScions());
+        if (!current.first) {
+          // errs() << "added one!\n";
+          // This new successor is the first in it's line! Add it to the current set.
+          current_states.push_back(succ_sptr);
+          // Since this is a new successor, it is also attached to this list
+          toTraverse.emplace_back(succ_sptr, succ_sptr->constructScions());
+        } else {
+          // errs() << "attached one!\n";
+          bool attached = NvmInstructionDesc::attach(current.first, succ_sptr);
+          // If it was attached, add to the list. If not, that means we have
+          // a duplicate, so we don't want to add it.
+          if (attached) {
+            toTraverse.emplace_back(succ_sptr, succ_sptr->constructScions());
+          }
+        }
+        
       } else {
         auto ns = desc.constructScions();
         next_scions.insert(ns.begin(), ns.end());
       }
     }
 
-    #if 0
-    instDesc->calculateWeight(es);
-    if (instDesc->)
-    
-    std::list<std::shared_ptr<NvmInstructionDesc>> succs = instDesc->getSuccessors(traversed);
-    if (succs.size()) {
-      for (std::shared_ptr<NvmInstructionDesc> &sp : succs) {
-        std::list<std::shared_ptr<NvmInstructionDesc>> pred = sp->getPredecessors();
-
-        bool found = false;        
-        for (std::shared_ptr<NvmInstructionDesc> &p : pred) {
-          // Won't be fully equal as adding the successor creates a new instance
-          // that is no longer equal to instDesc;
-          found = found || (p->inst() == instDesc->inst());     
-        }
-        assert(found && "The successor should have a predecessor equal to the current");
-
-        toTraverse.push_back(sp.get());
-      }
-    } else if (instDesc->isTerminator() || !instDesc->isValid()) {
-      // Invalid instructions serve as "terminator" points until they are
-      // resolved.
-      instDesc->calculateWeight(es);
-      terminators.insert(instDesc);
-    } else {
-      // Convergent branches and loops.
-
-      if (!instDesc->isValid()) assert(instDesc->isTerminator());
-    }
-    #endif
+    toTraverse.emplace_back(current.first, next_scions);
   }
+
+  if (current_states.size()) assert(terminators.size()); 
 
   // Now, we propagate up.
   // -- we still need loop detection.
@@ -930,20 +1006,42 @@ bool NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
   }
 
   current_priority_ = 0;
-  for (auto &c : current_states_) {
+  for (auto &c : current_states) {
+    assert(c->getWeight());
     current_priority_ = max(current_priority_, c->getPriority());
   }
 
-  return true;
+  return current_states;
+}
+
+// Private
+void NvmHeuristicInfo::computeCurrentPriority(ExecutionState *es) {
+  current_states_ = doComputation(es, current_states_);
+  // for (auto it = current_states_.begin(); it != current_states_.end(); ++it) {
+  //   errs() << "CC: " << (*it)->str() << "\n";
+  // }
 }
 
 // Public
 NvmHeuristicInfo::NvmHeuristicInfo(Executor *executor, KFunction *mainFn, ExecutionState *es) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
 
-  current_states_.push_back(NvmInstructionDesc::createEntry(executor, mainFn));
+  NvmInstructionDesc::SharedList initial;
+  initial.push_back(NvmInstructionDesc::createEntry(executor, mainFn));
 
-  if (!computeCurrentPriority(es)) {
+  current_states_ = doComputation(es, initial);
+  assert(current_states_.size());
+  for (auto &c : current_states_) {
+    NvmInstructionDesc::SharedUnorderedSet uniq(c->getSuccessors().begin(), c->getSuccessors().end());
+    assert(uniq.size() == c->getSuccessors().size() && "dups!");
+    errs() << "@@@@@@@@@@@@@@@@@\n";
+    for (auto &cs : c->getSuccessors()) {
+      errs() << cs->str() << "\n";
+    }
+    errs() << "@@@@@@@@@@@@@@@@@\n";
+  }
+
+  if (!current_states_.size()) {
     klee_warning_once((const void*)this, "Empty heuristic state!");
   }
 }
@@ -952,20 +1050,38 @@ NvmHeuristicInfo::NvmHeuristicInfo(Executor *executor, KFunction *mainFn, Execut
 void NvmHeuristicInfo::updateCurrentState(ExecutionState *es, KInstruction *pc, bool isNvm) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
 
+  // for (auto it = current_states_.begin(); it != current_states_.end(); ++it) {
+  //   errs() << "C: " << (*it)->str() << "\n";
+  // }
+
+  bool changed = false;
   for (auto it = current_states_.begin(); it != current_states_.end(); ++it) {
-    *it = (*it)->update(pc, isNvm);
+    auto updated = (*it)->update(pc, isNvm);
+    if (updated->updateWeight(es) != (*it)->getWeight()) {
+      changed = true;
+      *it = updated;
+    }
+    // errs() << "X: " << updated->str() << "\n";
+    // errs() << "U: " << (*it)->str() << "\n";
   }
 
-  computeCurrentPriority(es);
+  if (changed) computeCurrentPriority(es);
 }
 
 // Public
 void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruction *nextPC) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
 
+  if (current_states_.size()) {
+    errs() << "stepState: \n";
+    for (auto &c : current_states_) {
+      errs() << c->str() << "\n";
+    } 
+  }
+
   if (!current_states_.size()) {
     if (!last_state_) {
-      klee_warning_once(0, "Empty heuristic state!");
+      klee_warning_once(0, "Moved to empty heuristic state!");
       return;
     }
     
@@ -1003,53 +1119,6 @@ void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruct
 
   last_state_ = foundState;
   current_states_ = foundState->getSuccessors();
-
-  // auto candidates = foundState->getMatchingSuccessors(nextPC);
-  // if (!candidates.size() && isa<CallInst>(pc->inst) && foundState->forceFallOverUnset()) {
-  //   foundState = foundState->getForceFallOver();
-  //   assert(!priority.count(foundState.get()));
-  //   errs() << "forced " << foundState->str() << "\n";
-  //   computeCurrentPriority(es);
-  //   candidates = foundState->getMatchingSuccessors(nextPC);
-  // }
-
-  // if (candidates.size() > 1) {
-  //   klee_warning("Too many candidates! Wanted 1, got %zu", candidates.size());
-  //   errs() << nextPC->inst->getFunction()->getName() << "@" << *nextPC->inst << "\n";
-  //   for (auto &c : candidates) {
-  //     errs() << c->str() << "\n";
-  //   }
-  //   klee_error("too many candidates!");
-  //   return;
-  // } else if (!candidates.size() && foundState->getSuccessors().size() > 1) {
-  //   errs() << nextPC->inst->getFunction()->getName() << "@" << *nextPC->inst << "\n";
-  //   errs() << "Does not match any of: \n";
-  //   for (const auto &s : foundState->getSuccessors()) {
-  //     errs() << s->str() << "\n";
-  //   }
-
-  //   // This can happen with function pointers, if they aren't handled carefully.
-  //   assert(false && "no candidates! we need to recalculate");
-  //   return;
-  // } else if (!candidates.size() && foundState->getSuccessors().size() == 1) {
-  //   candidates = foundState->getSuccessors();
-  // }
-
-  // std::shared_ptr<NvmInstructionDesc> &next = candidates.front();
-
-  // if (!next->isValid()) {
-  //   // We now know what the next instruction is, thanks to the symbolic execution
-  //   // state.
-  //   next->setPC(es, nextPC);
-  //   computeCurrentPriority(es);
-  // } else if (foundState->isCachelineModifier(es)) {
-  //   // Update the weight if this instruction is known to modify NVM.
-  //   // -- this is probably pretty inefficient.
-  //   computeCurrentPriority(es);
-  // }
-
-  // current_state = next;
-  // computeCurrentPriority(es);
 }
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2: */

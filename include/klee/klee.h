@@ -177,8 +177,10 @@ extern "C" {
    * \arg name - A name used for identifying the object in messages, output
    * files, etc. If NULL, object is called "unnamed".
    * 
-   * \return The persistent pointer. This is a hack to make this work better
-   * for the NVM heuristic, which expects mmap calls.
+   * \return The persistent pointer. In order for the heuristic to properly
+   * analyze the program, you must use the return value if you want it to count
+   * as a store to memory. This is due to how Andersen's AA models allocation
+   * sites, so we must treat this as an allocation site.
    */
   void *klee_pmem_mark_persistent(void *addr, size_t size, const char *name);
 
