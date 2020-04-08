@@ -142,13 +142,6 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
     void *addr;
     for (addr = ret; addr < ret + actual_size; addr += pgsz) {
       klee_define_fixed_object_from_existing(addr, pgsz);
-      // if (actual_fd >= 0 && !memcmp(addr, zeros, pgsz)) klee_warning("mmap-ed page is 0!");
-      if (actual_fd >= 0) {
-        // snprintf(msg, 4096, "pmem-%d_page-%lu (%p)", fd, ((size_t)(addr - ret)) / pgsz, addr);
-        // klee_warning(msg);
-        klee_pmem_mark_persistent(addr, pgsz, msg);
-        klee_pmem_check_persisted(addr, pgsz);
-      }
     }
   }
 
@@ -186,6 +179,9 @@ int munmap_sym(char* start, size_t length, exe_disk_file_t* df) {
       // Force a persistent check on unmap to ensure we check. We can check
       // on sfences, but if a program also omits those, this will be our only
       // check.
+      if (!klee_pmem_is_pmem(df->contents + (pgsz*page_start), pgsz)) {
+        klee_error("Symbolically unmapping non-pmem!");
+      }
       klee_pmem_check_persisted(df->contents + (pgsz*page_start), pgsz);
     }
   }
@@ -215,14 +211,6 @@ int munmap(void *start, size_t length) {
   for (addr = start; addr < start + actual_size; addr += pgsz) {
     // snprintf(msg, 4096, "\tundef(addr=%p, length=%lu)", addr, pgsz);
     // klee_warning(msg);
-
-    // if (addr > start + 2*pgsz) {
-      // snprintf(msg, 4096, "\tcheck_persisted(addr=%p, length=%lu)", addr, pgsz);
-      // klee_warning(msg);
-      // klee_pmem_check_persisted(addr, pgsz);
-    // }
-    if (klee_pmem_is_pmem(addr, pgsz))
-      klee_pmem_check_persisted(addr, pgsz);
 
     klee_undefine_fixed_object(addr);
   }
