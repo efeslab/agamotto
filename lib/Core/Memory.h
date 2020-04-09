@@ -378,6 +378,7 @@ class PersistentState : public ObjectState {
      * set.
      */
     UpdateList rootCauseLocations;
+    UpdateList pendingRootCauseLocations;
     // We store all of the unique root cause locations. We can't use the pointer
     // due to copies, but we can make unique IDs
     uint64_t nextLocId = 1; // Start at 1

@@ -634,7 +634,8 @@ PersistentState::PersistentState(const ObjectState *os)
   : ObjectState(*os),
     cacheLineUpdates(nullptr, nullptr),
     pendingCacheLineUpdates(nullptr, nullptr),
-    rootCauseLocations(nullptr, nullptr) {
+    rootCauseLocations(nullptr, nullptr),
+    pendingRootCauseLocations(nullptr, nullptr) {
 
   // Set up all the symbolic Arrays we need.
   ArrayCache *arrayCache = getArrayCache();
@@ -681,6 +682,7 @@ PersistentState::PersistentState(const PersistentState &ps)
     idxUnbounded(ps.idxUnbounded),
 
     rootCauseLocations(ps.rootCauseLocations),
+    pendingRootCauseLocations(ps.rootCauseLocations),
     nextLocId(ps.nextLocId),
     allRootLocations(ps.allRootLocations) {}
 
@@ -730,8 +732,10 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
     nextLocId++;
   }
 
-  rootCauseLocations.extend(cacheLine, 
-      ConstantExpr::create(allRootLocations[info], rootCauseLocations.root->range));
+  ref<Expr> rootCauseExpr = 
+    ConstantExpr::create(allRootLocations[info], rootCauseLocations.root->range);
+  rootCauseLocations.extend(cacheLine, rootCauseExpr);
+  pendingRootCauseLocations.extend(cacheLine, rootCauseExpr);
 }
 
 void PersistentState::persistCacheLineAtOffset(unsigned offset) {
@@ -744,7 +748,7 @@ void PersistentState::persistCacheLineAtOffset(ref<Expr> offset) {
   ref<Expr> cacheLine = getCacheLine(offset);
   pendingCacheLineUpdates.extend(cacheLine, getPersistedExpr());
   // Update the root cause to be empty.
-  rootCauseLocations.extend(cacheLine, getNullptr());
+  pendingRootCauseLocations.extend(cacheLine, getNullptr());
 }
 
 void PersistentState::commitPendingPersists() {
@@ -754,6 +758,7 @@ void PersistentState::commitPendingPersists() {
   // Apply the writes and flushes accumulated during this epoch.
   // The UpdateList will clean up orphaned UpdateNodes from cacheLineUpdates.
   cacheLineUpdates = pendingCacheLineUpdates;
+  rootCauseLocations = pendingRootCauseLocations;
 }
 
 ref<Expr> PersistentState::getIsOffsetPersistedExpr(ref<Expr> offset,

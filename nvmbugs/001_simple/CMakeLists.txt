@@ -17,6 +17,14 @@ klee_add_test_object(TARGET 001_SimpleMod SOURCES
   simple_nvm_mod.c
 )
 
+klee_add_test_object(TARGET 001_FlushAndFence SOURCES
+  flush_and_fence.c
+)
+
+klee_add_test_object(TARGET 001_FlushNoFence SOURCES
+  flush_no_fence.c
+)
+
 klee_add_test_object(TARGET 001_SimpleBranchMod SOURCES
   branch_paths.c
 ) 
