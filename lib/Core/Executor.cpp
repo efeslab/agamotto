@@ -2395,7 +2395,9 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   case Instruction::Store: {
     ref<Expr> base = eval(ki, 1, state).value;
     ref<Expr> value = eval(ki, 0, state).value;
-    executeMemoryOperation(state, true, base, value, 0);
+    bool isNontemporal =
+      ki->inst->getMetadata(LLVMContext::MD_nontemporal) != nullptr;
+    executeMemoryOperation(state, true, base, value, 0, isNontemporal);
     break;
   }
 
@@ -3786,7 +3788,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                                       bool isWrite,
                                       ref<Expr> address,
                                       ref<Expr> value /* undef if read */,
-                                      KInstruction *target /* undef if write */) {
+                                      KInstruction *target /* undef if write */,
+                                      bool isNontemporal /* false if read */) {
   Expr::Width type = (isWrite ? value->getWidth() :
                      getWidthForLLVMType(target->inst->getType()));
   unsigned bytes = Expr::getMinBytesForWidth(type);
@@ -3805,6 +3808,14 @@ void Executor::executeMemoryOperation(ExecutionState &state,
         } else {
           ObjectState *wos = state.addressSpace.getWriteable(mo, os);
           wos->write(state, offset, value);
+          if (PersistentState *ps = dyn_cast<PersistentState>(wos)) {
+            if (isNontemporal) {
+              llvm::errs() << "nontemporal store!\n";
+              // Nontemporal writes don't dirty the cache, but they must
+              // still cause an error until a fence happens.
+              ps->persistCacheLineAtOffset(offset);
+            }
+          }
         }
       } else {
         ref<Expr> result = os->read(offset, type);
@@ -3835,6 +3846,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     success = state.addressSpace.resolveOne(cast<ConstantExpr>(address), op);
   }
   solver->setTimeout(time::Span());
+
 
   if (success) {
     const MemoryObject *mo = op.first;
@@ -4014,6 +4026,7 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
 }
 
 void Executor::executePersistentMemoryFence(ExecutionState &state) {
+  llvm::errs() << "Fence\n";
   for (const MemoryObject *mo : state.persistentObjects) {
     const ObjectState *os = state.addressSpace.findObject(mo);
     assert(os);

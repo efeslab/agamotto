@@ -44,3 +44,11 @@ klee_add_test_object(TARGET 001_CleanFlushErr SOURCES
 klee_add_test_object(TARGET 001_MayFlushErr SOURCES
   may_flush_err.c
 )
+
+klee_add_test_object(TARGET 001_NontemporalErr SOURCES
+  nontemporal_err.c
+)
+
+klee_add_test_object(TARGET 001_NontemporalNoErr SOURCES
+  nontemporal_noerr.c
+)

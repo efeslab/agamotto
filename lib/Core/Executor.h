@@ -321,7 +321,8 @@ private:
                               bool isWrite,
                               ref<Expr> address,
                               ref<Expr> value /* undef if read */,
-                              KInstruction *target /* undef if write */);
+                              KInstruction *target /* undef if write */,
+                              bool isNontemporal=false /* false if read */);
 
   void executePersistentMemoryFlush(ExecutionState &state,
                                     ref<Expr> address);
