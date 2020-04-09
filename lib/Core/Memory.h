@@ -321,13 +321,9 @@ class PersistentState : public ObjectState {
     UpdateList cacheLineUpdates;
     UpdateList pendingCacheLineUpdates;
 
-    // (iangneal): We need a small symbolic array to construct an index variable which
-    // can represent a range.
-    UpdateList idxEmptyUpdates;
+    /// This will be a ReadExpr on a symbolic offset into this object.
+    /// Retrieved with getAnyOffsetExpr().
     ref<Expr> idxUnbounded;
-    // We need to solve in slices for efficiency purposes.
-    const unsigned nrLinesPerSlice = 1; // pageszie
-    std::vector<ref<Expr>> idxConstraints;
 
     /**
      * (iangneal): We want symbolic root-cause detection. 
@@ -393,13 +389,8 @@ class PersistentState : public ObjectState {
   public:
 
     static const uint64_t MaxSize = 4 * (4096);
-    /// Create a new persistent object state from the given non-persistent
-    /// object state and symbolic bool array of cache lines. Also requires
-    /// a symbolic void* array (int64) for root cause.
-    PersistentState(const ObjectState *os, 
-                    const Array *cacheLines,
-                    const Array *rootCauses,
-                    const Array *idxArray);
+    /// Create a new persistent object state from the given non-persistent object state.
+    PersistentState(const ObjectState *os);
 
     ObjectState *clone() const override;
 
@@ -428,28 +419,29 @@ class PersistentState : public ObjectState {
 
     void commitPendingPersists();
     
-    // ref<Expr> isPersisted(ExecutionState &state) const;
+    /**
+     * Get an expression which will evaluate to 1 if all writes to the given
+     * offset have been persisted and fenced.
+     * If pending=true, then expression will also evaluate to 1 even if not fenced
+     * (used to detect redundant flushes).
+     */
+    ref<Expr> getIsOffsetPersistedExpr(ref<Expr> offset,
+                                       bool pending=false) const;
 
     /**
-     * Creates an expression that evaluates if, for 0 <= idx < INT_MAX, 
-     * if every cacheline at idx is persisted.
-     * 
-     * For this to work properly, you need to constrain the value of the state 
-     * using the constraints from getConstraints() and add them to the current 
-     * state's constraint manager.
+     * Returns a reference to a symbolic offset into this object.
+     * Combine this with getBoundsCheckOffset to constrain the solver
+     * while checking for persistence.
      */
-    ref<Expr> isPersistedUnconstrained() const;
+    ref<Expr> getAnyOffsetExpr() const;
 
-    const std::vector<ref<Expr>> getConstraints() const { 
-      return idxConstraints; 
-    }
-
-    // If we are known to per persistent, do this to optimize.
+    // If we are known to be persistent, do this to optimize.
     void clearRootCauses();
 
     std::unordered_set<std::string> getRootCauses(TimingSolver *solver, 
                                                   ExecutionState &state) const;
 
+    // TODO remove
     bool mustBePersisted(TimingSolver *solver, ExecutionState &state) const;
 
     std::string getLocationInfo(const ExecutionState &state);
@@ -461,8 +453,8 @@ class PersistentState : public ObjectState {
     static ref<ConstantExpr> getNullptr();
 
   private:
-    ref<Expr> isCacheLinePersisted(unsigned offset) const;
-    ref<Expr> isCacheLinePersisted(ref<Expr> offset) const;
+    ref<Expr> isCacheLinePersisted(unsigned offset, bool pending=false) const;
+    ref<Expr> isCacheLinePersisted(ref<Expr> offset, bool pending=false) const;
 
     std::unordered_set<std::string> getRootCause(TimingSolver *solver, 
                                                  ExecutionState &state, 
