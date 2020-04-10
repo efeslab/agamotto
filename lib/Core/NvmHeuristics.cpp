@@ -255,15 +255,22 @@ bool NvmValueDesc::isNvm(andersen_sptr_t apa, const Value *ptr) const {
     errs() << "\t!!!!cannot point because no calls!\n"; 
   }
 
+  bool may_point_nvm_alloc = false;
   for (const Value *mm : mmap_calls_) {
     if (mayPointTo(apa, ptr, mm)) {
+      may_point_nvm_alloc = true;
       // errs() << "\t++++may point to NVM!\n\t\t";
       // errs() << *ptr << "\n\t\t" << *mm << "\n";
       /**
        * We are saying, if this could point to any NVM, we must prove that 
        * for every value it points to, they must all be known to be volatile.
        * Otherwise, they could still be NVM.
+       * 
+       * We should say, if this has the same points-to set as a known volatile,
+       * it should be volatile. However, this doesn't necessarily play nice 
+       * with loops. TODO
        */
+      #if 0
       std::vector<const Value*> ptsSet;
       bool ret = apa->getResult().getPointsToSet(ptr, ptsSet);
       if (!ret) errs() << *ptr << "\n";
@@ -271,6 +278,15 @@ bool NvmValueDesc::isNvm(andersen_sptr_t apa, const Value *ptr) const {
       for (const Value *q : ptsSet) {
         if (!matchesKnownVolatile(apa, q)) return true;
       }
+      #else
+      for (const Value *l : not_local_nvm_) {
+        if (pointsToIsEq(apa, l, ptr)) return false;
+      }
+      for (const Value *l : not_global_nvm_) {
+        if (pointsToIsEq(apa, l, ptr)) return false;
+      }
+      
+      #endif
 
     } else {
       // errs() << "\t----may NOT point to NVM!\n\t\t";
@@ -278,7 +294,7 @@ bool NvmValueDesc::isNvm(andersen_sptr_t apa, const Value *ptr) const {
     }
   }
   
-  return false;
+  return may_point_nvm_alloc;
 }
 
 std::shared_ptr<NvmValueDesc> NvmValueDesc::staticState(llvm::Module *m) {
@@ -442,8 +458,10 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) const {
   const static uint64_t kUnimportant      = 0u;
   const static uint64_t kDirtiesCacheline = 1u;
 
+  assert(curr_);
+
   // We use this as an incentive to resolve unresolved function pointers.
-  if (!curr_ || needsResolution()) {
+  if (needsResolution()) {
     return kResolutionWeight;
   }
 
@@ -506,10 +524,10 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) const {
 
   for (const Value *v : ptsSet) {
     if (values_->isNvm(apa_, v)) {
-      // errs() << *i << " modifies " << *ptr << " which points to " << *v << " which IS NVM!!!\n";
+      // errs() << "$" << *i << " modifies " << *ptr << " which points to " << *v << " which IS NVM!!!\n";
       return kDirtiesCacheline;
     } else {
-      // errs() << *i << " modifies " << *ptr << " which points to " << *v << " which isn't NVM\n";
+      // errs() << "$" << *i << " modifies " << *ptr << " which points to " << *v << " which isn't NVM\n";
     }
   }
 
@@ -644,7 +662,10 @@ NvmInstructionDesc::constructScions(void) {
     // We can't immediately find the function. So, let's see if we can find it indirectly.
     // -- Inline assembly is skipped over.
     // -- Debug calls and other intrinsics
-    if (ci->isIndirectCall()){   
+    // errs() << *ci << "\n";
+    if (ci->isIndirectCall()){  
+      // errs() << "indirect!" << '\n';
+      assert(need_resolution_ && "should already be resolved");
       /**
        * Further analysis would be tedious and potentially unwanted. Since this
        * is potentially highly runtime dependent, we will defer and increase the weight
@@ -656,9 +677,13 @@ NvmInstructionDesc::constructScions(void) {
 
       if (!runtime_function_) {
         // Return no successors for now.
-        need_resolution_ = true;
+        // errs() << "set resolution\n";
+
+        assert(!ret.size());
+        assert(needsResolution());
         return ret;
       }
+      // errs() << "resolved!\n";
 
       Instruction *retLoc = ip->getNextNode();
       assert(retLoc && "Assumption violated -- call instruction is the last instruction in a basic block!");
@@ -723,16 +748,17 @@ NvmInstructionDesc::resolve(KInstruction *nextPC) const
 
   NvmInstructionDesc newDesc = *this; // explicit copy
   newDesc.runtime_function_ = f;
-  newDesc.need_resolution_ = false;
 
   auto sptr = std::make_shared<NvmInstructionDesc>(newDesc);
 
   assert(sptr->runtime_function_ == newDesc.runtime_function_);
   assert(sptr->need_resolution_ == newDesc.need_resolution_);
 
-  assert(sptr->successors_.size());
+  // Can resolve to an uninteresting state.
+  // assert(sptr->successors_.size());
+  // assert(!sptr->isTerminator());
   assert(sptr->isValid());
-  assert(!sptr->isTerminator());
+  assert(!sptr->needsResolution());
   return sptr;
 }
 
@@ -777,6 +803,7 @@ std::string NvmInstructionDesc::str(void) const {
   s << "\n\tPRIORITY=" << priority_;
   s << "\n\tRECURSE?=" << ready_to_recurse_;
   s << "\n\tSFH?=" << force_special_handler_call_fall_over_;
+  s << "\n\tRESOLVE?=" << need_resolution_ << " " << runtime_function_ << " => " << needsResolution();
   s << "\n----****----\n";
   return s.str();
 }
@@ -892,36 +919,42 @@ bool klee::operator!=(const NvmInstructionDesc &lhs, const NvmInstructionDesc &r
 NvmInstructionDesc::SharedList
 NvmHeuristicInfo::doComputation(ExecutionState *es,
                                 NvmInstructionDesc::SharedList initial) {
-  std::list<
-    std::pair<
-      NvmInstructionDesc::Shared,
-      NvmInstructionDesc::UnorderedSet
-    >
-  > toTraverse;
+
+  NvmInstructionDesc::List to_traverse;
+  NvmInstructionDesc::PathCheckSet traversed;
 
   NvmInstructionDesc::SharedUnorderedSet terminators;
-
   NvmInstructionDesc::SharedList current_states;
 
   for (std::shared_ptr<NvmInstructionDesc> &sptr : initial) {
-    sptr->updateWeight(es);
-    if (!sptr->getWeight()) {
-      toTraverse.emplace_back(nullptr, sptr->constructScions());
+    NvmInstructionDesc desc = *sptr;
+    desc.updateWeight(es);
+    if (!desc.getWeight()) {
+      desc.workingPredecessor = nullptr;
     } else {
-      toTraverse.emplace_back(sptr, sptr->constructScions());
       current_states.push_back(sptr);
+      desc.workingPredecessor = sptr;
     }
+    to_traverse.emplace_back(desc);
   }
+
+  fprintf(stderr, "\tSTART:\ntoTraverse: %lu, terminators: %lu\n", to_traverse.size(), terminators.size());
 
   // Downward traversal.
   // TODO: Recursion check
-  while (toTraverse.size()) {
-    std::pair<
-      NvmInstructionDesc::Shared,
-      NvmInstructionDesc::UnorderedSet
-    > current = toTraverse.front();
+  while (to_traverse.size()) {
+    fprintf(stderr, "toTraverse: %lu, terminators: %lu\n", to_traverse.size(), terminators.size());
+    NvmInstructionDesc &current = to_traverse.front();
 
-    toTraverse.pop_front();
+    if (traversed.count(current)) {
+      to_traverse.pop_front();
+      continue;
+    }
+
+    traversed.insert(current);
+
+    NvmInstructionDesc::UnorderedSet scions = current.constructScions();
+
     // There are cases when two basic blocks converge that an instruction which
     // used to be unique is no longer. So, we need to check the traversed
     // set on every iteration.
@@ -929,72 +962,107 @@ NvmHeuristicInfo::doComputation(ExecutionState *es,
     // if (traversed.find(instDesc) != traversed.end()) continue;
 
     // If there are no scions left, we don't add the successor back on.
-    if (!current.second.size()) continue;
+    if (!scions.size()) {
+      to_traverse.pop_front();
+      continue;
+    }
 
-    NvmInstructionDesc::UnorderedSet next_scions;
-
-    for (NvmInstructionDesc desc : current.second) {
-      // errs() << "\ttraverse " << *desc.inst() << "\n";
+    for (NvmInstructionDesc desc : scions) {
+      desc.workingPredecessor = current.workingPredecessor;
+      errs() << "\ttraverse " << *desc.inst() << "\n";
       (void)desc.updateWeight(es);
-      // errs() << "\t\tweight " << desc.getWeight() << "\n";
+      errs() << "\t\tweight " << desc.getWeight() << "\n";
       if (desc.getWeight()) {
         // errs() << "got one!\n";
+        // errs() << desc.str() << "\n";
         // errs() << *desc.inst() << "\n";
         // This successor produced a second! So, it is not a terminator, and
         // they need to be attached.
-        terminators.erase(current.first);
+        
+        terminators.erase(desc.workingPredecessor);
         auto succ_sptr = std::make_shared<NvmInstructionDesc>(desc);
         assert(desc.getWeight() == succ_sptr->getWeight());
+
+        desc.workingPredecessor = succ_sptr; 
+        // if (current.first)
+        //   errs() << "erase " << current.first->str() << "\n";
+        // errs() << "add" << succ_sptr->str() << "\n";
         // We assume this is a terminator until it's first true successor is 
         // found.
         terminators.insert(succ_sptr);
-        if (!current.first) {
-          // errs() << "added one!\n";
+        if (!current.workingPredecessor) {
+          errs() << "added one!\n";
           // This new successor is the first in it's line! Add it to the current set.
           current_states.push_back(succ_sptr);
-          // Since this is a new successor, it is also attached to this list
-          toTraverse.emplace_back(succ_sptr, succ_sptr->constructScions());
+          to_traverse.push_back(desc);
         } else {
-          // errs() << "attached one!\n";
-          bool attached = NvmInstructionDesc::attach(current.first, succ_sptr);
+          errs() << "attached one!\n";
+          bool attached = NvmInstructionDesc::attach(current.workingPredecessor, succ_sptr);
           // If it was attached, add to the list. If not, that means we have
           // a duplicate, so we don't want to add it.
           if (attached) {
-            toTraverse.emplace_back(succ_sptr, succ_sptr->constructScions());
+            // We reset the path to only keep the instructions in between in the
+            // set.
+            desc.resetPath();
+            to_traverse.push_back(desc);
           } else {
             // If not attached, we should make sure we converge the paths.
-            for (NvmInstructionDesc::Shared &c : current.first->getSuccessors()) {
+            // If it wasn't attached, that means one of the current successors 
+            // is equal.
+            for (NvmInstructionDesc::Shared &c : current.workingPredecessor->getSuccessors()) {
               if (*c == *succ_sptr) {
                 c->addToPath(*succ_sptr);
               }
             }
           }
         }
-        
+
       } else {
-        auto ns = desc.constructScions();
-        next_scions.insert(ns.begin(), ns.end());
+        // This is the boring case. We haven't found a new successor, so we need
+        // to rinse and repeat.
+        to_traverse.push_back(desc);
       }
     }
 
-    toTraverse.emplace_back(current.first, next_scions);
+    to_traverse.pop_front();
   }
 
-  if (current_states.size()) assert(terminators.size()); 
+  // This can happen if we resolve a function pointer an it's uninteresting
+  if (current_states.size()) {
+    for (auto &c : current_states) {
+      assert(terminators.size() || c->needsResolution());
+    }
+  }
+
+  for (auto &t : terminators) {
+    assert(std::count(current_states.begin(), current_states.end(), t) ||
+           t->getPredecessors().size());
+  }
+
+  if (!terminators.size()) {
+    current_priority_ = 0;
+    for (auto &c : current_states) {
+      c->setPriority(c->getWeight());
+      c->workingPredecessor = nullptr;
+      errs() << ">>>" << c->str() << "\n";
+      current_priority_ = max(current_priority_, c->getPriority());
+    }
+    return current_states;
+  }
 
   // Now, we propagate up.
   // -- we still need loop detection.
-  std::unordered_set<std::shared_ptr<NvmInstructionDesc>> propagated;
+  NvmInstructionDesc::SharedUnorderedSet propagated;
   // -- we do this as a list so we can modify them.
-  std::list<std::shared_ptr<NvmInstructionDesc>> level(terminators.begin(), 
-                                                       terminators.end());
+  NvmInstructionDesc::SharedList level(terminators.begin(), terminators.end());
 
   while (level.size()) {
-    std::list<std::shared_ptr<NvmInstructionDesc>> nextLevel;
+    NvmInstructionDesc::SharedList nextLevel;
 
-    for (std::shared_ptr<NvmInstructionDesc> &sptr : level) {
+    for (NvmInstructionDesc::Shared &sptr : level) {
       assert(sptr->getWeight());
-      for (std::shared_ptr<NvmInstructionDesc> &pred : sptr->getPredecessors()) {
+      sptr->workingPredecessor = nullptr;
+      for (NvmInstructionDesc::Shared &pred : sptr->getPredecessors()) {
         assert(pred->getWeight());
 
         // This prevents loops.
@@ -1007,7 +1075,7 @@ NvmHeuristicInfo::doComputation(ExecutionState *es,
         pred->setPriority(max(cur_priority, pos_priority));
 
         // We only want to update the priority of current states, not past it.
-        if (!std::count(current_states_.begin(), current_states_.end(), pred)) {
+        if (!std::count(current_states.begin(), current_states.end(), pred)) {
           nextLevel.push_back(pred);
         }
       }
@@ -1085,22 +1153,11 @@ void NvmHeuristicInfo::updateCurrentState(ExecutionState *es, KInstruction *pc, 
 void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruction *nextPC) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
 
-  // if (current_states_.size()) {
-  //   errs() << "[" << es << "] stepState [" << *pc->inst << "]: \n";
-  //   for (auto &c : current_states_) {
-  //     errs() << c->str() << "\n";
-  //   } 
-  // }
-
-  if (!current_states_.size()) {
-    if (!last_state_) {
-      klee_warning_once(0, "Moved to empty heuristic state!");
-      return;
-    }
-    
-    // Doesn't have to be terminator if we become unreachable
-    // assert(last_state_->isTerminator());
-    return;
+  if (current_states_.size()) {
+    errs() << "[" << es << "] stepState [" << *pc->inst << "]: \n";
+    for (auto &c : current_states_) {
+      errs() << c->str() << "\n";
+    } 
   }
 
   std::shared_ptr<NvmInstructionDesc> foundState(nullptr);
@@ -1121,34 +1178,66 @@ void NvmHeuristicInfo::stepState(ExecutionState *es, KInstruction *pc, KInstruct
         trimmed.push_back(c);
         current_priority_ = max(current_priority_, c->getPriority());
       } 
-      // else {
-      //   errs() << "&\n";
-      //   c->dumpPath(pc->inst);
-      //   errs() << "&\n";
-      // }
+      else {
+        errs() << "&\n";
+        c->dumpPath(pc->inst);
+        errs() << "&\n";
+      }
     }
     current_states_ = trimmed;
+
+    if (!current_states_.size()) {
+      if (!last_state_) {
+        klee_warning_once(0, "Moved to empty heuristic state!");
+        return;
+      }
+      
+      // Doesn't have to be terminator if we become unreachable
+      // assert(last_state_->isTerminator());
+      assert(current_priority_ == 0);
+      return;
+    }
     
   } else {
     if (foundState->needsResolution()) {
       foundState = foundState->resolve(nextPC);
       assert(!foundState->needsResolution());
+      current_states_.clear();
+      current_states_.push_back(foundState);
 
       computeCurrentPriority(es);
-      
-      assert(foundState->getSuccessors().size());
-      assert(!foundState->isTerminator());
-    }
-
-    if (foundState->isTerminator() && foundState->isRecursable()) {
+      errs() << "resolved, " << foundState->str() << "\n" <<
+        current_states_.size() << "\n" << current_priority_ << "\n"
+        << current_states_.front()->getSuccessors().size() << "\n";
+    } else if (foundState->isTerminator() && foundState->isRecursable()) {
       // Lazy recursion evaluation
       foundState = foundState->getRecursable();
-      computeCurrentPriority(es);
       assert(!foundState->isTerminator());
+      computeCurrentPriority(es);
+      last_state_ = foundState;
+      current_states_ = foundState->getSuccessors();
+    } else {
+      last_state_ = foundState;
+      current_states_ = foundState->getSuccessors();
     }
 
-    last_state_ = foundState;
-    current_states_ = foundState->getSuccessors();
+    // assert(current_states_.size() == 1);
+
+    errs() << "kerding\n";
+    // last_state_ = current_states_.front();
+    // current_states_ = last_state_->getSuccessors();
+    if (!current_states_.size()) {
+      errs() << last_state_->str() << "\n";
+      for (auto &s : last_state_->constructScions()) {
+        errs() << "BS: " << s.str() << "\n";
+      }
+    }
+    
+    current_priority_ = 0;
+    for (auto &c : current_states_) {
+      assert(c->getWeight());
+      current_priority_ = max(current_priority_, c->getPriority());
+    }
   }
 }
 

@@ -387,14 +387,15 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current, ExecutionState *ex
   size_t priority = execState->nvmInfo->getCurrentPriority();
   // bool canKillEarly = execState->nvmInfo->isCurrentTerminator();
   // errs() << *execState->nvmInfo->currentInst() << " has priority " << priority << "\n";
-  if (!priority && generateTest[execState]) {
+  // if (!priority && generateTest[execState]) {
+  if (!priority) {
     //errs() << "\tKilling state with test!!\n";
     stats::nvmStatesKilledEndTrace++;
-    executor.terminateStateEarly(*execState, "State is no longer interesting");
-  } else if (!priority) {
-    //errs() << "\tKilling state!\n";
-    stats::nvmStatesKilledIrrelevant++;
-    executor.terminateState(*execState);
+    // executor.terminateStateEarly(*execState, "State is no longer interesting");
+  // } else if (!priority) {
+  //   //errs() << "\tKilling state!\n";
+  //   stats::nvmStatesKilledIrrelevant++;
+    executor.terminateStateEarlyPmem(*execState);
   } else {
     //errs() << "\tAdding state!\n";
     states.emplace(execState, gen, priority);

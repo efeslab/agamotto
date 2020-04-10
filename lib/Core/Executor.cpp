@@ -3216,12 +3216,7 @@ void Executor::terminateStateEarly(ExecutionState &state,
   terminateState(state);
 }
 
-void Executor::terminateStateOnExit(ExecutionState &state) {
-  if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
-      (AlwaysOutputSeeds && seedMap.count(&state))) {
-    interpreterHandler->processTestCase(state, 0, 0);
-  }
-  
+void Executor::terminateStateEarlyPmem(ExecutionState &state) {
   // (iangneal): Sometimes, a program can forget to call close or unmap.
   // We need to ensure that the persistence of a program is checked at least
   // once.
@@ -3234,6 +3229,15 @@ void Executor::terminateStateOnExit(ExecutionState &state) {
   }
 
   terminateState(*toTerm);
+}
+
+void Executor::terminateStateOnExit(ExecutionState &state) {
+  if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
+      (AlwaysOutputSeeds && seedMap.count(&state))) {
+    interpreterHandler->processTestCase(state, 0, 0);
+  }
+  
+  terminateStateEarlyPmem(state);
 }
 
 const InstructionInfo & Executor::getLastNonKleeInternalInstruction(const ExecutionState &state,
