@@ -429,6 +429,8 @@ private:
 
   // remove state from queue and delete
   void terminateState(ExecutionState &state);
+  // remove state from queue and delete after checking for pmem errors
+  void terminateStateEarlyPmem(ExecutionState &state);
   // call exit handler and terminate state
   void terminateStateEarly(ExecutionState &state, const llvm::Twine &message);
   // call exit handler and terminate state

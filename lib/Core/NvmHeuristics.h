@@ -364,12 +364,24 @@ namespace klee {
         } 
       };
 
+      struct FullEq : public std::equal_to<NvmInstructionDesc> {
+        bool operator()(const NvmInstructionDesc &lhs, 
+                        const NvmInstructionDesc &rhs) const {
+          return lhs == rhs && lhs.path_ == rhs.path_;
+        }
+      };
+
       typedef std::shared_ptr<NvmInstructionDesc> Shared;
       typedef std::unordered_set<NvmInstructionDesc, HashFn> UnorderedSet;
+      typedef std::unordered_set<NvmInstructionDesc, HashFn, FullEq> PathCheckSet;
       typedef std::unordered_set<std::shared_ptr<NvmInstructionDesc>> SharedUnorderedSet;
+      typedef std::list<NvmInstructionDesc> List;
       typedef std::list<std::shared_ptr<NvmInstructionDesc>> SharedList;
 
       virtual ~NvmInstructionDesc() = default;
+
+      // This is a convenient storage variable to make the calculation easier
+      NvmInstructionDesc::Shared workingPredecessor;
 
       /* inline getters */
       bool isTerminator(void) const { return !successors_.size(); } 
@@ -421,6 +433,12 @@ namespace klee {
 
       bool pathContains(llvm::Instruction *i) {
         return path_.count(i);
+      }
+
+
+      void resetPath(void) {
+        path_.clear();
+        path_.insert(curr_->inst);
       }
 
       void dumpPath(llvm::Instruction *i) {
@@ -486,6 +504,12 @@ namespace klee {
        * Also updates priority (gives us the base case).
        */
       bool updateWeight(ExecutionState *es) {
+        // Check if this will need resolution
+        assert(curr_ && curr_->inst);
+        if (llvm::CallInst *ci = dyn_cast<llvm::CallInst>(curr_->inst)) {
+          need_resolution_ = (!ci->getCalledFunction()) && ci->isIndirectCall();
+        }
+
         uint64_t new_weight = calculateWeight(es);
         bool changed = weight_ == new_weight || !weight_init_;
         priority_ = (priority_ - weight_) + new_weight;
