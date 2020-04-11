@@ -275,6 +275,7 @@ namespace klee {
    */
   class NvmInstructionDesc {
     private:
+      friend class NvmHeuristicInfo;
 
       // The utility state.
       Executor *executor_;
@@ -292,6 +293,10 @@ namespace klee {
       // predecessors. We leave this as an unordered set to accomodate loops,
       // which may iterate many times.
       std::unordered_set<llvm::Instruction*> path_;
+      // This is for some loop stuff -- if we set the loop branch instruction as
+      // a "do not repeat", we prevent loops from being calculated more than
+      // once.
+      std::unordered_set<llvm::BranchInst*> do_not_repeat_;
 
       llvm::Function *runtime_function_ = nullptr;
       bool need_resolution_ = false;
@@ -331,7 +336,8 @@ namespace klee {
                          KInstruction *location, 
                          std::shared_ptr<NvmValueDesc> values, 
                          std::shared_ptr<NvmStackFrameDesc> stackframe,
-                         const std::unordered_set<llvm::Instruction*> &currpath);
+                         const std::unordered_set<llvm::Instruction*> &currpath,
+                         const std::unordered_set<llvm::BranchInst*> &dnr);
 
       NvmInstructionDesc(Executor *executor,
                          andersen_sptr_t apa, 
@@ -489,7 +495,7 @@ namespace klee {
 
       std::shared_ptr<NvmInstructionDesc> update(KInstruction *pc, bool isNvm) {
         std::shared_ptr<NvmValueDesc> up = values_->updateState(pc->inst, isNvm);
-        NvmInstructionDesc nd(executor_, apa_, curr_, up, stackframe_, path_);
+        NvmInstructionDesc nd(executor_, apa_, curr_, up, stackframe_, path_, do_not_repeat_);
         return std::make_shared<NvmInstructionDesc>(nd);
       }
 
