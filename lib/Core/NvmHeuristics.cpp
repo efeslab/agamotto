@@ -372,14 +372,16 @@ NvmInstructionDesc::NvmInstructionDesc(Executor *executor,
                                        KInstruction *location, 
                                        std::shared_ptr<NvmValueDesc> values, 
                                        std::shared_ptr<NvmStackFrameDesc> stackframe,
-                                       const std::unordered_set<llvm::Instruction*> &currpath) 
+                                       const std::unordered_set<llvm::Instruction*> &currpath,
+                                       const std::unordered_set<llvm::BranchInst*> &dnr) 
         : executor_(executor),
           apa_(apa), 
           mod_(executor->kmodule.get()), 
           curr_(location), 
           values_(values), 
           stackframe_(stackframe),
-          path_(currpath) {
+          path_(currpath),
+          do_not_repeat_(dnr) {
   path_.insert(curr_->inst);
 }
 
@@ -537,7 +539,7 @@ uint64_t NvmInstructionDesc::calculateWeight(ExecutionState *es) const {
 NvmInstructionDesc NvmInstructionDesc::constructDefaultScion(void) const {
   Instruction *ni = curr_->inst->getNextNode();
   NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), 
-                          values_, stackframe_, path_);
+                          values_, stackframe_, path_, do_not_repeat_);
   return desc;
 }
 
@@ -565,21 +567,32 @@ NvmInstructionDesc::constructScions(void) {
       std::shared_ptr<NvmStackFrameDesc> ns = stackframe_->doReturn();
 
       NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), 
-                              new_values, ns, path_);
+                              new_values, ns, path_, do_not_repeat_);
       ret.insert(desc);
       return ret;
 
     } else if (BranchInst *bi = dyn_cast<BranchInst>(ip)) {
+      if (do_not_repeat_.count(bi)) {
+        // errs() << "firing DNR!\n";
+        return ret;
+      }
       for (auto *sbb : bi->successors()) {
         // do loop detection.
         Instruction *ni = &(sbb->front());
+        NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), 
+                                  values_, stackframe_, path_, do_not_repeat_);
+        desc.addToPath(curr_->inst);
+
         llvm::DominatorTree dom(*ip->getFunction());
-        if (!dom.dominates(ni, ip)) {
-          NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), 
-                                  values_, stackframe_, path_);
-          desc.addToPath(curr_->inst);
-          ret.insert(desc);
-        }
+        if (dom.dominates(ni, ip)) {
+          // errs() << "adding DNR\n";
+          desc.do_not_repeat_.insert(bi);
+        } 
+        ret.insert(desc);
+        // NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), 
+        //                           values_, stackframe_, path_);
+        // desc.addToPath(curr_->inst);
+        // ret.insert(desc);
       }
       return ret;
 
@@ -597,7 +610,7 @@ NvmInstructionDesc::constructScions(void) {
       
       for (Instruction *ni : uniqueTargets) {
         NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(ni), 
-                                values_, stackframe_, path_);
+                                values_, stackframe_, path_, do_not_repeat_);
         ret.insert(desc);
       }
 
@@ -639,7 +652,7 @@ NvmInstructionDesc::constructScions(void) {
       std::shared_ptr<NvmValueDesc> newValues = values_->doCall(apa_, ci);
 
       NvmInstructionDesc desc(executor_, apa_, mod_->getKInstruction(nextInst), 
-                              newValues, newStack, path_);
+                              newValues, newStack, path_, do_not_repeat_);
       ret.insert(desc);
     }
     
@@ -694,7 +707,7 @@ NvmInstructionDesc::constructScions(void) {
 
       NvmInstructionDesc desc(executor_, apa_, 
                               mod_->getKInstruction(&(runtime_function_->getEntryBlock().front())), 
-                              newValues, newStack, path_);
+                              newValues, newStack, path_, do_not_repeat_);
       ret.insert(desc);
 
       // We always want the default, because the instruction could be handled by
@@ -921,10 +934,21 @@ NvmHeuristicInfo::doComputation(ExecutionState *es,
                                 NvmInstructionDesc::SharedList initial) {
 
   NvmInstructionDesc::List to_traverse;
+  #if 0
   NvmInstructionDesc::PathCheckSet traversed;
+  #elif 1
+  NvmInstructionDesc::UnorderedSet traversed, tterm;
+  #else 
+  // TODO: fix this. For now, we just want to complete at some point.
+  // NvmInstructionDesc::UnorderedSet traversed;
+  std::unordered_set<Instruction*> inst_traversed;
+  #endif
 
   NvmInstructionDesc::SharedUnorderedSet terminators;
   NvmInstructionDesc::SharedList current_states;
+
+  size_t ntrimmed = 0;
+  size_t fork = 0, kill = 0;
 
   for (std::shared_ptr<NvmInstructionDesc> &sptr : initial) {
     NvmInstructionDesc desc = *sptr;
@@ -941,17 +965,54 @@ NvmHeuristicInfo::doComputation(ExecutionState *es,
   fprintf(stderr, "\tSTART:\ntoTraverse: %lu, terminators: %lu\n", to_traverse.size(), terminators.size());
 
   // Downward traversal.
-  // TODO: Recursion check
   while (to_traverse.size()) {
-    fprintf(stderr, "toTraverse: %lu, terminators: %lu\n", to_traverse.size(), terminators.size());
-    NvmInstructionDesc &current = to_traverse.front();
+    // fprintf(stderr, "toTraverse: %lu, traversed: %lu, terminators: %lu\n", 
+    //         to_traverse.size(), traversed.size(), terminators.size()); 
+    // fprintf(stderr, "toTraverse: %lu, terminators: %lu, current: %lu\n", 
+    //         to_traverse.size(), terminators.size(), current_states.size()); 
+    // fprintf(stderr, "toTraverse: %lu, traversed: %lu, terminators: %lu\n", 
+    //         to_traverse.size(), inst_traversed.size(), terminators.size());
+    // errs() << "NTRIM " << ntrimmed << "\n";
+    // NvmInstructionDesc &current = to_traverse.front();
+    NvmInstructionDesc current = to_traverse.back();
+    to_traverse.pop_back();
+    // errs() << current.str() << "\n";
 
-    if (traversed.count(current)) {
-      to_traverse.pop_front();
+    errs() << "fork: " << fork << " kill: " << kill << "\n";
+
+    #if 1
+    // if (traversed.count(current)) {
+    //   ntrimmed++;
+    //   // to_traverse.pop_front();
+    //   // to_traverse.pop_back();
+    //   continue;
+    // }
+    #elif 0
+    if (inst_traversed.count(current.inst())) {
+      ntrimmed++;
       continue;
     }
+    #else
+    auto it = traversed.find(current);
+    if (it != traversed.end()) {
+      NvmInstructionDesc t = *it;
+      std::unordered_set<Instruction*> union_set(t.path_.begin(), t.path_.end());
+      union_set.insert(current.path_.begin(), current.path_.end());
+      
+      if (t.path_ == union_set) {
+        ntrimmed++;
+        to_traverse.pop_front();
+        continue;
+      } else {
+        traversed.erase(it);
+        t.addToPath(current);
+        traversed.insert(t);
+      }
+    } 
+    #endif
 
-    traversed.insert(current);
+    // traversed.insert(current);
+    // inst_traversed.insert(current.inst());
 
     NvmInstructionDesc::UnorderedSet scions = current.constructScions();
 
@@ -963,15 +1024,20 @@ NvmHeuristicInfo::doComputation(ExecutionState *es,
 
     // If there are no scions left, we don't add the successor back on.
     if (!scions.size()) {
-      to_traverse.pop_front();
+      // to_traverse.pop_front();
+      // to_traverse.pop_back();
+      kill++;
       continue;
     }
 
+    if (scions.size() > 1) fork += scions.size() - 1;
+
     for (NvmInstructionDesc desc : scions) {
       desc.workingPredecessor = current.workingPredecessor;
-      errs() << "\ttraverse " << *desc.inst() << "\n";
+      // errs() << "\ttraverse " << *desc.inst() << "\n";
       (void)desc.updateWeight(es);
-      errs() << "\t\tweight " << desc.getWeight() << "\n";
+      // errs() << "\ttraverse" << desc.str() << "\n";
+      // errs() << "\t\tweight " << desc.getWeight() << "\n";
       if (desc.getWeight()) {
         // errs() << "got one!\n";
         // errs() << desc.str() << "\n";
@@ -989,14 +1055,15 @@ NvmHeuristicInfo::doComputation(ExecutionState *es,
         // errs() << "add" << succ_sptr->str() << "\n";
         // We assume this is a terminator until it's first true successor is 
         // found.
-        terminators.insert(succ_sptr);
         if (!current.workingPredecessor) {
-          errs() << "added one!\n";
+          // errs() << "added one!\n";
+          // errs() << succ_sptr->str() << "\n";
           // This new successor is the first in it's line! Add it to the current set.
           current_states.push_back(succ_sptr);
           to_traverse.push_back(desc);
+          terminators.insert(succ_sptr);
         } else {
-          errs() << "attached one!\n";
+          // errs() << "attached one!\n";
           bool attached = NvmInstructionDesc::attach(current.workingPredecessor, succ_sptr);
           // If it was attached, add to the list. If not, that means we have
           // a duplicate, so we don't want to add it.
@@ -1005,6 +1072,7 @@ NvmHeuristicInfo::doComputation(ExecutionState *es,
             // set.
             desc.resetPath();
             to_traverse.push_back(desc);
+            terminators.insert(succ_sptr);
           } else {
             // If not attached, we should make sure we converge the paths.
             // If it wasn't attached, that means one of the current successors 
@@ -1024,8 +1092,11 @@ NvmHeuristicInfo::doComputation(ExecutionState *es,
       }
     }
 
-    to_traverse.pop_front();
+    // to_traverse.pop_front();
+    // to_traverse.pop_back();
   }
+
+  errs() << "BOOM\n";
 
   // This can happen if we resolve a function pointer an it's uninteresting
   if (current_states.size()) {
@@ -1035,8 +1106,11 @@ NvmHeuristicInfo::doComputation(ExecutionState *es,
   }
 
   for (auto &t : terminators) {
-    assert(std::count(current_states.begin(), current_states.end(), t) ||
-           t->getPredecessors().size());
+    if (!(std::count(current_states.begin(), current_states.end(), t) ||
+           t->getPredecessors().size())) {
+      errs() << t->str() << "\n";
+      
+    }
   }
 
   if (!terminators.size()) {
