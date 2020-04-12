@@ -103,6 +103,7 @@ void *mmap_sym(exe_file_t* f, size_t length, off_t offset) {
   size_t page_end = page_start + (actual_length / pgsz);
   // want to increment page_refs in interval: [page_start, page_end)
   for (; page_start < page_end; page_start++) {
+    assert(klee_pmem_is_pmem(df->contents + (pgsz * page_start), pgsz));
     df->page_refs[page_start]++;
   }
 

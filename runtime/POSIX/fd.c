@@ -137,7 +137,7 @@ static int has_permission(int flags, struct stat64 *s) {
 
   if (write_access && !((mode & S_IWUSR) | (mode & S_IWGRP) | (mode & S_IWOTH))) {
     // klee_warning("No permission for write");
-    fprintf(stderr, "read access: %d, %o, %o\n", read_access, mode, S_IWUSR| S_IWGRP | S_IWOTH);
+    fprintf(stderr, "write access: %d, %o, %o\n", read_access, mode, S_IWUSR| S_IWGRP | S_IWOTH);
     return 0;
   }
 
@@ -150,7 +150,11 @@ static int __concretize_int(int i) {
   return c;
 }
 
-static void __setup_pmem_struct_stat(struct stat64 *s, exe_disk_file_t *dfile, struct stat64 *defaults, const char *sname) {
+static void __setup_pmem_struct_stat(struct stat64 *s, 
+                                     exe_disk_file_t *dfile, 
+                                     struct stat64 *defaults, 
+                                     const char *sname)
+{
 
   size_t pgsz = (size_t)getpagesize();
   // FIXME: what should stat64 actually be?
@@ -229,7 +233,7 @@ static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
 
   dfile->size = size;
   // FIXME: page aligned vs. cache aligned
-  dfile->contents = memalign(pgsz, dfile->size);
+  dfile->contents = klee_pmem_alloc_pmem(dfile->size, "pmem_file_data");
   if (__exe_fs.sym_pmem_init_concrete) {
     if (__exe_fs.sym_pmem_init_to_zero) {
       // memset(dfile->contents, 0, dfile->size);
