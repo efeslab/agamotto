@@ -216,23 +216,22 @@ namespace {
                  cl::cat(ChecksCat));
 
   // -- NVM options begin
-  enum class NvmCheckType { None, CoverageOnly, Debug };
+  #define clNvmEnumValN(t) clEnumValN(t, \
+                             NvmHeuristicBuilder::stringify(t), \
+                             NvmHeuristicBuilder::explanation(t))
 
-  cl::opt<NvmCheckType>
-  NvmCheck("nvm-check-type",
-       cl::desc("Choose how to check persistent memory (PM) (full by default)."),
-       cl::values(
-                  clEnumValN(NvmCheckType::None,
-                             "none",
-                             "Don't do any persistent memory checks (run KLEE normally)"),
-                  clEnumValN(NvmCheckType::CoverageOnly,
-                             "coverage-only",
-                             "Don't attempt to catch any bugs, but track coverage statistics about basic blocks that are relevant to PM"),
-                  clEnumValN(NvmCheckType::Debug, "full",
-                             "Check for PM bugs and track coverage statistics. Search strategy is selected in a separate option.")
+  cl::opt<NvmHeuristicBuilder::Type>
+  NvmCheck("nvm-heuristic-type",
+       cl::desc("Choose the search heuristic used by the NVM searcher."),
+       cl::values(clNvmEnumValN(NvmHeuristicBuilder::Type::None),
+                  clNvmEnumValN(NvmHeuristicBuilder::Type::Static),
+                  clNvmEnumValN(NvmHeuristicBuilder::Type::InsensitiveDynamic),
+                  clNvmEnumValN(NvmHeuristicBuilder::Type::ContextDynamic)
                   KLEE_LLVM_CL_VAL_END),
-       cl::init(NvmCheckType::None),
+       cl::init(NvmHeuristicBuilder::Type::None),
        cl::cat(ChecksCat));
+  
+  #undef clNvmEnumValN
 
   cl::alias PmCheck("pm-check-type",
                     cl::desc("Alias for nvm-check-type"),
@@ -241,11 +240,11 @@ namespace {
                     cl::cat(ChecksCat));
 
   bool clOptEnableNvmInfo() {
-    return NvmCheck != NvmCheckType::None;
+    return NvmCheck != NvmHeuristicBuilder::Type::None;
   }
 
   bool clOptCheckNvm() {
-    return NvmCheck == NvmCheckType::Debug;
+    return clOptEnableNvmInfo();
   }
   // -- NVM options end
 

@@ -44,6 +44,10 @@ cl::opt<bool> DebugLogStateMerge(
     cl::cat(MergeCat));
 }
 
+namespace klee {
+  extern cl::opt<NvmHeuristicBuilder::Type> NvmCheck;
+}
+
 /***/
 
 StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
@@ -86,8 +90,8 @@ ExecutionState::ExecutionState(Executor *executor,
     ptreeNode(0),
     steppedInstructions(0) {
   pushFrame(0, kf);
-  if (modOpts.EnableNvmInfo) {
-    nvmInfo = std::make_unique<NvmHeuristicInfo>(executor, kf, this);
+  if (NvmCheck != NvmHeuristicBuilder::Type::None) {
+    nvmInfo = NvmHeuristicBuilder::create(NvmCheck);
   }
 }
 
@@ -118,9 +122,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     stack(state.stack),
     incomingBBIndex(state.incomingBBIndex),
 
-    // Copy constructor for NvmHeuristicInfo
-    nvmInfo(state.nvmInfo ? std::make_unique<NvmHeuristicInfo>(*state.nvmInfo)
-                          : nullptr),
+    nvmInfo(NvmHeuristicBuilder::copy(state.nvmInfo)),
 
     addressSpace(state.addressSpace),
     constraints(state.constraints),

@@ -58,6 +58,7 @@ namespace klee {
   class NvmInstructionDesc;
 
   typedef std::shared_ptr<AndersenAAWrapperPass> andersen_sptr_t;
+  typedef std::shared_ptr<AndersenAAWrapperPass> SharedAndersen;
   // typedef std::shared_ptr<NvmStackFrameDesc> nsf_sptr_t;
   // typedef std::shared_ptr<NvmValueDesc> nv_sptr_t;
   // typedef std::shared_ptr<NvmInstructionDesc> ni_sptr_t;
@@ -256,383 +257,49 @@ namespace klee {
   };
   /* #endregion */
 
-  /**
-   * Sparse.
-   * 
-   * Each NvmInstructionDesc contains successors, which are the set of reachable
-   * instructions that follow it which have some weight. If the successor set
-   * is empty, that means this is the last instruction in a path that is worth
-   * executing for our purposes.
-   * 
-   * A more precise tree can be kept (tracking every instruction), but this 
-   * takes up much more space. Under this model, we store <1% of the data as 
-   * tracking NvmInstructionDesc for each instruction in the system. In the old
-   * system, tracking these states was responsible for 98% of klee's overhead.
-   * 
-   * Terminology: "Scion" is any descendant for any given instruction, 
-   * regardless of whether or not it is interesting. A "successor" is an 
-   * descendant which has a positive weight.
-   */
-  class NvmInstructionDesc {
-    private:
-      friend class NvmHeuristicInfo;
-
-      // The utility state.
-      Executor *executor_;
-      andersen_sptr_t apa_; // Andersen's whole program pointer analysis
-      KModule *mod_;
-      // The real state.
-      KInstruction *curr_; // The 
-      std::shared_ptr<NvmValueDesc> values_;
-      std::shared_ptr<NvmStackFrameDesc> stackframe_;
-
-      std::list<std::shared_ptr<NvmInstructionDesc>> successors_;
-      std::list<std::shared_ptr<NvmInstructionDesc>> predecessors_;
-
-      // This is the set of valid instructions between this state and it's
-      // predecessors. We leave this as an unordered set to accomodate loops,
-      // which may iterate many times.
-      std::unordered_set<llvm::Instruction*> path_;
-      // This is for some loop stuff -- if we set the loop branch instruction as
-      // a "do not repeat", we prevent loops from being calculated more than
-      // once.
-      std::unordered_set<llvm::BranchInst*> do_not_repeat_;
-
-      llvm::Function *runtime_function_ = nullptr;
-      bool need_resolution_ = false;
-
-      /**
-       * Recursion prevention.
-       */
-      bool ready_to_recurse_ = false;
-      bool can_recurse_ = false;
-
-      /** 
-       * Laziness triggers.
-       * - We need to be lazy in a lot of cases for speed.
-       */
-      bool force_special_handler_call_fall_over_ = false;
-
-      /**
-       * Part of the heuristic calculation. This weight is the "interesting-ness"
-       * of an instreuction given the current state of values in the system.
-       * 
-       * Weight is given to instructions which:
-       * (1) Contain a call to mmap.
-       * (2) Perform a write to a memory location know to be NVM.
-       * (3) Perform cacheline writebacks on known NVM addresses.
-       * (4) Contain memory fences.
-       * 
-       * We will not speculate about the return values of mmap.
-       */
-      bool weight_init_ = false;
-      uint64_t weight_ = 0;
-      uint64_t priority_ = 0;
-
-      NvmInstructionDesc() = delete;
-
-      NvmInstructionDesc(Executor *executor,
-                         andersen_sptr_t apa,
-                         KInstruction *location, 
-                         std::shared_ptr<NvmValueDesc> values, 
-                         std::shared_ptr<NvmStackFrameDesc> stackframe,
-                         const std::unordered_set<llvm::Instruction*> &currpath,
-                         const std::unordered_set<llvm::BranchInst*> &dnr);
-
-      NvmInstructionDesc(Executor *executor,
-                         andersen_sptr_t apa, 
-                         KInstruction *entry);
-
-      /* Methods for creating successor states. */
-
-      /* Helper functions. */
-
-      /**
-       * Construct the default and immediate scion for
-       */
-      NvmInstructionDesc constructDefaultScion(void) const;
-
-      /**
-       * Calculates the weight without modifying anything.
-       * 
-       * This differs between static and dynamic as static has no concept of 
-       * unresolved functions.
-       */
-      virtual uint64_t calculateWeight(ExecutionState *es) const;
-
-    public:
-
-      struct HashFn : public std::unary_function<NvmInstructionDesc, uint64_t> {
-        uint64_t operator()(const NvmInstructionDesc &desc) const {
-          return std::hash<void*>{}(desc.curr_) ^ 
-                 std::hash<void*>{}(desc.values_.get()) ^
-                 std::hash<void*>{}(desc.stackframe_.get());
-        } 
-      };
-
-      struct FullEq : public std::equal_to<NvmInstructionDesc> {
-        bool operator()(const NvmInstructionDesc &lhs, 
-                        const NvmInstructionDesc &rhs) const {
-          return lhs == rhs && lhs.path_ == rhs.path_;
-        }
-      };
-
-      typedef std::shared_ptr<NvmInstructionDesc> Shared;
-      typedef std::unordered_set<NvmInstructionDesc, HashFn> UnorderedSet;
-      typedef std::unordered_set<NvmInstructionDesc, HashFn, FullEq> PathCheckSet;
-      typedef std::unordered_set<std::shared_ptr<NvmInstructionDesc>> SharedUnorderedSet;
-      typedef std::list<NvmInstructionDesc> List;
-      typedef std::list<std::shared_ptr<NvmInstructionDesc>> SharedList;
-
-      virtual ~NvmInstructionDesc() = default;
-
-      // This is a convenient storage variable to make the calculation easier
-      NvmInstructionDesc::Shared workingPredecessor;
-
-      /* inline getters */
-      bool isTerminator(void) const { return !successors_.size(); } 
-
-      bool isEntry(void) const { return !predecessors_.size(); }
-
-      bool isValid(void) const { return !!curr_; }
-
-      bool isRecursable(void) const { return can_recurse_; }
-
-      bool forceFallOverUnset(void) const { return !force_special_handler_call_fall_over_; }
-
-      uint64_t getWeight(void) const { 
-        assert(weight_init_);
-        return weight_;
-      }
-
-      uint64_t getPriority(void) const { return priority_; }
-
-      llvm::Instruction *inst(void) const { return curr_->inst; }
-
-      KInstruction *kinst(void) const { return curr_; }
-
-      bool needsResolution(void) const { return need_resolution_ && !runtime_function_; }
-
-      /**
-       * This allows the process to be forward and backward. After we find all
-       * block weights, we go from the ends back up to bubble up the overall
-       * priority.
-       */
-      std::list<std::shared_ptr<NvmInstructionDesc>> &getPredecessors() {
-        // Predecessors are set externally. This call should only ever occur after
-        // all successors have been calculated.
-        return predecessors_;
-      }
-
-      std::list<std::shared_ptr<NvmInstructionDesc>> &getSuccessors() { 
-        return successors_; 
-      }
-
-      void addToPath(llvm::Instruction* prior) {
-        path_.insert(prior);
-      }
-
-      void addToPath(NvmInstructionDesc &other) {
-        assert(curr_ == other.curr_);
-        path_.insert(other.path_.begin(), other.path_.end());
-      }
-
-      bool pathContains(llvm::Instruction *i) {
-        return path_.count(i);
-      }
-
-
-      void resetPath(void) {
-        path_.clear();
-        path_.insert(curr_->inst);
-      }
-
-      void dumpPath(llvm::Instruction *i) {
-        for (auto *ip : path_) {
-          llvm::errs() << "\tpath inst" << *ip;
-          if (ip == i) {
-            llvm::errs() << "equals";
-          } else {
-            llvm::errs() << "does not equal";
-          }
-          llvm::errs() << *i << "\n";
-        }
-      }
-
-      /* out-line getters */
-
-      bool isCachelineModifier(ExecutionState *es) const;
-
-      /**
-       * This creates the descriptions of the immediate scion states. Not all
-       * of these will go on to become true successors, as many will have a 
-       * weight of 0. However, we must construct these so we can iterate through
-       * and construct the states we actually care about.
-       * 
-       * Does all the loop checking, recursion checking, etc.
-       * 
-       * Does some modifications
-       */
-      virtual NvmInstructionDesc::UnorderedSet constructScions(void);
-
-      /**
-       * Creates a version of the instruction description with recursable 
-       * set true.
-       */
-      std::shared_ptr<NvmInstructionDesc> getRecursable() const;
-
-      /**
-       * Creates a version of the instruction description with special
-       * function handler fall over enabled. 
-       * 
-       * Note, you can replace successors with this new one to safe effort of 
-       * specialFunctionHandler resolution across execution states.
-       */
-      std::shared_ptr<NvmInstructionDesc> getForceFallOver() const;
-
-      /**
-       */
-
-      std::shared_ptr<NvmInstructionDesc> update(KInstruction *pc, bool isNvm) {
-        std::shared_ptr<NvmValueDesc> up = values_->updateState(pc->inst, isNvm);
-        NvmInstructionDesc nd(executor_, apa_, curr_, up, stackframe_, path_, do_not_repeat_);
-        return std::make_shared<NvmInstructionDesc>(nd);
-      }
-
-      std::shared_ptr<NvmInstructionDesc> resolve(KInstruction *nextPC) const;
-
-      /* modifiers */
-
-      /**
-       * Try to update the weight. Return true if the current weight was changed
-       * during this process.
-       * 
-       * Also updates priority (gives us the base case).
-       */
-      bool updateWeight(ExecutionState *es) {
-        // Check if this will need resolution
-        assert(curr_ && curr_->inst);
-        if (llvm::CallInst *ci = dyn_cast<llvm::CallInst>(curr_->inst)) {
-          need_resolution_ = (!ci->getCalledFunction()) && ci->isIndirectCall();
-        }
-
-        uint64_t new_weight = calculateWeight(es);
-        bool changed = weight_ == new_weight || !weight_init_;
-        priority_ = (priority_ - weight_) + new_weight;
-        weight_ = new_weight;
-        weight_init_ = true;
-        return changed;
-      }
-
-      /**
-       * Sets the current priority based on the current successors. Returns 
-       * true if the priority was changed, false if it is the same.
-       */
-      bool setPriority(uint64_t new_priority) {
-        bool changed = priority_ == new_priority;
-        priority_ = new_priority;
-        return changed;
-      }
-      
-      /* helpers */
-
-      /**
-       * Generate a string representation of this instruction description.
-       * Used for debugging, so it is not well optimized.
-       */
-      std::string str(void) const;
-
-      /* statics */
-
-      /**
-       * Create/remove the link between two instruction descriptions which are 
-       * significant. Return true if changes are made.
-       */
-      static bool attach(std::shared_ptr<NvmInstructionDesc> &pptr,
-                         std::shared_ptr<NvmInstructionDesc> &sptr);
-
-      static bool detach(std::shared_ptr<NvmInstructionDesc> &pptr,
-                         std::shared_ptr<NvmInstructionDesc> &sptr);
-
-      static bool replace(std::shared_ptr<NvmInstructionDesc> &pptr,
-                          std::shared_ptr<NvmInstructionDesc> &optr,
-                          std::shared_ptr<NvmInstructionDesc> &nptr);
-      
-      /**
-       * Create the first NvmInstructionDesc instance. This is the only entry
-       * point to create an instruction from scratch.
-       */
-      static std::shared_ptr<NvmInstructionDesc> createEntry(Executor *executor, KFunction *mainFn);
-
-      /**
-       * These are likely unnecessary
-       */
-      friend bool operator==(const NvmInstructionDesc &lhs, const NvmInstructionDesc &rhs);
-      friend bool operator!=(const NvmInstructionDesc &lhs, const NvmInstructionDesc &rhs);
-  };
-
   // Two concrete initializations of NvmInstructionDesc:
   // -- Static version
   // -- Dynamic version
 
 
+  /* #region NvmHeuristicInfo (super class) */
   /**
    * This is per state.
    */
+  class NvmHeuristicBuilder;
+
   class NvmHeuristicInfo {
-    private:
+    friend class NvmHeuristicBuilder;
+    protected:
 
-      /**
-       * The priority of the ExecutionState is max(current_states).
-       * 
-       * We continue under the assumption that we could be in any of these
-       * states until we execute an instruction that corresponds to one of these
-       * states.
-       * 
-       * We occasionally want to update these states. We do these in-place, so
-       * we don't affect other states.
-       */
-      std::shared_ptr<NvmInstructionDesc> last_state_ = nullptr; // For SFH
-      // List to allow mutability
-      std::list<std::shared_ptr<NvmInstructionDesc>> current_states_;
-      uint64_t current_priority_ = 0;
-
-      /**
-       * Returns the new current state
-       */
-      NvmInstructionDesc::SharedList doComputation(ExecutionState *es, 
-                                                   NvmInstructionDesc::SharedList initial);
+      typedef std::unordered_set<const llvm::Value*> ValueSet;
 
       /**
        * We halt propagation at the current instructions, because we don't want
        * to taint the earlier tree, as other ExecutionStates may use those as
        * their blank slate of evaluation.
        */
-      void computeCurrentPriority(ExecutionState *es);
+      virtual void computeCurrentPriority(ExecutionState *es) = 0;
+
+      // NvmHeuristicInfo(Executor *executor, KFunction *mainFn, ExecutionState *es) {};
+
+      static SharedAndersen createAndersen(llvm::Module &m);
+      static ValueSet getNvmAllocationSites(llvm::Module *m, SharedAndersen &ander);
+      static bool isNvmAllocationSite(llvm::Module *m, const llvm::Value *v);
+      static bool isStore(llvm::Instruction *i);
+      static bool isFlush(llvm::Instruction *i);
+      static bool isFence(llvm::Instruction *i);
 
     public:
-      NvmHeuristicInfo(Executor *executor, KFunction *mainFn, ExecutionState *es);
+    
+      virtual ~NvmHeuristicInfo() = 0;
 
-      uint64_t getCurrentPriority(void) const { 
-        return current_priority_; 
-      }
-
-      bool isCurrentTerminator(void) const {
-        if (last_state_) return last_state_->isTerminator();
-        return current_states_.size() == 0;
-      }
-
-      /**
-       * Checks that the current PC is in the set of currently considered 
-       * instructions. This can be used in PersistentState when a modification
-       * to NVM occurs.
-       */
-      void assertIsImportantInstruction(KInstruction *pc) const;
+      virtual uint64_t getCurrentPriority(void) const = 0;
 
       /**
        * May change one of the current states, or could not.
        */
-      void updateCurrentState(ExecutionState *es, KInstruction *pc, bool isNvm);
+      virtual void updateCurrentState(ExecutionState *es, KInstruction *pc, bool isNvm) = 0;
 
       /**
        * Advance the current state, if we can.
@@ -649,8 +316,161 @@ namespace klee {
        * We need the current PC to resolve when we execute one of our possible
        * states. We need the next PC to resolve function pointers.
        */
-      void stepState(ExecutionState *es, KInstruction *pc, KInstruction *nextPC);
+      virtual void stepState(ExecutionState *es, KInstruction *pc, KInstruction *nextPC) = 0;
+
+      virtual void dump(void) const {}
   };
+  /* #endregion */
+
+  /* #region NvmStaticHeuristic */
+  class NvmStaticHeuristic : public NvmHeuristicInfo {
+    protected:
+      typedef std::unordered_map<llvm::Instruction*, uint64_t> WeightMap;
+      typedef std::shared_ptr<WeightMap> SharedWeightMap;
+
+      Executor *executor_;
+      SharedAndersen analysis_; // Andersen's whole program pointer analysis
+
+      SharedWeightMap weights_;
+      SharedWeightMap priorities_;
+      llvm::Instruction *curr_;
+
+      NvmStaticHeuristic(Executor *executor, KFunction *mainFn);
+
+      void computePriority();
+    public:
+
+      virtual ~NvmStaticHeuristic() {}
+
+      virtual uint64_t getCurrentPriority(void) const override {
+        return priorities_->at(curr_);
+      };
+
+      /**
+       * May change one of the current states, or could not.
+       */
+      virtual void updateCurrentState(ExecutionState *es, 
+                                      KInstruction *pc, 
+                                      bool isNvm) override {}
+
+      /**
+       * Advance the current state, if we can.
+       * 
+       * It's fine if the current PC was a jump, branch, etc. We already computed
+       * the possible successor states for ourself (without symbolic values of course).
+       * If we did our job correctly, this should work fine. Otherwise, we error.
+       * 
+       * The only case we currently don't handle well is interprocedurally 
+       * generated function pointers. We will resolve them at runtime.
+       * 
+       * In stepState, we also want check if we modified any persistent state.
+       * 
+       * We need the current PC to resolve when we execute one of our possible
+       * states. We need the next PC to resolve function pointers.
+       */
+      virtual void stepState(ExecutionState *es, 
+                             KInstruction *pc, 
+                             KInstruction *nextPC) override {
+        curr_ = nextPC->inst;
+      }
+
+      virtual void dump(void) const override {
+        uint64_t nonZeroWeights = 0, nonZeroPriorities = 0;
+
+        for (const auto &p : *weights_) nonZeroWeights += (p.second > 0);
+        for (const auto &p : *priorities_) nonZeroPriorities += (p.second > 0);
+
+        double pWeights = 100.0 * ((double)nonZeroWeights / (double)weights_->size());
+        double pPriorities = 100.0 * ((double)nonZeroPriorities / (double)priorities_->size());
+
+        fprintf(stderr, "NvmStaticHeuristic:\n"
+                        "\tNVM allocation sites: %lu\n"
+                        "\t%% instructions with weight: %lu\n",
+                        "\t%% instructions with weight: %lu\n",
+                        getNvmAllocationSites(executor_->kmodule->module, analysis_).size(),
+                        pWeights, pPriorities);
+      }
+  };
+
+  /* #endregion */
+
+  /* #region NvmHeuristicBuilder */
+  class NvmHeuristicBuilder {
+    private:
+      static std::string typeNames[] = {
+        "none", "static", "insensitive-dynamic", "context-dynamic"
+      };
+
+      static std::string typeDesc[] = {
+        "None: uses a no-op heuristic (disables the features)",
+        "Static: this only uses the points-to information from Andersen's analysis",
+        "Insensitive-Dynamic: this updates Andersen's analysis as runtime "
+          "variables are resolved",
+        "Context-Dynamic: this updates Andersen's analysis while being context"
+          " (call-site) sensitive",
+      }
+
+    public:
+      NvmHeuristicBuilder() = delete;
+
+      enum Type {
+        None = 0,
+        Static,
+        InsensitiveDynamic,
+        ContextDynamic,
+        Invalid
+      };
+
+      static const std::string &stringify(Type t) {
+        return typeNames[t];
+      }
+
+      static const std::string &explanation(Type t) {
+        return typeDesc[t];
+      }
+
+      static Type toType(const char *tStr) {
+        for (Type t = None; t < Invalid; ++t) {
+          if (tStr == typeNames[t]) {
+            return t;
+          }
+        }
+        return Invalid;
+      }
+
+      static std::unique_ptr<NvmHeuristicInfo> create(Type t) {
+        switch(t) {
+          case None:
+            assert(false && "unsupported!");
+            break;
+          case Static:
+
+          case InsensitiveDynamic:
+          case ContextDynamic:
+          default:
+            assert(false && "unsupported!");
+            break;
+        }
+
+        return std::unique_ptr<NvmHeuristicInfo>(nullptr);
+      }
+
+      static std::unique_ptr<NvmHeuristicInfo> copy(const std::unique_ptr<NvmHeuristicInfo> &info) {
+        if (!info.get()) {
+          return std::unique_ptr<NvmHeuristicInfo>(nullptr);
+        }
+
+        NvmHeuristicInfo *newInfo;
+        if (typeid(info.get()) == typeid(NvmStaticHeuristic)) {
+          newInfo = new NvmStaticHeuristic(*info); // Copy construct
+        }
+
+        assert(newInfo && "null!");
+        return std::unique_ptr<NvmHeuristicInfo>(newInfo);
+      }
+  };
+  /* #endregion */
+
 }
 #endif //__NVM_HEURISTICS_H__
 /*
