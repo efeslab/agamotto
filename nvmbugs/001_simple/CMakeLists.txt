@@ -13,6 +13,10 @@ klee_add_test_executable(TARGET 001_BranchMod SOURCES
   branch_nvm_mod.c
 )
 
+klee_add_test_object(TARGET 001_InlineAsm SOURCES
+  inline_asm.c
+)
+
 klee_add_test_object(TARGET 001_SimpleMod SOURCES
   simple_nvm_mod.c
 )

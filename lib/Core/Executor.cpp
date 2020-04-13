@@ -1362,18 +1362,6 @@ static inline const llvm::fltSemantics *fpWidthToSemantics(unsigned width) {
   }
 }
 
-static llvm::StringRef getAnnotationStringFromAnnotationCall(KInstruction *ki) {
-  llvm::Value *annotation = ki->inst->getOperand(1)->stripPointerCasts();
-  // Get first operand of GEP instruction.
-  auto *constant = ValueAsMetadata::getConstant(annotation)->getValue();
-  if (auto *global = dyn_cast<GlobalVariable>(constant)) {
-    if (auto *initter = dyn_cast<ConstantDataSequential>(global->getInitializer())) {
-      return initter->getAsCString();
-    }
-  }
-  return llvm::StringRef();
-}
-
 void Executor::executeCall(ExecutionState &state,
                            KInstruction *ki,
                            Function *f,
@@ -1453,8 +1441,6 @@ void Executor::executeCall(ExecutionState &state,
 
       // Non-volatile memory intrinsics
     case Intrinsic::x86_sse2_clflush: {
-      klee_warning_once(
-        0, "program contains not-yet-supported clflush intrinsic. Treating as clwb+sfence.");
       llvm::Value *v = ki->inst->getOperand(0);
       v = v->stripPointerCasts();
       KInstruction *kv = kmodule->getKInstruction(dyn_cast<Instruction>(v));
@@ -1464,8 +1450,6 @@ void Executor::executeCall(ExecutionState &state,
       break;
     }
     case Intrinsic::x86_clflushopt:
-      klee_warning_once(
-        0, "program contains not-yet-supported clflushopt intrinsic. Treating as clwb.");
     case Intrinsic::x86_clwb: {
       llvm::Value *v = ki->inst->getOperand(0);
       v = v->stripPointerCasts();
@@ -1474,32 +1458,11 @@ void Executor::executeCall(ExecutionState &state,
       executePersistentMemoryFlush(state, address);
       break;
     }
+      // TODO: performance warning for mfence instead of sfence?
+    case Intrinsic::x86_sse2_mfence:
     case Intrinsic::x86_sse_sfence:
       executePersistentMemoryFence(state);
       break;
-
-      // XXX: For now, we detect non-volatile memory using an
-      // annotation __attribute__. In future we should detect these addresses
-      // automatically.
-    case Intrinsic::var_annotation: {
-      // Check if it is the "nvmvar" annotation.
-      // The first operand to the annotation is a pointer, the second
-      // is which annotation is being applied.
-      auto annotationStr = getAnnotationStringFromAnnotationCall(ki);
-      if (annotationStr == "nvmvar") {
-        llvm::Instruction *bitcastInst =
-          dyn_cast<Instruction>(ki->inst->getOperand(0));
-        KInstruction *bitcastKInst = kmodule->getKInstruction(bitcastInst);
-        // Get the address of the variable being annotated.
-        ref<Expr> address = eval(bitcastKInst, 0, state).value;
-        executeMarkPersistent(state, cast<ConstantExpr>(address));
-      } else if (annotationStr == "nvmptr") {
-        klee_warning_once(0, "Skipping over 'nvmptr' annotation");
-      } else {
-        klee_warning("Unsupported annotation: %s", annotationStr.str().c_str());
-      }
-      break;
-    }
 
     case Intrinsic::vacopy:
       // va_copy should have been lowered.
