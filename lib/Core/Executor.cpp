@@ -3810,7 +3810,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           wos->write(state, offset, value);
           if (PersistentState *ps = dyn_cast<PersistentState>(wos)) {
             if (isNontemporal) {
-              llvm::errs() << "nontemporal store!\n";
+              // llvm::errs() << "nontemporal store!\n";
+
               // Nontemporal writes don't dirty the cache, but they must
               // still cause an error until a fence happens.
               ps->persistCacheLineAtOffset(offset);
@@ -4003,7 +4004,8 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
         assert(wos);
         ps = dyn_cast<PersistentState>(wos);
         assert(ps);
-        llvm::errs() << "Unnecessary Flush\n";
+        // llvm::errs() << "Unnecessary Flush\n";
+
         // avoid masking later bugs; emit error, but continue
         emitPmemError(*errState, { ps->getLocationInfo(*errState) });
       }
@@ -4017,7 +4019,7 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
         ps = dyn_cast<PersistentState>(wos);
         assert(ps);
         ps->persistCacheLineAtOffset(offset);
-        llvm::errs() << "Good Flush\n";
+        // llvm::errs() << "Good Flush\n";
       }
     }
   } else {
@@ -4026,7 +4028,7 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
 }
 
 void Executor::executePersistentMemoryFence(ExecutionState &state) {
-  llvm::errs() << "Fence\n";
+  // llvm::errs() << "Fence\n";
   for (const MemoryObject *mo : state.persistentObjects) {
     const ObjectState *os = state.addressSpace.findObject(mo);
     assert(os);
@@ -4036,10 +4038,6 @@ void Executor::executePersistentMemoryFence(ExecutionState &state) {
   }
 }
 
-/**
- * TODO: (iangneal): we can refactor the slice constraint stuff. Currently, 
- * there's only one set of constraints, so it's a little unnecessary.
- */
 ExecutionState *Executor::executeCheckPersistence(ExecutionState &state,
                                                   const MemoryObject *mo) {
   const ObjectState *os = state.addressSpace.findObject(mo);
@@ -4060,7 +4058,7 @@ ExecutionState *Executor::executeCheckPersistence(ExecutionState &state,
   }
   if (isPersisted.second) {
     isPersisted.second->constraints.removeConstraint(inBoundsConstraint);
-  } 
+  }
 
   // If there's a state where it's not definitely persisted, terminate it.
   ExecutionState *notPersisted = isPersisted.second;
@@ -4074,7 +4072,8 @@ ExecutionState *Executor::executeCheckPersistence(ExecutionState &state,
                               nps->getRootCauses(solver, *notPersisted));
   }
 
-  return &state;
+  ExecutionState *goodState = isPersisted.first;
+  return goodState;
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state,

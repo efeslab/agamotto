@@ -662,13 +662,14 @@ PersistentState::PersistentState(const ObjectState *os)
                                                     Expr::Int32 /* domain */,
                                                     Expr::Int64 /* range */);
   rootCauseLocations = UpdateList(rootCauses, nullptr);
+  pendingRootCauseLocations = UpdateList(rootCauseLocations);
 
   // Set up a symbolic integer to act as an "arbitrary offset" into this.
   const Array *idxArray = arrayCache->CreateArray(baseName + "_idx", 1,
                                                        nullptr, nullptr,
                                                        Expr::Int32,
                                                        Expr::Int32);
-  // ReadExpr just deep copies the UpdateList you give it;
+  // ReadExpr just copies the UpdateList you give it;
   // no need to store one as a member variable.
   idxUnbounded = ReadExpr::create(UpdateList(idxArray, nullptr),
                                   ConstantExpr::create(0, idxArray->range));
