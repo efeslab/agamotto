@@ -91,7 +91,7 @@ ExecutionState::ExecutionState(Executor *executor,
     steppedInstructions(0) {
   pushFrame(0, kf);
   if (NvmCheck != NvmHeuristicBuilder::Type::None) {
-    nvmInfo = NvmHeuristicBuilder::create(NvmCheck);
+    nvmInfo = NvmHeuristicBuilder::create(NvmCheck, executor, kf);
   }
 }
 

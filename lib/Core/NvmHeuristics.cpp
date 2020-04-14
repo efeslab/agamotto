@@ -5,11 +5,44 @@ using namespace std;
 using namespace klee;
 
 #include <sstream>
+#include <utility>
 
 #include "CoreStats.h"
 #include "Executor.h"
 #include "klee/ExecutionState.h"
 #include "klee/TimerStatIncrementer.h"
+
+/* #region CL Options */
+
+namespace klee {
+  cl::OptionCategory NvmCat("NVM options",
+                            "These options control some of NVM-related features of this NVM-version of KLEE.");
+
+  #define clNvmEnumValN(t) (clEnumValN(t, \
+                              NvmHeuristicBuilder::stringify(t), \
+                              NvmHeuristicBuilder::explanation(t)))
+
+  cl::opt<NvmHeuristicBuilder::Type>
+  NvmCheck("nvm-heuristic-type",
+        cl::desc("Choose the search heuristic used by the NVM searcher."),
+        cl::values(clNvmEnumValN(NvmHeuristicBuilder::Type::None),
+                   clNvmEnumValN(NvmHeuristicBuilder::Type::Static),
+                   clNvmEnumValN(NvmHeuristicBuilder::Type::InsensitiveDynamic),
+                   clNvmEnumValN(NvmHeuristicBuilder::Type::ContextDynamic)
+                   KLEE_LLVM_CL_VAL_END),
+        cl::init(NvmHeuristicBuilder::Type::None),
+        cl::cat(NvmCat));
+
+  #undef clNvmEnumValN
+
+  cl::alias PmCheck("pm-check-type",
+                    cl::desc("Alias for nvm-check-type"),
+                    cl::NotHidden,
+                    cl::aliasopt(NvmCheck),
+                    cl::cat(NvmCat));
+}
+/* #endregion */
+
 
 /* #region NvmStackFrameDesc */
 
@@ -370,6 +403,8 @@ bool klee::operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs) {
 
 /* #region NvmHeuristicInfo (abstract super class) */ 
 
+NvmHeuristicInfo::~NvmHeuristicInfo() {}
+
 SharedAndersen NvmHeuristicInfo::createAndersen(llvm::Module &m) {
   TimerStatIncrementer timer(stats::nvmAndersenTime);
 
@@ -379,8 +414,9 @@ SharedAndersen NvmHeuristicInfo::createAndersen(llvm::Module &m) {
   return anders;
 }
 
-ValueSet NvmHeuristicInfo::getNvmAllocationSites(Module *m, SharedAndersen &ander) {
-  ValueSet all, onlyNvm;
+NvmHeuristicInfo::ValueSet NvmHeuristicInfo::getNvmAllocationSites(Module *m, const SharedAndersen &ander) {
+  NvmHeuristicInfo::ValueVector all;
+  NvmHeuristicInfo::ValueSet onlyNvm;
   ander->getResult().getAllAllocationSites(all);
   
   for (const Value *v : all) {
@@ -426,7 +462,7 @@ bool NvmHeuristicInfo::isFlush(llvm::Instruction *i) {
 }
 
 bool NvmHeuristicInfo::isFence(llvm::Instruction *i) {
-  if (CallInst *ci = dyn_cast<CallInst>(curr_->inst)) {
+  if (CallInst *ci = dyn_cast<CallInst>(i)) {
     Function *f = ci->getCalledFunction();
     if (f && f->isDeclaration()) {
       switch(f->getIntrinsicID()) {
@@ -449,7 +485,7 @@ bool NvmHeuristicInfo::isFence(llvm::Instruction *i) {
 
 /* #region NvmStaticHeuristic */
 
-NvmStaticHeuristic::NvmStaticHeuristic(Executor *executor, KFunction *mainFn) :
+NvmStaticHeuristic::NvmStaticHeuristic(Executor *executor, KFunction *mainFn) 
   : executor_(executor),
     analysis_(createAndersen(*executor->kmodule->module)),
     weights_(std::make_shared<WeightMap>()),
@@ -457,34 +493,68 @@ NvmStaticHeuristic::NvmStaticHeuristic(Executor *executor, KFunction *mainFn) :
     curr_(mainFn->function->getEntryBlock().getFirstNonPHIOrDbgOrLifetime()) {
 
   computePriority();
+  dump();
+  // assert(false);
 }
 
 void NvmStaticHeuristic::computePriority(void) {
-  ValueSet nvmSites = getNvmAllocationSites(curr_->getModule(), analysis_);
-
+  Module *module = executor_->kmodule->module.get();
+  ValueSet nvmSites = getNvmAllocationSites(module, analysis_);
+  ValueSet allSites;
+  {
+    ValueVector allSitesVec;
+    analysis_->getResult().getAllAllocationSites(allSitesVec);
+    allSites.insert(allSitesVec.begin(), allSitesVec.end());
+  }
+  
   /**
    * Calculating the raw weights is easy.
    */
 
   std::unordered_set<llvm::CallInst*> call_insts;
 
-  for (Function &f : *curr_->getModule()) {
+  for (Function &f : *module) {
     for (BasicBlock &b : f) {
       for (Instruction &i : b) {
-        if (isStore(&i) || isFlush(&i) || isFence(&i)) {
+        (*weights_)[&i] = 0lu;
+        (*priorities_)[&i] = 0lu;
+        if (isStore(&i) || isFlush(&i)) {
+          Value *v = &i;
+          if (isFlush(&i)) {
+            assert(isa<CallInst>(&i));
+            v = dyn_cast<CallInst>(&i)->getArgOperand(0);
+          }
           std::vector<const Value*> ptsSet;
 
           TimerStatIncrementer timer(stats::nvmAndersenTime);
-          bool ret = analysis_->getResult().getPointsToSet(op, ptsSet);
-          assert(ret && "could not get points-to set!");
+          bool ret = analysis_->getResult().getPointsToSet(v, ptsSet);
+
+          if (!ret) {
+            if (allSites.count(v)) {
+              if (nvmSites.count(v)) (*weights_)[&i] = 1u;
+              continue;
+            } else if (AllocaInst *ai = dyn_cast<AllocaInst>(&i)) {
+              if (ai->getType()->isFunctionTy()) continue;
+            } else if (StoreInst *si = dyn_cast<StoreInst>(&i)) {
+              if (isa<GlobalValue>(si->getPointerOperand()->stripPointerCasts())) continue;
+
+              assert(analysis_->getResult().getPointsToSet(si->getPointerOperand(), ptsSet));
+            } else {
+              errs() << i << "\n";
+              assert(false && "could not get points-to!");
+            }
+          }
+          
           for (const Value *ptsTo : ptsSet) {
             if (nvmSites.count(ptsTo)) {
-              weights_[&i] = 1u;
+              (*weights_)[&i] = 1u;
             }
           }
 
+        } else if (isFence(&i)) {
+          (*weights_)[&i] = 1u;
         } else if (CallInst *ci = dyn_cast<CallInst>(&i)) {
-          call_insts.insert(ci);
+          if (!ci->isInlineAsm()) call_insts.insert(ci);
         }
       }
     }
@@ -494,95 +564,208 @@ void NvmStaticHeuristic::computePriority(void) {
    * We also need to fill in the weights for function calls.
    * We'll just give a weight of one, prioritizes immediate instructions.
    */
+  bool c = false;
+  do {
+    c = false;
+    for (CallInst *ci : call_insts) {
+      std::unordered_set<Function*> possibleFns;
+      if (Function *f = utils::getCallInstFunction(ci)) {
+        possibleFns.insert(f);
+      } else if (Function *f = ci->getCalledFunction()) {
+        possibleFns.insert(f);
+      } else {
+        if (!ci->isIndirectCall()) errs() << *ci << "\n";
+        assert(ci->isIndirectCall());
 
-  for (CallInst *ci : call_insts) {
-    std::unordered_set<Function*> possibleFns;
-    if (Function *f = utils::getCallInstFunction(ci)) {
-      possibleFns.insert(f);
-    } else {
-      assert(ci->isIndirectCall());
-
-      for (Function &f : *curr_->getModule()) {
-        for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
-          if (f.arg_size() <= i) {
-            if (f.isVarArg()) {
-              possibleFns.insert(&f);
+        for (Function &f : *curr_->getModule()) {
+          for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
+            if (f.arg_size() <= i) {
+              if (f.isVarArg()) {
+                possibleFns.insert(&f);
+              }
+              break;
             }
-            break;
-          }
 
-          Argument *arg = f.arg_begin() + i;
-          Value *val = ci->getArgOperand(i);
+            Argument *arg = f.arg_begin() + i;
+            Value *val = ci->getArgOperand(i);
 
-          if (arg->getType() != val->getType()) break;
-          else if (i + 1 == ci->getNumArgOperands()) possibleFns.insert(&f);
-        }
-      }
-    }
-
-    for (Function *f : possibleFns) {
-      for (BasicBlock &bb : *f) {
-        for (Instruction &i : bb) {
-          if (weights_[&i]) {
-            weights_[dyn_cast<Instruction>(ci)] = 1u;
-            goto done;
+            if (arg->getType() != val->getType()) break;
+            else if (i + 1 == ci->getNumArgOperands()) possibleFns.insert(&f);
           }
         }
       }
-    }
 
-    done: 0;
-  }
+      for (Function *f : possibleFns) {
+        for (BasicBlock &bb : *f) {
+          for (Instruction &i : bb) {
+            if ((*weights_)[&i] && !(*weights_)[dyn_cast<Instruction>(ci)]) {
+              c = true;
+              (*weights_)[dyn_cast<Instruction>(ci)] = 1u;
+              goto done;
+            }
+          }
+        }
+      }
+
+      done: (void)0;
+    }
+    errs() << "C " << c << "\n";
+  } while (c);
+  
+
+  // errs() << "filled in!\n";
+  // dump();
 
   /**
    * Now, we do the priority.
    */
 
-  for (Function &f : *curr_->getModule()) {
+  for (Function &f : *module) {
+    if (f.empty()) continue;
     llvm::DominatorTree dom(f);
 
     // Find the ending basic blocks
-    std::unordered_set<BasicBlock*> endBlocks;
-    std::list<BasicBlock*> bbList;
-    bbList.push_back(&f.getEntryBlock());
+    std::unordered_set<BasicBlock*> endBlocks, bbSet, traversed;
+  
+    BasicBlock *entry = &f.getEntryBlock();
+    assert(entry);
+    bbSet.insert(entry);
 
-    while(bbList.size()) {
-      BasicBlock *bb = bbList.front();
-      bbList.pop_front();
+    while(bbSet.size()) {
+      BasicBlock *bb = *bbSet.begin();
+      assert(bb);
+      bbSet.erase(bbSet.begin());
+      traversed.insert(bb);
 
       if (succ_empty(bb)) {
-        endBlocks.push_back(bb);
+        endBlocks.insert(bb);
       } else {
         for (BasicBlock *sbb : successors(bb)) {
-          if (!dom.dominates(sbb, bb)) bbList.push_back(sbb);
+          assert(sbb);
+          if (traversed.count(sbb)) continue;
+          if (!dom.dominates(sbb, bb)) bbSet.insert(sbb);
         }
       }
     }
 
-    bbList = endBlocks; // copy
+    // errs() << "\tfound terminators" << "\n";
+    bbSet = endBlocks;
 
-    while (bbList.size()) {
-      BasicBlock *bb = bbList.front();
-      bbList.pop_front();
+    /**
+     * Propagating the priority is slightly trickier than just finding the 
+     * terminal basic blocks, as different paths can have different priorities.
+     * So, we annotate the propagated with the priority. If the priority changed,
+     * then reprop.
+     */
+
+    std::unordered_map<BasicBlock*, uint64_t> prop;
+
+    while (bbSet.size()) {
+      BasicBlock *bb = *bbSet.begin();
+      assert(bb);
+      bbSet.erase(bbSet.begin());
 
       Instruction *pi = bb->getTerminator();
-      assert(pi);
-      Instruction *i = pi->getPrevNonDebugInstruction();
-      while(i) {
-        priorities_[i] = priorities_[pi] + weights_[i];
+      if (!pi) {
+        assert(f.isDeclaration());
+        continue; // empty body
+      }
+
+      if (prop.count(bb) && prop[bb] == (*priorities_)[pi]) {
+        continue;
+      }
+      prop[bb] = (*priorities_)[pi];
+
+      Instruction *i = pi->getPrevNode();
+      while (i) {
+        (*priorities_)[i] = (*priorities_)[pi] + (*weights_)[i];
+        pi = i;
+        i = pi->getPrevNode();
       }
 
       for (BasicBlock *pbb : predecessors(bb)) {
-        if (dom.dominates(bb, pbb)) continue;
-        bbList.push_back(pbb);
+        assert(pbb);
+        // if (!dom.dominates(bb, pbb)) bbSet.insert(pbb);
+        // bbSet.insert(pbb);
+        if (!prop.count(pbb)) bbSet.insert(pbb);
 
         Instruction *term = pbb->getTerminator();
-        priorities_[term] = std::max(priorities_[term], 
-                                     weights_[term] + priorities_[pi]); 
+        (*priorities_)[term] = std::max((*priorities_)[term], 
+                                      (*weights_)[term] + (*priorities_)[pi]); 
       }
+
     }
   }
+
+  /**
+   * We're actually still not done. For each function, the base priority needs to
+   * be boosted by the priority of the call site return locations.
+   */
+  bool changed = false;
+  do {
+    changed = false;
+    for (Function &f : *module) {
+      if (f.empty()) continue;
+      for (Use &u : f.uses()) {
+        User *usr = u.getUser();
+        // errs() << "usr:" << *usr << "\n";
+        if (Instruction *i = dyn_cast<Instruction>(usr)) {
+          // errs() << "\t=> " << (*priorities_)[i] << "\n";
+          Instruction *retLoc = i->getNextNode();
+          assert(retLoc);
+          // errs() << "\t=> " << (*priorities_)[retLoc] << "\n";
+          if ((*priorities_)[retLoc]) {
+            for (BasicBlock &bb : f) {
+              for (Instruction &ii : bb) {
+                if (!(*priorities_)[&ii]) {
+                  changed = true;
+                  (*priorities_)[&ii] = (*priorities_)[retLoc];
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    errs() << "changed = " << changed << "\n";
+  } while (changed);
+  
+} 
+
+void NvmStaticHeuristic::dump(void) const {
+  uint64_t nonZeroWeights = 0, nonZeroPriorities = 0;
+
+  for (const auto &p : *weights_) nonZeroWeights += (p.second > 0);
+  for (const auto &p : *priorities_) nonZeroPriorities += (p.second > 0);
+
+  double pWeights = 100.0 * ((double)nonZeroWeights / (double)weights_->size());
+  double pPriorities = 100.0 * ((double)nonZeroPriorities / (double)priorities_->size());
+
+  fprintf(stderr, "NvmStaticHeuristic:\n"
+                  "\tNVM allocation sites: %lu\n"
+                  "\t%% instructions with weight: %f%%\n"
+                  "\t%% instructions with priority: %f%%\n",
+                  getNvmAllocationSites(executor_->kmodule->module.get(), 
+                                        analysis_).size(),
+                  pWeights, pPriorities);
 }
+
+/* #endregion */
+
+/* #region NvmHeuristicBuilder */
+
+const char *NvmHeuristicBuilder::typeNames[] = {
+  "none", "static", "insensitive-dynamic", "context-dynamic"
+};
+
+const char *NvmHeuristicBuilder::typeDesc[] = {
+  "None: uses a no-op heuristic (disables the features)",
+  "Static: this only uses the points-to information from Andersen's analysis",
+  "Insensitive-Dynamic: this updates Andersen's analysis as runtime "
+    "variables are resolved",
+  "Context-Dynamic: this updates Andersen's analysis while being context"
+    " (call-site) sensitive",
+};
 
 /* #endregion */
 

@@ -86,6 +86,10 @@ cl::opt<std::string> BatchTime(
 
 } // namespace
 
+namespace klee {
+  extern cl::opt<NvmHeuristicBuilder::Type> NvmCheck;
+}
+
 void klee::initializeSearchOptions() {
   // default values
   if (CoreSearch.empty()) {
@@ -118,19 +122,14 @@ Searcher *getNewSearcher(Searcher::CoreSearchType type, Executor &executor) {
   // (iangneal): Handle some error/warning cases first.
   switch (type) {
   case Searcher::NvmMod:
-    if (!executor.getModuleOptions().EnableNvmInfo) {
+    assert(NvmCheck != NvmHeuristicBuilder::Type::Invalid);
+    if (NvmCheck == NvmHeuristicBuilder::Type::None) {
       klee_error("must enable NVM information to use the NvmPathSearcher!");
-    }
-
-    if (!executor.getModuleOptions().CheckNvm) {
-      klee_warning_once((void*)getNewSearcher,
-          "using an NVM-aware search heuristic for normal debugging can lead"
-          " to aggressive search-space trimming, thereby avoiding some states"
-          " which may have non-NVM errors.\n");
     }
     break;
   default:
-    if (executor.getModuleOptions().CheckNvm) {
+    if (NvmCheck != NvmHeuristicBuilder::Type::None &&
+        NvmCheck != NvmHeuristicBuilder::Type::Invalid) {
       klee_warning_once((void*)getNewSearcher,
           "using a non-NVM aware search heuristic may result in longer search"
           " times.\n(Ignore this warning if you are running for the sake of"

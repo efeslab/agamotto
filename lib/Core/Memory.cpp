@@ -630,6 +630,8 @@ void ObjectState::print() const {
 
 /***/
 
+uint64_t PersistentState::MaxSize = 4lu * (4096lu);
+
 PersistentState::PersistentState(const ObjectState *os, 
                                  const Array *cacheLines,
                                  const Array *rootCauses,

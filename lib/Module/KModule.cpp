@@ -287,16 +287,6 @@ void KModule::instrument(const Interpreter::ModuleOptions &opts) {
   // module.
   legacy::PassManager pm;
 
-  // XXX: (iangneal) We can eventually change the pass so it accepts KLEE's
-  // raised ASM for uniformity, but since it was built on raw LLVM IR, it's best
-  // to do everything beforehand.
-  if (opts.EnableNvmInfo) {
-    // (iangneal) The "add" function will destroy the pass for us.
-    // klee_message("Running NvmAnalysisPass.");
-    // pm.add(new NvmAnalysisPass(&nvmInfo));
-    klee_warning_once(0, "We are no longer using the static NvmAnalysisPass.");
-  }
-
   pm.add(new RaiseAsmPass());
 
   // This pass will scalarize as much code as possible so that the Executor
