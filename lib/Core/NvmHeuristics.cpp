@@ -500,68 +500,69 @@ NvmStaticHeuristic::NvmStaticHeuristic(Executor *executor, KFunction *mainFn)
     analysis_(createAndersen(*executor->kmodule->module)),
     weights_(std::make_shared<WeightMap>()),
     priorities_(std::make_shared<WeightMap>()),
-    curr_(mainFn->function->getEntryBlock().getFirstNonPHIOrDbgOrLifetime()) {
+    curr_(mainFn->function->getEntryBlock().getFirstNonPHIOrDbgOrLifetime()),
+    module_(executor->kmodule->module.get()),
+    nvmSites_(getNvmAllocationSites(module_, analysis_)) {}
 
-  computePriority();
-  dump();
+uint64_t NvmStaticHeuristic::computeInstWeight(Instruction *i) const {
+
+  if (isStore(i) || isFlush(i)) {
+    Value *v = dyn_cast<Value>(i);
+    if (isFlush(i)) {
+      assert(isa<CallInst>(i));
+      v = dyn_cast<CallInst>(i)->getArgOperand(0);
+    }
+    std::vector<const Value*> ptsSet;
+
+    TimerStatIncrementer timer(stats::nvmAndersenTime);
+    bool ret = analysis_->getResult().getPointsToSet(v, ptsSet);
+
+    if (!ret) {
+      if (getCurrentNvmSites().count(v)) {
+        return 1u;
+      } else if (AllocaInst *ai = dyn_cast<AllocaInst>(i)) {
+        if (ai->getType()->isFunctionTy()) return 0u;
+      } else if (StoreInst *si = dyn_cast<StoreInst>(i)) {
+        if (isa<GlobalValue>(si->getPointerOperand()->stripPointerCasts())) return 0u;
+
+        assert(analysis_->getResult().getPointsToSet(si->getPointerOperand(), ptsSet));
+      } else {
+        errs() << *i << "\n";
+        assert(false && "could not get points-to!");
+      }
+    }
+    
+    for (const Value *ptsTo : ptsSet) {
+      if (getCurrentNvmSites().count(ptsTo)) {
+        return 1u;
+      }
+    }
+
+  } else if (isNvmAllocSite(i)) {
+    return 1u;
+  } else if (isFence(i) && getCurrentNvmSites().size()) {
+    return 1u;
+  }
+
+  return 0u;
 }
 
 void NvmStaticHeuristic::computePriority(void) {
-  Module *module = executor_->kmodule->module.get();
-  ValueSet nvmSites = getNvmAllocationSites(module, analysis_);
-  ValueSet allSites;
-  {
-    ValueVector allSitesVec;
-    analysis_->getResult().getAllAllocationSites(allSitesVec);
-    allSites.insert(allSitesVec.begin(), allSitesVec.end());
-  }
-  
   /**
    * Calculating the raw weights is easy.
    */
+  weights_->clear();
+  priorities_->clear();
 
   std::unordered_set<llvm::CallInst*> call_insts;
 
-  for (Function &f : *module) {
+  for (Function &f : *module_) {
     for (BasicBlock &b : f) {
       for (Instruction &i : b) {
         (*weights_)[&i] = 0lu;
         (*priorities_)[&i] = 0lu;
-        if (isStore(&i) || isFlush(&i)) {
-          Value *v = &i;
-          if (isFlush(&i)) {
-            assert(isa<CallInst>(&i));
-            v = dyn_cast<CallInst>(&i)->getArgOperand(0);
-          }
-          std::vector<const Value*> ptsSet;
-
-          TimerStatIncrementer timer(stats::nvmAndersenTime);
-          bool ret = analysis_->getResult().getPointsToSet(v, ptsSet);
-
-          if (!ret) {
-            if (allSites.count(v)) {
-              if (nvmSites.count(v)) (*weights_)[&i] = 1u;
-              continue;
-            } else if (AllocaInst *ai = dyn_cast<AllocaInst>(&i)) {
-              if (ai->getType()->isFunctionTy()) continue;
-            } else if (StoreInst *si = dyn_cast<StoreInst>(&i)) {
-              if (isa<GlobalValue>(si->getPointerOperand()->stripPointerCasts())) continue;
-
-              assert(analysis_->getResult().getPointsToSet(si->getPointerOperand(), ptsSet));
-            } else {
-              errs() << i << "\n";
-              assert(false && "could not get points-to!");
-            }
-          }
-          
-          for (const Value *ptsTo : ptsSet) {
-            if (nvmSites.count(ptsTo)) {
-              (*weights_)[&i] = 1u;
-            }
-          }
-
-        } else if (isFence(&i)) {
-          (*weights_)[&i] = 1u;
+        if (mayHaveWeight(&i)) {
+          (*weights_)[&i] = computeInstWeight(&i);
         } else if (CallInst *ci = dyn_cast<CallInst>(&i)) {
           if (!ci->isInlineAsm()) call_insts.insert(ci);
         }
@@ -620,16 +621,12 @@ void NvmStaticHeuristic::computePriority(void) {
     }
     errs() << "C " << c << "\n";
   } while (c);
-  
-
-  // errs() << "filled in!\n";
-  // dump();
 
   /**
    * Now, we do the priority.
    */
 
-  for (Function &f : *module) {
+  for (Function &f : *module_) {
     if (f.empty()) continue;
     llvm::DominatorTree dom(f);
 
@@ -713,7 +710,7 @@ void NvmStaticHeuristic::computePriority(void) {
   bool changed = false;
   do {
     changed = false;
-    for (Function &f : *module) {
+    for (Function &f : *module_) {
       if (f.empty()) continue;
       for (Use &u : f.uses()) {
         User *usr = u.getUser();
@@ -802,8 +799,31 @@ void NvmStaticHeuristic::dump(void) const {
                   "\tNVM allocation sites: %lu\n"
                   "\t%% instructions with weight: %f%%\n"
                   "\t%% instructions with priority: %f%%\n",
-                  getNvmAllocationSites(executor_->kmodule->module.get(), 
-                                        analysis_).size(),
+                  nvmSites_.size(), pWeights, pPriorities);
+}
+
+/* #endregion */
+
+/* #region NvmInsensitiveDynamicHeuristic */
+
+void NvmInsensitiveDynamicHeuristic::dump(void) const {
+  uint64_t nonZeroWeights = 0, nonZeroPriorities = 0;
+
+  for (const auto &p : *weights_) nonZeroWeights += (p.second > 0);
+  for (const auto &p : *priorities_) nonZeroPriorities += (p.second > 0);
+
+  double pWeights = 100.0 * ((double)nonZeroWeights / (double)weights_->size());
+  double pPriorities = 100.0 * ((double)nonZeroPriorities / (double)priorities_->size());
+
+  for (auto *v : getNvmAllocationSites(executor_->kmodule->module.get(), analysis_)) {
+    errs() << *v << "\n";
+  }
+
+  fprintf(stderr, "NvmInsensitiveDynamicHeuristic:\n"
+                  "\tNVM allocation sites: %lu/%lu\n"
+                  "\t%% instructions with weight: %f%%\n"
+                  "\t%% instructions with priority: %f%%\n",
+                  activeNvmSites_.size(), nvmSites_.size(), 
                   pWeights, pPriorities);
 }
 

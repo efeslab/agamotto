@@ -1758,6 +1758,21 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 
           bindLocal(kcaller, state, result);
 
+          // (iangneal): update NVM allocation sites
+          if (state.nvmInfo && 
+              result->getWidth() == Context::get().getPointerWidth() &&
+              NvmHeuristicInfo::isNvmAllocationSite(kmodule->module.get(), kcaller->inst)) {
+            
+            if (ri->getFunction() == kmodule->module->getFunction("mmap") ||
+                ri->getFunction() == kmodule->module->getFunction("mmap64")) {
+              ObjectPair op;
+          
+              bool success;
+              assert(state.addressSpace.resolveOne(state, solver, result, op, success));
+              assert(success);
+              state.nvmInfo->updateCurrentState(&state, kcaller, isa<PersistentState>(op.second));
+            }
+          }
         }
       } else {
         // We check that the return value has no users instead of

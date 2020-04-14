@@ -277,12 +277,15 @@ namespace klee {
 
       static SharedAndersen createAndersen(llvm::Module &m);
       static ValueSet getNvmAllocationSites(llvm::Module *m, const SharedAndersen &ander);
+      
+      virtual void computePriority() = 0;
+
+    public:
+
       static bool isNvmAllocationSite(llvm::Module *m, const llvm::Value *v);
       static bool isStore(llvm::Instruction *i);
       static bool isFlush(llvm::Instruction *i);
       static bool isFence(llvm::Instruction *i);
-
-    public:
     
       virtual ~NvmHeuristicInfo() = 0;
 
@@ -310,7 +313,7 @@ namespace klee {
        */
       virtual void stepState(ExecutionState *es, KInstruction *pc, KInstruction *nextPC) = 0;
 
-      virtual void dump(void) const {}
+      virtual void dump(void) const = 0;
   };
   /* #endregion */
 
@@ -328,17 +331,31 @@ namespace klee {
       SharedWeightMap priorities_;
       llvm::Instruction *curr_;
 
+      llvm::Module *module_;
+      ValueSet nvmSites_;
+
       NvmStaticHeuristic(Executor *executor, KFunction *mainFn);
 
-      void computePriority();
+      bool isNvmAllocSite(llvm::Instruction *i) const {
+        return nvmSites_.count(i);
+      }
+
+      virtual bool mayHaveWeight(llvm::Instruction *i) const {
+        return isStore(i) || isFlush(i) || isFence(i) || isNvmAllocSite(i);
+      }
+
+      virtual const ValueSet &getCurrentNvmSites() const { return nvmSites_; }
+
+      /**
+       * Calculate what the weight of this instruction would be.
+       */
+      virtual uint64_t computeInstWeight(llvm::Instruction *i) const;
+
+      virtual void computePriority() override;
+
     public:
 
-      NvmStaticHeuristic(const NvmStaticHeuristic &other)
-        : executor_(other.executor_),
-          analysis_(other.analysis_),
-          weights_(other.weights_),
-          priorities_(other.priorities_),
-          curr_(other.curr_) {}
+      NvmStaticHeuristic(const NvmStaticHeuristic &other) = default;
 
       virtual ~NvmStaticHeuristic() {}
 
@@ -377,6 +394,52 @@ namespace klee {
                              KInstruction *pc, 
                              KInstruction *nextPC) override {
         curr_ = nextPC->inst;
+      }
+
+      virtual void dump(void) const override;
+  };
+
+  /* #endregion */
+
+  /* #region NvmInsensitiveDynamicHeuristic */
+  class NvmInsensitiveDynamicHeuristic : public NvmStaticHeuristic {
+    friend class NvmHeuristicBuilder;
+    protected:
+      
+      ValueSet activeNvmSites_;
+
+      NvmInsensitiveDynamicHeuristic(Executor *executor, KFunction *mainFn) 
+        : NvmStaticHeuristic(executor, mainFn) {}
+
+      virtual const ValueSet &getCurrentNvmSites() const override { 
+        return activeNvmSites_;
+      }
+
+    public:
+
+      NvmInsensitiveDynamicHeuristic(const NvmInsensitiveDynamicHeuristic &other) = default;
+
+      virtual ~NvmInsensitiveDynamicHeuristic() {}
+
+      /**
+       * May change one of the current states, or could not.
+       */
+      virtual void updateCurrentState(ExecutionState *es, 
+                                      KInstruction *pc, 
+                                      bool isNvm) override {
+        if (!nvmSites_.count(pc->inst)) {
+          llvm::errs() << "got: " << *pc->inst << "\n";
+          dump();
+        }
+        assert(nvmSites_.count(pc->inst) && "must only update NVM sites!");
+        if (isNvm) {
+          activeNvmSites_.insert(pc->inst);
+        } else {
+          activeNvmSites_.erase(pc->inst);
+        }
+        
+        computePriority();
+        dump();
       }
 
       virtual void dump(void) const override;
@@ -429,6 +492,8 @@ namespace klee {
             ptr = new NvmStaticHeuristic(executor, main);
             break;
           case InsensitiveDynamic:
+            ptr = new NvmInsensitiveDynamicHeuristic(executor, main);
+            break;
           case ContextDynamic:
           default:
             assert(false && "unsupported!");
@@ -436,6 +501,10 @@ namespace klee {
         }
 
         assert(ptr);
+
+        ptr->computePriority();
+        ptr->dump();
+        
         return std::shared_ptr<NvmHeuristicInfo>(ptr);
       }
 
@@ -443,19 +512,24 @@ namespace klee {
         // llvm::errs() << "ding\n";
         // return info;
         // return std::shared_ptr<NvmHeuristicInfo>(nullptr);
-        if (!info.get()) {
+        NvmHeuristicInfo *ptr = info.get();
+        if (!ptr) {
           return info;
         }
 
-        if (auto ptr = dynamic_cast<const NvmStaticHeuristic*>(info.get())) {
+        if (auto sptr = dynamic_cast<const NvmStaticHeuristic*>(info.get())) {
           return info;
           // return std::shared_ptr<NvmHeuristicInfo>(nullptr);
           // return info;
           // return new NvmStaticHeuristic(*ptr);
         }
 
-        assert(false && "null!");
-        return std::shared_ptr<NvmHeuristicInfo>(nullptr);
+        if (auto iptr = dynamic_cast<const NvmInsensitiveDynamicHeuristic*>(info.get())) {
+          ptr = new NvmInsensitiveDynamicHeuristic(*iptr);
+        }
+
+        assert(ptr && "null!");
+        return std::shared_ptr<NvmHeuristicInfo>(ptr);
       }
   };
   /* #endregion */

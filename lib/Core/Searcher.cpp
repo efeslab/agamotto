@@ -354,9 +354,9 @@ ExecutionState &NvmPathSearcher::selectState() {
     states.pop();
   } while (!lastState);
 
-  errs() << "[" << lastState << 
-              "] priority: " << p << ", gen: " << currentGen << 
-              " (selected out of " << states.size() << " states)\n";
+  // errs() << "[" << lastState << 
+  //             "] priority: " << p << ", gen: " << currentGen << 
+  //             " (selected out of " << states.size() << " states)\n";
 
   return *lastState;
 }
