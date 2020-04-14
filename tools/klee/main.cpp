@@ -88,6 +88,12 @@ namespace {
             cl::cat(TestCaseCat));
 
   cl::opt<bool>
+  WriteErrs("write-err-tests-only",
+            cl::init(false),
+            cl::desc("Only output test files for error cases (default=false)"),
+            cl::cat(TestCaseCat));
+
+  cl::opt<bool>
   WriteCVCs("write-cvcs",
             cl::desc("Write .cvc files for each test case (default=false)"),
             cl::cat(TestCaseCat));
@@ -477,7 +483,12 @@ KleeHandler::openTestFile(const std::string &suffix, unsigned id) {
 void KleeHandler::processTestCase(const ExecutionState &state,
                                   const char *errorMessage,
                                   const char *errorSuffix) {
-  if (!WriteNone) {
+  bool doTestOutput = !WriteNone && 
+                      (!WriteErrs || 
+                          (errorMessage && 
+                          errorSuffix &&
+                          strcmp(errorSuffix, "early")));
+  if (doTestOutput) {
     std::vector< std::pair<std::string, std::vector<unsigned char> > > out;
     bool success = m_interpreter->getSymbolicSolution(state, out);
 
