@@ -2876,30 +2876,30 @@ void Executor::updateStates(ExecutionState *current) {
     if (s && s->nvmInfo) {
       
       // TODO: this all needs to be timed
-      if (current->prevPC->dest < s->stack.back().kf->numRegisters) {
-        ref<Expr> val = getDestCell(*s, s->prevPC).value;
-        // update for prevPC, then set the instruction to the current pc for the
-        // next round.
-        // errs() << "prevPC = " << *current->prevPC->inst << "\n";
-        // errs() << "nvmPC  = " << *current->nvmInfo->currentInst() << "\n";
-        // errs() << "pc     = " << *current->pc->inst << "\n";
+      // if (current->prevPC->dest < s->stack.back().kf->numRegisters) {
+      //   ref<Expr> val = getDestCell(*s, s->prevPC).value;
+      //   // update for prevPC, then set the instruction to the current pc for the
+      //   // next round.
+      //   // errs() << "prevPC = " << *current->prevPC->inst << "\n";
+      //   // errs() << "nvmPC  = " << *current->nvmInfo->currentInst() << "\n";
+      //   // errs() << "pc     = " << *current->pc->inst << "\n";
 
-        ObjectPair op;
-        bool success;
-        solver->setTimeout(coreSolverTimeout);
-        if (!val.isNull() && 
-            val->getWidth() == Context::get().getPointerWidth() &&
-            s->addressSpace.resolveOne(*s, solver, val, op, success) &&
-            success &&
-            isa<PersistentState>(op.second))
-        {
-          // This value is a pointer into nvm.
-          s->nvmInfo->updateCurrentState(s, s->prevPC, true);
-        } else {
-          s->nvmInfo->updateCurrentState(s, s->prevPC, false);
-        }
-        solver->setTimeout(time::Span());
-      }
+      //   ResolutionList rl;
+      //   solver->setTimeout(coreSolverTimeout);
+      //   if (!val.isNull() && 
+      //       val->getWidth() == Context::get().getPointerWidth() &&
+      //       !s->addressSpace.resolve(*s, solver, val, rl))
+      //   {
+      //     bool isNvm = false;
+      //     for (ObjectPair &op : rl) {
+      //       isNvm = isNvm || isa<PersistentState>(op.second);
+      //     }
+      //     s->nvmInfo->updateCurrentState(s, s->prevPC, isNvm);
+      //   } else {
+      //     s->nvmInfo->updateCurrentState(s, s->prevPC, false);
+      //   }
+      //   solver->setTimeout(time::Span());
+      // } 
 
       // Now go to the next
       s->nvmInfo->stepState(s, s->prevPC, s->pc);

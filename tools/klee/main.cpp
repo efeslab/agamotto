@@ -306,10 +306,7 @@ private:
   unsigned m_numTotalTests;     // Number of tests received from the interpreter
   unsigned m_numGeneratedTests; // Number of tests successfully generated
   unsigned m_pathsExplored; // number of paths explored so far
-  unsigned m_pathsCutEndTrace; // number of paths ended early and had interesting blocks.
-  unsigned m_pathsCutUninteresting; // number of paths terminated because they added nothing.
   bool m_outputNvm;
-  double m_nvmCoverage = -1.0;
 
   // used for writing .ktest files
   int m_argc;
@@ -323,17 +320,11 @@ public:
   /// Returns the number of test cases successfully generated so far
   unsigned getNumTestCases() { return m_numGeneratedTests; }
   unsigned getNumPathsExplored() { return m_pathsExplored; }
-  unsigned getNumPathsCutEndTrace() { return m_pathsCutEndTrace; }
-  unsigned getNumPathsCutUninteresting() { return m_pathsCutUninteresting; }
-  double getNvmCoverage() { return m_nvmCoverage; }
 
   void setNvm() { m_outputNvm = true; }
   bool outputNvm() { return m_outputNvm; }
-  void setNvmCoverage(double ratio) { m_nvmCoverage = ratio; }
 
   void incPathsExplored() { m_pathsExplored++; }
-  void incPathsCutEndTrace() { m_pathsCutEndTrace++; }
-  void incPathsCutUninteresting() { m_pathsCutUninteresting++; }
 
   void setInterpreter(Interpreter *i);
 
@@ -1571,12 +1562,6 @@ int main(int argc, char **argv, char **envp) {
           << *theStatisticManager->getStatisticByName("NvmHeuristicStatesKilledIrrelevant") << "\n";
     stats << "\tKLEE-NVM: done: paths terminated (after last relevant block, gen tests) = "
           << *theStatisticManager->getStatisticByName("NvmHeuristicStatesKilledEndTrace") << "\n";
-  }
-  if (handler->getNvmCoverage() >= 0.0) {
-    char tmp[101];
-    snprintf(tmp, 100, "\tKLEE-NVM: important basic block coverage = %3d%%\n",
-        (int)(handler->getNvmCoverage() * 100.0));
-    stats << tmp;
   }
   stats << "KLEE: done: generated tests = "
         << handler->getNumTestCases() << "\n";
