@@ -64,8 +64,16 @@ bool RaiseAsmPass::runOnInstruction(Module &M, Instruction *I) {
   if (triple.getArch() == llvm::Triple::x86_64) {
     Function *intrinsicFunction = nullptr;
 
+    // sfence
+    if (ia->getAsmString() == "sfence") {
+      intrinsicFunction = Intrinsic::getDeclaration(&M, Intrinsic::x86_sse_sfence);
+    }
+    // mfence
+    else if (ia->getAsmString() == "mfence") {
+      intrinsicFunction = Intrinsic::getDeclaration(&M, Intrinsic::x86_sse2_mfence);
+    }
     // clflushopt
-    if (ia->getAsmString() == ".byte 0x66; clflush $0") {
+    else if (ia->getAsmString() == ".byte 0x66; clflush $0") {
       intrinsicFunction = Intrinsic::getDeclaration(&M, Intrinsic::x86_clflushopt);
     }
     // clwb
@@ -75,9 +83,10 @@ bool RaiseAsmPass::runOnInstruction(Module &M, Instruction *I) {
 
     if (intrinsicFunction) {
       IRBuilder<> Builder(I);
-      auto addressOperand = ci->getArgOperand(0);
-      Builder.CreateCall(intrinsicFunction,
-                         llvm::ArrayRef<llvm::Value*>(&addressOperand, 1));
+      std::vector<llvm::Value*> Args;
+      for (size_t i = 0; i < ci->getNumArgOperands(); ++i)
+        Args.push_back(ci->getArgOperand(i));
+      Builder.CreateCall(intrinsicFunction, Args);
       I->eraseFromParent();
       return true;
     }

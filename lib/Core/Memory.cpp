@@ -630,27 +630,49 @@ void ObjectState::print() const {
 
 /***/
 
-PersistentState::PersistentState(const ObjectState *os, 
-                                 const Array *cacheLines,
-                                 const Array *rootCauses,
-                                 const Array *idxArray)
+PersistentState::PersistentState(const ObjectState *os)
   : ObjectState(*os),
-    cacheLineUpdates(cacheLines, nullptr),
-    pendingCacheLineUpdates(cacheLineUpdates),
-    idxEmptyUpdates(idxArray, nullptr),
-    rootCauseLocations(rootCauses, nullptr) {
-  // -- For cacheline stuff
-  // 0 <= X < 2^32
-  idxUnbounded = ReadExpr::create(idxEmptyUpdates,
+    cacheLineUpdates(nullptr, nullptr),
+    pendingCacheLineUpdates(nullptr, nullptr),
+    rootCauseLocations(nullptr, nullptr),
+    pendingRootCauseLocations(nullptr, nullptr) {
+
+  // Set up all the symbolic Arrays we need.
+  ArrayCache *arrayCache = getArrayCache();
+  const MemoryObject *object = getObject();
+  std::string baseName = object->name;
+  uint64_t size = object->parent->getSizeInCacheLines(object->size);
+
+  // For initializing values
+  std::vector<ref<ConstantExpr> > Init(size);
+
+  // First, the symbolic cache line tracking array (initialize to persisted).
+  Init.assign(size, getPersistedExpr());
+  const Array *cacheLines = arrayCache->CreateArray(baseName + "_cacheLines", size,
+                                                    &Init[0], &Init[0] + size,
+                                                    Expr::Int32 /* domain */,
+                                                    Expr::Int8 /* range */);
+  cacheLineUpdates = UpdateList(cacheLines, nullptr);
+  pendingCacheLineUpdates = UpdateList(cacheLineUpdates);
+
+  // Set up the root causes symbolic array (initialize to nullptr).
+  Init.assign(size, getNullptr());
+  const Array *rootCauses = arrayCache->CreateArray(baseName + "_rootCauses", size,
+                                                    &Init[0], &Init[0] + size,
+                                                    Expr::Int32 /* domain */,
+                                                    Expr::Int64 /* range */);
+  rootCauseLocations = UpdateList(rootCauses, nullptr);
+  pendingRootCauseLocations = UpdateList(rootCauseLocations);
+
+  // Set up a symbolic integer to act as an "arbitrary offset" into this.
+  const Array *idxArray = arrayCache->CreateArray(baseName + "_idx", 1,
+                                                       nullptr, nullptr,
+                                                       Expr::Int32,
+                                                       Expr::Int32);
+  // ReadExpr just copies the UpdateList you give it;
+  // no need to store one as a member variable.
+  idxUnbounded = ReadExpr::create(UpdateList(idxArray, nullptr),
                                   ConstantExpr::create(0, idxArray->range));
-  // idxUnbounded = ReadExpr::createTempRead(idxArray, idxArray->range);
-  // idxUnbounded->dump();
-
-  assert(!(numCacheLines() % nrLinesPerSlice) && "not divisible!");
-
-  ref<Expr> lowerBound = UleExpr::create(ConstantExpr::create(0, idxArray->range), idxUnbounded);
-  ref<Expr> upperBound = UltExpr::create(idxUnbounded, ConstantExpr::create(numCacheLines(), idxArray->range));
-  idxConstraints.push_back(AndExpr::create(lowerBound, upperBound));
 }
 
 PersistentState::PersistentState(const PersistentState &ps)
@@ -658,11 +680,10 @@ PersistentState::PersistentState(const PersistentState &ps)
     cacheLineUpdates(ps.cacheLineUpdates),
     pendingCacheLineUpdates(ps.pendingCacheLineUpdates),
 
-    idxEmptyUpdates(ps.idxEmptyUpdates),
     idxUnbounded(ps.idxUnbounded),
-    idxConstraints(ps.idxConstraints),
 
     rootCauseLocations(ps.rootCauseLocations),
+    pendingRootCauseLocations(ps.rootCauseLocations),
     nextLocId(ps.nextLocId),
     allRootLocations(ps.allRootLocations) {}
 
@@ -670,26 +691,31 @@ ObjectState *PersistentState::clone() const {
   return new PersistentState(*this);
 }
 
-void PersistentState::write8(const ExecutionState &state, unsigned offset, uint8_t value) {
+void PersistentState::write8(const ExecutionState &state,
+                             unsigned offset, uint8_t value) {
   ObjectState::write8(state, offset, value);
   dirtyCacheLineAtOffset(state, offset);
 }
 
-void PersistentState::write8(const ExecutionState &state, unsigned offset, ref<Expr> value) {
+void PersistentState::write8(const ExecutionState &state,
+                             unsigned offset, ref<Expr> value) {
   ObjectState::write8(state, offset, value);
   dirtyCacheLineAtOffset(state, offset);
 }
 
-void PersistentState::write8(const ExecutionState &state, ref<Expr> offset, ref<Expr> value) {
+void PersistentState::write8(const ExecutionState &state,
+                             ref<Expr> offset, ref<Expr> value) {
   ObjectState::write8(state, offset, value);
   dirtyCacheLineAtOffset(state, offset);
 }
 
-void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state, unsigned offset) {
+void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
+                                             unsigned offset) {
   dirtyCacheLineAtOffset(state, ConstantExpr::create(offset, Expr::Int32));
 }
 
-void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset) {
+void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
+                                             ref<Expr> offset) {
   /* llvm::errs() << getObject()->name << ":\n"; */
   /* ExprPPrinter::printOne(llvm::errs(), "dirtyCacheLineAtOffset", offset); */
 
@@ -707,11 +733,10 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state, ref<Ex
     nextLocId++;
   }
 
-  // allRootLocations.insert(info);
-  // assert(!sanity_check || sanity_check == allRootLocations.find(info)->c_str());
-
-  rootCauseLocations.extend(cacheLine, 
-      ConstantExpr::create(allRootLocations[info], rootCauseLocations.root->range));
+  ref<Expr> rootCauseExpr = 
+    ConstantExpr::create(allRootLocations[info], rootCauseLocations.root->range);
+  rootCauseLocations.extend(cacheLine, rootCauseExpr);
+  pendingRootCauseLocations.extend(cacheLine, rootCauseExpr);
 }
 
 void PersistentState::persistCacheLineAtOffset(unsigned offset) {
@@ -724,7 +749,7 @@ void PersistentState::persistCacheLineAtOffset(ref<Expr> offset) {
   ref<Expr> cacheLine = getCacheLine(offset);
   pendingCacheLineUpdates.extend(cacheLine, getPersistedExpr());
   // Update the root cause to be empty.
-  rootCauseLocations.extend(cacheLine, getNullptr());
+  pendingRootCauseLocations.extend(cacheLine, getNullptr());
 }
 
 void PersistentState::commitPendingPersists() {
@@ -734,55 +759,49 @@ void PersistentState::commitPendingPersists() {
   // Apply the writes and flushes accumulated during this epoch.
   // The UpdateList will clean up orphaned UpdateNodes from cacheLineUpdates.
   cacheLineUpdates = pendingCacheLineUpdates;
+  rootCauseLocations = pendingRootCauseLocations;
 }
 
-// ref<Expr> PersistentState::isPersisted(ExecutionState &state) const {
-//   state.constraints.addConstraint(idxConstraints.front());
-//   return EqExpr::create(getPersistedExpr(), isCacheLinePersisted(idxUnbounded));
-// }
+ref<Expr> PersistentState::getIsOffsetPersistedExpr(ref<Expr> offset,
+                                                    bool pending) const {
+  return isCacheLinePersisted(getCacheLine(offset), pending);
+}
 
-ref<Expr> PersistentState::isPersistedUnconstrained() const {
-  return EqExpr::create(getPersistedExpr(), isCacheLinePersisted(idxUnbounded));
+ref<Expr> PersistentState::getAnyOffsetExpr() const {
+  return ZExtExpr::create(idxUnbounded, Context::get().getPointerWidth());
 }
 
 void PersistentState::clearRootCauses() {
   allRootLocations.clear();
 }
 
-std::unordered_set<std::string> PersistentState::getRootCauses(
-    TimingSolver *solver, ExecutionState &state) const {
+std::unordered_set<std::string>
+PersistentState::getRootCauses(TimingSolver *solver,
+                               ExecutionState &state) const {
   std::unordered_set<std::string> causes;
 
-  // Copy the constraint manager to reset the constraints once we are finished.
-  ConstraintManager orig = state.constraints;
-  for (const ref<Expr> &sliceConstraint : idxConstraints) {
-    ConstraintManager cm = orig; // copy
-    cm.addConstraint(sliceConstraint);
-    state.constraints = cm;
-    
-    auto sliceCauses = getRootCause(solver, state, idxUnbounded);
-    causes.insert(sliceCauses.begin(), sliceCauses.end());
-  }
+  auto idx = getAnyOffsetExpr();
+  auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
 
-  state.constraints = orig;
+  state.constraints.addConstraint(inBoundsConstraint);
+  causes = getRootCause(solver, state, idx);
+  state.constraints.removeConstraint(inBoundsConstraint);
   
   return causes;
 }
 
-ref<Expr> PersistentState::isOffsetAlreadyPersisted(ref<Expr> offset) const {
-  ref<Expr> cacheLine = getCacheLine(offset);
-  ref<Expr> result = ReadExpr::create(pendingCacheLineUpdates,
-                                      ZExtExpr::create(cacheLine, Expr::Int32));
-  return result;
+ref<Expr> PersistentState::isCacheLinePersisted(unsigned cacheLine,
+                                                bool pending) const {
+  return isCacheLinePersisted(ConstantExpr::create(cacheLine, Expr::Int32),
+                              pending);
 }
 
-ref<Expr> PersistentState::isCacheLinePersisted(unsigned cacheLine) const {
-  return isCacheLinePersisted(ConstantExpr::create(cacheLine, Expr::Int32));
-}
-
-ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine) const {
-  ref<Expr> result = ReadExpr::create(cacheLineUpdates,
+ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine,
+                                                bool pending) const {
+  auto &updateList = pending ? pendingCacheLineUpdates : cacheLineUpdates;
+  ref<Expr> result = ReadExpr::create(updateList,
                                       ZExtExpr::create(cacheLine, Expr::Int32));
+  result = EqExpr::create(result, getPersistedExpr());
   return result;
 }
 
@@ -792,9 +811,10 @@ std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solv
   return getRootCause(solver, state, ConstantExpr::create(cacheLine, Expr::Int32));
 }
 
-std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solver, 
-                                                              ExecutionState &state, 
-                                                              ref<Expr> cacheLine) const {
+std::unordered_set<std::string>
+PersistentState::getRootCause(TimingSolver *solver,
+                              ExecutionState &state,
+                              ref<Expr> cacheLine) const {
   ref<Expr> result = ReadExpr::create(rootCauseLocations,
                                       ZExtExpr::create(cacheLine, Expr::Int32));
   
@@ -829,20 +849,19 @@ std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solv
 bool PersistentState::mustBePersisted(TimingSolver *solver, ExecutionState &state) const {
   bool ret = true;
   
-  ConstraintManager orig = state.constraints;
-  for (const ref<Expr> &sliceConstraint : idxConstraints) {
-    ConstraintManager cm = orig; // copy
-    cm.addConstraint(sliceConstraint);
-    state.constraints = cm;
+  auto idx = getAnyOffsetExpr();
+  auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
 
-    bool mustBe;
-    bool success = solver->mustBeTrue(state, isPersistedUnconstrained(), mustBe);
-    assert(success && "Could not solve!");
-    ret = ret && mustBe;
-    if (!ret) return false;
-  }
+  state.constraints.addConstraint(inBoundsConstraint);
+  bool mustBe;
+  bool success = solver->mustBeTrue(state,
+                                    getIsOffsetPersistedExpr(idx),
+                                    mustBe);
+  state.constraints.removeConstraint(inBoundsConstraint);
 
-  state.constraints = orig;
+  assert(success && "Could not solve!");
+  ret = ret && mustBe;
+  if (!ret) return false;
   
   return true;
 }

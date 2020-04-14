@@ -76,6 +76,9 @@ endif()
 # Shared
 add_custom_target(set_wllvm_env COMMAND export LLVM_COMPILER=clang; export LLVM_CC_NAME=clang-8)
 
+# Subdirectories can access header files in this directory
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
 add_subdirectory(000_pmdk_btree_map)
 add_subdirectory(001_simple)
 #add_subdirectory(002_simple_symbolic)
