@@ -220,8 +220,6 @@ namespace klee {
    * Essentially, we want the most NVM successors.
    */
   class NvmPathSearcher : public Searcher {
-    size_t currGen = 0;
-
     /**
      * The three fields are:
      * 1. The execution state. Naturally.
@@ -234,6 +232,11 @@ namespace klee {
      * is over.
      */
     typedef std::tuple<ExecutionState*, size_t, size_t> priority_tuple;
+
+    /**
+     * This is updated whenever we select a state.
+     */
+    size_t currentGen = 0;
 
     /**
      * If the generation of rhs is higher, it has lower priority. If it has
@@ -270,10 +273,10 @@ namespace klee {
     /**
      * Given the current state, see if a newly added state should go in a second
      * generation.
+     * 
      */
     size_t calculateGeneration(ExecutionState *current, ExecutionState *added);
 
-    void outputCoverage();
   protected:
     ExecutionState &selectState();
 
