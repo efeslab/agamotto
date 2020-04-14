@@ -419,7 +419,7 @@ namespace klee {
         return Invalid;
       }
 
-      static NvmHeuristicInfo *create(Type t, Executor *executor, KFunction *main) {
+      static std::shared_ptr<NvmHeuristicInfo> create(Type t, Executor *executor, KFunction *main) {
         NvmHeuristicInfo *ptr = nullptr;
         switch(t) {
           case None:
@@ -436,27 +436,26 @@ namespace klee {
         }
 
         assert(ptr);
-        return ptr;
+        return std::shared_ptr<NvmHeuristicInfo>(ptr);
       }
 
-      static NvmHeuristicInfo *copy(const NvmHeuristicInfo *info) {
+      static std::shared_ptr<NvmHeuristicInfo> copy(const std::shared_ptr<NvmHeuristicInfo> &info) {
         // llvm::errs() << "ding\n";
         // return info;
         // return std::shared_ptr<NvmHeuristicInfo>(nullptr);
-        // if (!info.get()) {
-        //   return info;
-        // }
-
-        if (auto ptr = dynamic_cast<const NvmStaticHeuristic*>(info)) {
-          // return info;
-          // return std::shared_ptr<NvmHeuristicInfo>(nullptr);
-          // return info;
-          return new NvmStaticHeuristic(*ptr);
+        if (!info.get()) {
+          return info;
         }
 
-        // assert(false && "null!");
-        // return std::shared_ptr<NvmHeuristicInfo>(nullptr);
-        return nullptr;
+        if (auto ptr = dynamic_cast<const NvmStaticHeuristic*>(info.get())) {
+          return info;
+          // return std::shared_ptr<NvmHeuristicInfo>(nullptr);
+          // return info;
+          // return new NvmStaticHeuristic(*ptr);
+        }
+
+        assert(false && "null!");
+        return std::shared_ptr<NvmHeuristicInfo>(nullptr);
       }
   };
   /* #endregion */

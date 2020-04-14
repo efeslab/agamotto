@@ -112,8 +112,6 @@ ExecutionState::~ExecutionState() {
     cur_mergehandler->removeOpenState(this);
   }
 
-  if (nvmInfo) delete nvmInfo;
-
   while (!stack.empty()) popFrame();
 }
 
