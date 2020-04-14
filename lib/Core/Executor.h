@@ -94,6 +94,8 @@ class Executor : public Interpreter {
   friend class Searcher;
   friend class NvmPathSearcher;
   friend class NvmHeuristicInfo;
+  friend class NvmStaticHeuristic;
+  friend class NvmHeuristicBuilder;
   friend class NvmInstructionDesc;
 
 public:

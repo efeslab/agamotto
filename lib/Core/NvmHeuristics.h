@@ -273,18 +273,10 @@ namespace klee {
     protected:
 
       typedef std::unordered_set<const llvm::Value*> ValueSet;
-
-      /**
-       * We halt propagation at the current instructions, because we don't want
-       * to taint the earlier tree, as other ExecutionStates may use those as
-       * their blank slate of evaluation.
-       */
-      virtual void computeCurrentPriority(ExecutionState *es) = 0;
-
-      // NvmHeuristicInfo(Executor *executor, KFunction *mainFn, ExecutionState *es) {};
+      typedef std::vector<const llvm::Value*> ValueVector;
 
       static SharedAndersen createAndersen(llvm::Module &m);
-      static ValueSet getNvmAllocationSites(llvm::Module *m, SharedAndersen &ander);
+      static ValueSet getNvmAllocationSites(llvm::Module *m, const SharedAndersen &ander);
       static bool isNvmAllocationSite(llvm::Module *m, const llvm::Value *v);
       static bool isStore(llvm::Instruction *i);
       static bool isFlush(llvm::Instruction *i);
@@ -324,6 +316,7 @@ namespace klee {
 
   /* #region NvmStaticHeuristic */
   class NvmStaticHeuristic : public NvmHeuristicInfo {
+    friend class NvmHeuristicBuilder;
     protected:
       typedef std::unordered_map<llvm::Instruction*, uint64_t> WeightMap;
       typedef std::shared_ptr<WeightMap> SharedWeightMap;
@@ -343,7 +336,12 @@ namespace klee {
       virtual ~NvmStaticHeuristic() {}
 
       virtual uint64_t getCurrentPriority(void) const override {
-        return priorities_->at(curr_);
+        uint64_t priority = priorities_->count(curr_) ? priorities_->at(curr_) : 0lu;
+        if (!priority) {
+          llvm::errs() << curr_->getFunction()->getName() << '\n';
+          llvm::errs() << *curr_ << '\n';
+        }
+        return priority;
       };
 
       /**
@@ -374,22 +372,7 @@ namespace klee {
         curr_ = nextPC->inst;
       }
 
-      virtual void dump(void) const override {
-        uint64_t nonZeroWeights = 0, nonZeroPriorities = 0;
-
-        for (const auto &p : *weights_) nonZeroWeights += (p.second > 0);
-        for (const auto &p : *priorities_) nonZeroPriorities += (p.second > 0);
-
-        double pWeights = 100.0 * ((double)nonZeroWeights / (double)weights_->size());
-        double pPriorities = 100.0 * ((double)nonZeroPriorities / (double)priorities_->size());
-
-        fprintf(stderr, "NvmStaticHeuristic:\n"
-                        "\tNVM allocation sites: %lu\n"
-                        "\t%% instructions with weight: %lu\n",
-                        "\t%% instructions with weight: %lu\n",
-                        getNvmAllocationSites(executor_->kmodule->module, analysis_).size(),
-                        pWeights, pPriorities);
-      }
+      virtual void dump(void) const override;
   };
 
   /* #endregion */
@@ -397,18 +380,9 @@ namespace klee {
   /* #region NvmHeuristicBuilder */
   class NvmHeuristicBuilder {
     private:
-      static std::string typeNames[] = {
-        "none", "static", "insensitive-dynamic", "context-dynamic"
-      };
+      static const char *typeNames[];
 
-      static std::string typeDesc[] = {
-        "None: uses a no-op heuristic (disables the features)",
-        "Static: this only uses the points-to information from Andersen's analysis",
-        "Insensitive-Dynamic: this updates Andersen's analysis as runtime "
-          "variables are resolved",
-        "Context-Dynamic: this updates Andersen's analysis while being context"
-          " (call-site) sensitive",
-      }
+      static const char *typeDesc[];
 
     public:
       NvmHeuristicBuilder() = delete;
@@ -421,30 +395,32 @@ namespace klee {
         Invalid
       };
 
-      static const std::string &stringify(Type t) {
+      static const char *stringify(Type t) {
         return typeNames[t];
       }
 
-      static const std::string &explanation(Type t) {
+      static const char *explanation(Type t) {
         return typeDesc[t];
       }
 
       static Type toType(const char *tStr) {
-        for (Type t = None; t < Invalid; ++t) {
+        for (int t = None; t < Invalid; ++t) {
           if (tStr == typeNames[t]) {
-            return t;
+            return (Type)t;
           }
         }
         return Invalid;
       }
 
-      static std::unique_ptr<NvmHeuristicInfo> create(Type t) {
+      static std::unique_ptr<NvmHeuristicInfo> create(Type t, Executor *executor, KFunction *main) {
+        NvmHeuristicInfo *ptr = nullptr;
         switch(t) {
           case None:
             assert(false && "unsupported!");
             break;
           case Static:
-
+            ptr = new NvmStaticHeuristic(executor, main);
+            break;
           case InsensitiveDynamic:
           case ContextDynamic:
           default:
@@ -452,7 +428,8 @@ namespace klee {
             break;
         }
 
-        return std::unique_ptr<NvmHeuristicInfo>(nullptr);
+        assert(ptr);
+        return std::unique_ptr<NvmHeuristicInfo>(ptr);
       }
 
       static std::unique_ptr<NvmHeuristicInfo> copy(const std::unique_ptr<NvmHeuristicInfo> &info) {
@@ -460,9 +437,10 @@ namespace klee {
           return std::unique_ptr<NvmHeuristicInfo>(nullptr);
         }
 
-        NvmHeuristicInfo *newInfo;
+        NvmHeuristicInfo *newInfo = nullptr;
         if (typeid(info.get()) == typeid(NvmStaticHeuristic)) {
-          newInfo = new NvmStaticHeuristic(*info); // Copy construct
+          auto ptr = dynamic_cast<const NvmStaticHeuristic*>(info.get());
+          newInfo = new NvmStaticHeuristic(*ptr); // Copy construct
         }
 
         assert(newInfo && "null!");

@@ -389,7 +389,7 @@ class PersistentState : public ObjectState {
 
   public:
 
-    static constexpr uint64_t MaxSize = 4 * (4096);
+    static uint64_t MaxSize;
     /// Create a new persistent object state from the given non-persistent
     /// object state and symbolic bool array of cache lines. Also requires
     /// a symbolic void* array (int64) for root cause.

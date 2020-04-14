@@ -215,39 +215,6 @@ namespace {
                  cl::init(true),
                  cl::cat(ChecksCat));
 
-  // -- NVM options begin
-  #define clNvmEnumValN(t) clEnumValN(t, \
-                             NvmHeuristicBuilder::stringify(t), \
-                             NvmHeuristicBuilder::explanation(t))
-
-  cl::opt<NvmHeuristicBuilder::Type>
-  NvmCheck("nvm-heuristic-type",
-       cl::desc("Choose the search heuristic used by the NVM searcher."),
-       cl::values(clNvmEnumValN(NvmHeuristicBuilder::Type::None),
-                  clNvmEnumValN(NvmHeuristicBuilder::Type::Static),
-                  clNvmEnumValN(NvmHeuristicBuilder::Type::InsensitiveDynamic),
-                  clNvmEnumValN(NvmHeuristicBuilder::Type::ContextDynamic)
-                  KLEE_LLVM_CL_VAL_END),
-       cl::init(NvmHeuristicBuilder::Type::None),
-       cl::cat(ChecksCat));
-  
-  #undef clNvmEnumValN
-
-  cl::alias PmCheck("pm-check-type",
-                    cl::desc("Alias for nvm-check-type"),
-                    cl::NotHidden,
-                    cl::aliasopt(NvmCheck),
-                    cl::cat(ChecksCat));
-
-  bool clOptEnableNvmInfo() {
-    return NvmCheck != NvmHeuristicBuilder::Type::None;
-  }
-
-  bool clOptCheckNvm() {
-    return clOptEnableNvmInfo();
-  }
-  // -- NVM options end
-
   cl::opt<bool>
   OptExitOnError("exit-on-error",
                  cl::desc("Exit KLEE if an error in the tested application has been found (default=false)"),
@@ -1297,9 +1264,7 @@ int main(int argc, char **argv, char **envp) {
                                   /*LibcMainFunction=*/LibcMainFunction,
                                   /*Optimize=*/OptimizeModule,
                                   /*CheckDivZero=*/CheckDivZero,
-                                  /*CheckOvershift=*/CheckOvershift,
-                                  /*EnableNvmInfo=*/clOptEnableNvmInfo(),
-                                  /*CheckNvm=*/clOptCheckNvm());
+                                  /*CheckOvershift=*/CheckOvershift);
 
   if (WithPOSIXRuntime) {
     SmallString<128> Path(Opts.LibraryDir);
