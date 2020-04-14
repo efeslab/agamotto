@@ -727,6 +727,50 @@ void NvmStaticHeuristic::computePriority(void) {
         }
       }
     }
+
+    for (CallInst *ci : call_insts) {
+      Instruction *retLoc = ci->getNextNode();
+      assert(retLoc);
+
+      std::unordered_set<Function*> possibleFns;
+      if (Function *f = utils::getCallInstFunction(ci)) {
+        possibleFns.insert(f);
+      } else if (Function *f = ci->getCalledFunction()) {
+        possibleFns.insert(f);
+      } else {
+        if (!ci->isIndirectCall()) errs() << *ci << "\n";
+        assert(ci->isIndirectCall());
+
+        for (Function &f : *curr_->getModule()) {
+          for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
+            if (f.arg_size() <= i) {
+              if (f.isVarArg()) {
+                possibleFns.insert(&f);
+              }
+              break;
+            }
+
+            Argument *arg = f.arg_begin() + i;
+            Value *val = ci->getArgOperand(i);
+
+            if (arg->getType() != val->getType()) break;
+            else if (i + 1 == ci->getNumArgOperands()) possibleFns.insert(&f);
+          }
+        }
+      }
+
+      for (Function *f : possibleFns) {
+        for (BasicBlock &bb : *f) {
+          for (Instruction &i : bb) {
+            if (!(*priorities_)[&i] && (*priorities_)[retLoc]) {
+              changed = true;
+              (*priorities_)[&i] = (*priorities_)[retLoc];
+            }
+          }
+        }
+      }
+
+    }
     errs() << "changed = " << changed << "\n";
   } while (changed);
   

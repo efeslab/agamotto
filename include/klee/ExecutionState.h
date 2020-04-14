@@ -97,7 +97,8 @@ public:
   // Overall state of the state - Data specific
 
   /// @brief (iangneal): Information about the current state of NVM and the predicted state
-  std::unique_ptr<NvmHeuristicInfo> nvmInfo;
+  /// apparently if this is a shared pointer everything dies.
+  NvmHeuristicInfo *nvmInfo;
 
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;

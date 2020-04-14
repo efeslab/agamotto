@@ -333,13 +333,20 @@ namespace klee {
       void computePriority();
     public:
 
+      NvmStaticHeuristic(const NvmStaticHeuristic &other)
+        : executor_(other.executor_),
+          analysis_(other.analysis_),
+          weights_(other.weights_),
+          priorities_(other.priorities_),
+          curr_(other.curr_) {}
+
       virtual ~NvmStaticHeuristic() {}
 
       virtual uint64_t getCurrentPriority(void) const override {
         uint64_t priority = priorities_->count(curr_) ? priorities_->at(curr_) : 0lu;
         if (!priority) {
-          llvm::errs() << curr_->getFunction()->getName() << '\n';
-          llvm::errs() << *curr_ << '\n';
+          // llvm::errs() << curr_->getFunction()->getName() << '\n';
+          // llvm::errs() << *curr_ << '\n';
         }
         return priority;
       };
@@ -412,7 +419,7 @@ namespace klee {
         return Invalid;
       }
 
-      static std::unique_ptr<NvmHeuristicInfo> create(Type t, Executor *executor, KFunction *main) {
+      static NvmHeuristicInfo *create(Type t, Executor *executor, KFunction *main) {
         NvmHeuristicInfo *ptr = nullptr;
         switch(t) {
           case None:
@@ -429,22 +436,27 @@ namespace klee {
         }
 
         assert(ptr);
-        return std::unique_ptr<NvmHeuristicInfo>(ptr);
+        return ptr;
       }
 
-      static std::unique_ptr<NvmHeuristicInfo> copy(const std::unique_ptr<NvmHeuristicInfo> &info) {
-        if (!info.get()) {
-          return std::unique_ptr<NvmHeuristicInfo>(nullptr);
+      static NvmHeuristicInfo *copy(const NvmHeuristicInfo *info) {
+        // llvm::errs() << "ding\n";
+        // return info;
+        // return std::shared_ptr<NvmHeuristicInfo>(nullptr);
+        // if (!info.get()) {
+        //   return info;
+        // }
+
+        if (auto ptr = dynamic_cast<const NvmStaticHeuristic*>(info)) {
+          // return info;
+          // return std::shared_ptr<NvmHeuristicInfo>(nullptr);
+          // return info;
+          return new NvmStaticHeuristic(*ptr);
         }
 
-        NvmHeuristicInfo *newInfo = nullptr;
-        if (typeid(info.get()) == typeid(NvmStaticHeuristic)) {
-          auto ptr = dynamic_cast<const NvmStaticHeuristic*>(info.get());
-          newInfo = new NvmStaticHeuristic(*ptr); // Copy construct
-        }
-
-        assert(newInfo && "null!");
-        return std::unique_ptr<NvmHeuristicInfo>(newInfo);
+        // assert(false && "null!");
+        // return std::shared_ptr<NvmHeuristicInfo>(nullptr);
+        return nullptr;
       }
   };
   /* #endregion */
