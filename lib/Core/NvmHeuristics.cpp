@@ -420,7 +420,10 @@ NvmHeuristicInfo::ValueSet NvmHeuristicInfo::getNvmAllocationSites(Module *m, co
   ander->getResult().getAllAllocationSites(all);
   
   for (const Value *v : all) {
-    if (isNvmAllocationSite(m, v)) onlyNvm.insert(v);
+    if (isNvmAllocationSite(m, v)) {
+      // errs() << "\tNVM: " << *v << "\n";
+      onlyNvm.insert(v);
+    }
   }
 
   return onlyNvm;
@@ -429,10 +432,17 @@ NvmHeuristicInfo::ValueSet NvmHeuristicInfo::getNvmAllocationSites(Module *m, co
 bool NvmHeuristicInfo::isNvmAllocationSite(Module *m, const llvm::Value *v) {
   if (const CallInst *ci = dyn_cast<CallInst>(v)) {
     if (const Function *f = ci->getCalledFunction()) {
-      if (f == m->getFunction("mmap") ||
-          f == m->getFunction("mmap64") ||
-          f == m->getFunction("klee_pmem_mark_persistent") || 
+      if (f == m->getFunction("klee_pmem_mark_persistent") || 
           f == m->getFunction("klee_pmem_alloc_pmem")) return true;
+      
+      if (f == m->getFunction("mmap") || f == m->getFunction("mmap64")) {
+        Value *arg = ci->getArgOperand(4);
+        if (Constant *cs = dyn_cast<Constant>(arg)) {
+          const APInt &ap = cs->getUniqueInteger();
+          if ((int32_t)ap.getLimitedValue() == -1) return false;
+        }
+        return true;
+      }
     }
   }
 
@@ -494,7 +504,6 @@ NvmStaticHeuristic::NvmStaticHeuristic(Executor *executor, KFunction *mainFn)
 
   computePriority();
   dump();
-  // assert(false);
 }
 
 void NvmStaticHeuristic::computePriority(void) {
@@ -784,6 +793,10 @@ void NvmStaticHeuristic::dump(void) const {
 
   double pWeights = 100.0 * ((double)nonZeroWeights / (double)weights_->size());
   double pPriorities = 100.0 * ((double)nonZeroPriorities / (double)priorities_->size());
+
+  for (auto *v : getNvmAllocationSites(executor_->kmodule->module.get(), analysis_)) {
+    errs() << *v << "\n";
+  }
 
   fprintf(stderr, "NvmStaticHeuristic:\n"
                   "\tNVM allocation sites: %lu\n"

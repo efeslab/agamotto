@@ -1722,6 +1722,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           }
 
           bindLocal(kcaller, state, result);
+
         }
       } else {
         // We check that the return value has no users instead of
@@ -1979,8 +1980,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       // CPUID is treated as a call that returns an array which is then
       // extracted from.
       if (ia->getAsmString().find("cpuid") != std::string::npos) {
-        errs() << *ia << " " << numArgs << "\n";
-        errs() << *(i->getParent()->getParent());
 
         // Set up the output of the call.
         Type *t = i->getType();
@@ -2830,47 +2829,23 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 }
 
 void Executor::updateStates(ExecutionState *current) {
-  if (searcher) {
-    searcher->update(current, addedStates, removedStates);
-  }
-  
-  // (iangneal): Update the heuristic as well.
-  std::vector<ExecutionState*> toUpdate;
-  toUpdate.push_back(current);
-  toUpdate.insert(toUpdate.end(), addedStates.begin(), addedStates.end());
+  /**
+   * (iangneal): Update the heuristic first, so that the priorities are up
+   * to date for the NvmPathSearcher.
+   */ 
+  if (current && current->nvmInfo) {
+    std::vector<ExecutionState*> toUpdate;
+    toUpdate.push_back(current);
+    toUpdate.insert(toUpdate.end(), addedStates.begin(), addedStates.end());
 
-  for (ExecutionState *s : toUpdate) {
-    if (s && s->nvmInfo) {
-      
-      // TODO: this all needs to be timed
-      // if (current->prevPC->dest < s->stack.back().kf->numRegisters) {
-      //   ref<Expr> val = getDestCell(*s, s->prevPC).value;
-      //   // update for prevPC, then set the instruction to the current pc for the
-      //   // next round.
-      //   // errs() << "prevPC = " << *current->prevPC->inst << "\n";
-      //   // errs() << "nvmPC  = " << *current->nvmInfo->currentInst() << "\n";
-      //   // errs() << "pc     = " << *current->pc->inst << "\n";
-
-      //   ResolutionList rl;
-      //   solver->setTimeout(coreSolverTimeout);
-      //   if (!val.isNull() && 
-      //       val->getWidth() == Context::get().getPointerWidth() &&
-      //       !s->addressSpace.resolve(*s, solver, val, rl))
-      //   {
-      //     bool isNvm = false;
-      //     for (ObjectPair &op : rl) {
-      //       isNvm = isNvm || isa<PersistentState>(op.second);
-      //     }
-      //     s->nvmInfo->updateCurrentState(s, s->prevPC, isNvm);
-      //   } else {
-      //     s->nvmInfo->updateCurrentState(s, s->prevPC, false);
-      //   }
-      //   solver->setTimeout(time::Span());
-      // } 
-
-      // Now go to the next
+    for (ExecutionState *s : toUpdate) {
+      assert(s && s->nvmInfo);
       s->nvmInfo->stepState(s, s->prevPC, s->pc);
     }
+  }
+
+  if (searcher) {
+    searcher->update(current, addedStates, removedStates);
   }
 
   states.insert(addedStates.begin(), addedStates.end());
