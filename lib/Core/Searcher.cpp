@@ -317,6 +317,14 @@ bool RandomPathSearcher::empty() {
 
 ///
 
+
+bool NvmPathSearcher::priority_less::operator()(const priority_tuple &lhs, const priority_tuple &rhs) {
+  bool youngerState = std::get<0>(lhs)->steppedInstructions < std::get<0>(rhs)->steppedInstructions;
+  bool higherGen = std::get<1>(lhs) > std::get<1>(rhs); 
+  bool lowerPriority = std::get<2>(lhs) < std::get<2>(rhs);
+  return lowerPriority || higherGen || youngerState;
+}
+
 NvmPathSearcher::NvmPathSearcher(Executor &_executor) 
   : Searcher(_executor)
 {
@@ -346,8 +354,9 @@ ExecutionState &NvmPathSearcher::selectState() {
     states.pop();
   } while (!lastState);
 
-  // errs() << "[" << lastState << "] priority: " << p << 
-  //                               ", gen: " << currentGen << "\n";
+  errs() << "[" << lastState << 
+              "] priority: " << p << ", gen: " << currentGen << 
+              " (selected out of " << states.size() << " states)\n";
 
   return *lastState;
 }

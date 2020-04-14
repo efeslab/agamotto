@@ -239,14 +239,13 @@ namespace klee {
     size_t currentGen = 0;
 
     /**
+     * Determine if LHS < RHS
      * If the generation of rhs is higher, it has lower priority. If it has
      * the same generation, the priority is lower by standard rules.
+     * To break ties, newer states have lower priority.
      */
     struct priority_less : public std::less<priority_tuple> {
-      bool operator()(const priority_tuple &rhs, const priority_tuple &lhs) {
-        return std::get<1>(rhs) > std::get<1>(lhs) ||
-               (std::get<1>(rhs) == std::get<1>(lhs) && std::get<2>(rhs) < std::get<2>(lhs));
-      }
+      bool operator()(const priority_tuple &lhs, const priority_tuple &rhs);
     };
 
     // C++ doesn't let us override only part of the template defaults, or if
