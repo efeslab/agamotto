@@ -1770,7 +1770,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
               bool success;
               assert(state.addressSpace.resolveOne(state, solver, result, op, success));
               assert(success);
-              state.nvmInfo->updateCurrentState(&state, kcaller, isa<PersistentState>(op.second));
+              executeUpdateNvmInfo(state, kcaller, op.second);
             }
           }
         }
@@ -3822,6 +3822,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     if (inBounds) {
       const ObjectState *os = op.second;
+      executeUpdateNvmInfo(state, state.prevPC, os);
       if (isWrite) {
         if (os->readOnly) {
           terminateStateOnError(state, "memory error: object read only",
@@ -3973,6 +3974,14 @@ bool Executor::isPersistentMemory(ExecutionState &state, const MemoryObject *mo)
     return true;
   }
   return false;
+}
+
+void Executor::executeUpdateNvmInfo(ExecutionState &state, 
+                                    KInstruction *loc, 
+                                    const ObjectState *cos) {
+  if (state.nvmInfo && loc && cos) {
+    state.nvmInfo->updateCurrentState(&state, loc, isa<PersistentState>(cos));
+  }
 }
 
 void Executor::executePersistentMemoryFlush(ExecutionState &state,
