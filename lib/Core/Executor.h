@@ -339,6 +339,9 @@ private:
   void executeMarkPersistent(ExecutionState &state, const MemoryObject *mo);
   bool isPersistentMemory(ExecutionState &state, const MemoryObject *mo);
 
+  /// Resolve the address to update the nvmInfo in the state.
+  void executeUpdateNvmInfo(ExecutionState &state, KInstruction *loc, const ObjectState *cos);
+
   /// Asserts the persistence of a given MemoryObject, forking if necessary.
   /// A state in which mo is definitely not persisted will terminate with error.
   /// Return: a pointer to the remaining state, or nullptr if all states were

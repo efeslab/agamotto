@@ -280,6 +280,8 @@ namespace klee {
       
       virtual void computePriority() = 0;
 
+      virtual bool needsRecomputation() const = 0;
+
     public:
 
       static bool isNvmAllocationSite(llvm::Module *m, const llvm::Value *v);
@@ -329,6 +331,12 @@ namespace klee {
 
       SharedWeightMap weights_;
       SharedWeightMap priorities_;
+
+      void resetWeights(void) {
+        weights_ = std::make_shared<WeightMap>();
+        priorities_ = std::make_shared<WeightMap>();
+      }
+
       llvm::Instruction *curr_;
 
       llvm::Module *module_;
@@ -346,12 +354,16 @@ namespace klee {
 
       virtual const ValueSet &getCurrentNvmSites() const { return nvmSites_; }
 
+      virtual bool modifiesNvm(llvm::Instruction *i) const;
+
       /**
        * Calculate what the weight of this instruction would be.
        */
       virtual uint64_t computeInstWeight(llvm::Instruction *i) const;
 
       virtual void computePriority() override;
+
+      virtual bool needsRecomputation() const override { return false; }
 
     public:
 
@@ -407,6 +419,7 @@ namespace klee {
     protected:
       
       ValueSet activeNvmSites_;
+      ValueSet knownVolatiles_;
 
       NvmInsensitiveDynamicHeuristic(Executor *executor, KFunction *mainFn) 
         : NvmStaticHeuristic(executor, mainFn) {}
@@ -414,6 +427,15 @@ namespace klee {
       virtual const ValueSet &getCurrentNvmSites() const override { 
         return activeNvmSites_;
       }
+
+      /**
+       * Since we track volatiles, we know something modifies NVM if:
+       * - It can point to an active NVM allocation.
+       * - There is no known volatile that has the same points-to set.
+       */
+      virtual bool modifiesNvm(llvm::Instruction *i) const override;
+
+      virtual bool needsRecomputation() const override;
 
     public:
 
@@ -426,21 +448,7 @@ namespace klee {
        */
       virtual void updateCurrentState(ExecutionState *es, 
                                       KInstruction *pc, 
-                                      bool isNvm) override {
-        if (!nvmSites_.count(pc->inst)) {
-          llvm::errs() << "got: " << *pc->inst << "\n";
-          dump();
-        }
-        assert(nvmSites_.count(pc->inst) && "must only update NVM sites!");
-        if (isNvm) {
-          activeNvmSites_.insert(pc->inst);
-        } else {
-          activeNvmSites_.erase(pc->inst);
-        }
-        
-        computePriority();
-        dump();
-      }
+                                      bool isNvm) override;
 
       virtual void dump(void) const override;
   };

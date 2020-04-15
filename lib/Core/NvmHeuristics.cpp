@@ -498,14 +498,13 @@ bool NvmHeuristicInfo::isFence(llvm::Instruction *i) {
 NvmStaticHeuristic::NvmStaticHeuristic(Executor *executor, KFunction *mainFn) 
   : executor_(executor),
     analysis_(createAndersen(*executor->kmodule->module)),
-    weights_(std::make_shared<WeightMap>()),
-    priorities_(std::make_shared<WeightMap>()),
+    weights_(nullptr),
+    priorities_(nullptr),
     curr_(mainFn->function->getEntryBlock().getFirstNonPHIOrDbgOrLifetime()),
     module_(executor->kmodule->module.get()),
     nvmSites_(getNvmAllocationSites(module_, analysis_)) {}
 
-uint64_t NvmStaticHeuristic::computeInstWeight(Instruction *i) const {
-
+bool NvmStaticHeuristic::modifiesNvm(Instruction *i) const {
   if (isStore(i) || isFlush(i)) {
     Value *v = dyn_cast<Value>(i);
     if (isFlush(i)) {
@@ -519,7 +518,7 @@ uint64_t NvmStaticHeuristic::computeInstWeight(Instruction *i) const {
 
     if (!ret) {
       if (getCurrentNvmSites().count(v)) {
-        return 1u;
+        return true;
       } else if (AllocaInst *ai = dyn_cast<AllocaInst>(i)) {
         if (ai->getType()->isFunctionTy()) return 0u;
       } else if (StoreInst *si = dyn_cast<StoreInst>(i)) {
@@ -534,11 +533,17 @@ uint64_t NvmStaticHeuristic::computeInstWeight(Instruction *i) const {
     
     for (const Value *ptsTo : ptsSet) {
       if (getCurrentNvmSites().count(ptsTo)) {
-        return 1u;
+        return true;
       }
     }
+  }
 
-  } else if (isNvmAllocSite(i)) {
+  return false;
+}
+
+uint64_t NvmStaticHeuristic::computeInstWeight(Instruction *i) const {
+
+  if (modifiesNvm(i) || isNvmAllocSite(i)) {
     return 1u;
   } else if (isFence(i) && getCurrentNvmSites().size()) {
     return 1u;
@@ -551,8 +556,7 @@ void NvmStaticHeuristic::computePriority(void) {
   /**
    * Calculating the raw weights is easy.
    */
-  weights_->clear();
-  priorities_->clear();
+  resetWeights();
 
   std::unordered_set<llvm::CallInst*> call_insts;
 
@@ -805,6 +809,117 @@ void NvmStaticHeuristic::dump(void) const {
 /* #endregion */
 
 /* #region NvmInsensitiveDynamicHeuristic */
+
+bool NvmInsensitiveDynamicHeuristic::needsRecomputation() const { 
+  for (Function &f : *module_) {
+    for (BasicBlock &b : f) {
+      for (Instruction &i : b) {
+        if (mayHaveWeight(&i)) {
+          if ((*weights_)[&i] != computeInstWeight(&i)) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+bool NvmInsensitiveDynamicHeuristic::modifiesNvm(Instruction *i) const {
+  if (isStore(i) || isFlush(i)) {
+    Value *v = dyn_cast<Value>(i);
+    if (isFlush(i)) {
+      assert(isa<CallInst>(i));
+      v = dyn_cast<CallInst>(i)->getArgOperand(0);
+    }
+    std::vector<const Value*> ptsSet;
+
+    TimerStatIncrementer timer(stats::nvmAndersenTime);
+    bool ret = analysis_->getResult().getPointsToSet(v, ptsSet);
+
+    if (!ret) {
+      if (getCurrentNvmSites().count(v)) {
+        return true;
+      } else if (AllocaInst *ai = dyn_cast<AllocaInst>(i)) {
+        if (ai->getType()->isFunctionTy()) return 0u;
+      } else if (StoreInst *si = dyn_cast<StoreInst>(i)) {
+        if (isa<GlobalValue>(si->getPointerOperand()->stripPointerCasts())) return 0u;
+
+        assert(analysis_->getResult().getPointsToSet(si->getPointerOperand(), ptsSet));
+      } else {
+        errs() << *i << "\n";
+        assert(false && "could not get points-to!");
+      }
+    }
+    
+    bool pointsToNvm = false;
+    for (const Value *ptsTo : ptsSet) {
+      if (getCurrentNvmSites().count(ptsTo)) {
+        pointsToNvm = true;
+        break;
+      }
+    }
+
+    if (!pointsToNvm) return false;
+
+    ValueSet truePtsSet(ptsSet.begin(), ptsSet.end());
+
+    for (const Value *vol : knownVolatiles_) {
+      std::vector<const Value*> volPtsSet;
+      assert(analysis_->getResult().getPointsToSet(vol, volPtsSet));
+      ValueSet trueVolSet(volPtsSet.begin(), volPtsSet.end());
+
+      if (truePtsSet == trueVolSet) return false;
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+void NvmInsensitiveDynamicHeuristic::updateCurrentState(ExecutionState *es, 
+                                                        KInstruction *pc, 
+                                                        bool isNvm) {
+  bool modified = false;
+  if (nvmSites_.count(pc->inst)) {
+    if (isNvm) {
+      activeNvmSites_.insert(pc->inst);
+    } else {
+      activeNvmSites_.erase(pc->inst);
+    }
+    modified = true;
+  } else {
+    Value *v = nullptr;
+    if (LoadInst *li = dyn_cast<LoadInst>(pc->inst)) {
+      v = li->getPointerOperand();
+    } else if (StoreInst *si = dyn_cast<StoreInst>(pc->inst)) {
+      v = si->getPointerOperand();
+    }
+
+    if (v) {
+      // We only want to add a known volatile to something that points to NVM
+      std::vector<const Value*> volPtsSet;
+      assert(analysis_->getResult().getPointsToSet(v, volPtsSet));
+
+      if (nvmSites_.count(v)) {
+        if (isNvm) {
+          knownVolatiles_.erase(pc->inst);
+        } else {
+          knownVolatiles_.insert(pc->inst);
+        }
+        modified = true;
+      }
+    }
+  }
+  
+  // I like lazy eval
+  if (modified && needsRecomputation()) {
+    computePriority();
+    dump();
+  } 
+}
 
 void NvmInsensitiveDynamicHeuristic::dump(void) const {
   uint64_t nonZeroWeights = 0, nonZeroPriorities = 0;
