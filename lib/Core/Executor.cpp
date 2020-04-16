@@ -3775,7 +3775,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
               // Nontemporal writes don't dirty the cache, but they must
               // still cause an error until a fence happens.
-              ps->persistCacheLineAtOffset(offset);
+              ps->persistCacheLineAtOffset(state, offset);
             }
           }
         }
@@ -3988,7 +3988,7 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
         assert(wos);
         ps = dyn_cast<PersistentState>(wos);
         assert(ps);
-        ps->persistCacheLineAtOffset(offset);
+        ps->persistCacheLineAtOffset(state, offset);
         // llvm::errs() << "Good Flush\n";
       }
     }
@@ -4004,7 +4004,7 @@ void Executor::executePersistentMemoryFence(ExecutionState &state) {
     assert(os);
     ObjectState *wos = state.addressSpace.getWriteable(mo, os);
     PersistentState *ps = dyn_cast<PersistentState>(wos);
-    ps->commitPendingPersists();
+    ps->commitPendingPersists(state);
   }
 }
 

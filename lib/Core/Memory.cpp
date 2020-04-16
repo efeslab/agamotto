@@ -45,7 +45,7 @@ namespace {
                     llvm::cl::cat(SolvingCat));
 }
 
-/***/
+/* #region ObjectHolder */
 
 ObjectHolder::ObjectHolder(const ObjectHolder &b) : os(b.os) { 
   if (os) ++os->refCount; 
@@ -66,7 +66,9 @@ ObjectHolder &ObjectHolder::operator=(const ObjectHolder &b) {
   return *this;
 }
 
-/***/
+/* #endregion */
+
+/* #region MemoryObject */
 
 int MemoryObject::counter = 0;
 
@@ -99,7 +101,9 @@ void MemoryObject::getAllocInfo(std::string &result) const {
   info.flush();
 }
 
-/***/
+/* #endregion */
+
+/* #region ObjectState */
 
 ObjectState::ObjectState(const MemoryObject *mo)
   : copyOnWriteOwner(0),
@@ -628,7 +632,9 @@ void ObjectState::print() const {
   }
 }
 
-/***/
+/* #endregion */
+
+/* #region PersistentState */
 
 uint64_t PersistentState::MaxSize = 4lu * (4096lu);
 
@@ -681,9 +687,7 @@ PersistentState::PersistentState(const PersistentState &ps)
   : ObjectState(ps),
     cacheLineUpdates(ps.cacheLineUpdates),
     pendingCacheLineUpdates(ps.pendingCacheLineUpdates),
-
     idxUnbounded(ps.idxUnbounded),
-
     rootCauseLocations(ps.rootCauseLocations),
     pendingRootCauseLocations(ps.rootCauseLocations),
     nextLocId(ps.nextLocId),
@@ -738,30 +742,45 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
   ref<Expr> rootCauseExpr = 
     ConstantExpr::create(allRootLocations[info], rootCauseLocations.root->range);
   rootCauseLocations.extend(cacheLine, rootCauseExpr);
-  pendingRootCauseLocations.extend(cacheLine, rootCauseExpr);
+  // pendingRootCauseLocations.extend(cacheLine, rootCauseExpr);
 }
 
-void PersistentState::persistCacheLineAtOffset(unsigned offset) {
-  persistCacheLineAtOffset(ConstantExpr::create(offset, Expr::Int32));
+void PersistentState::persistCacheLineAtOffset(const ExecutionState &state, 
+                                               unsigned offset) {
+  persistCacheLineAtOffset(state, ConstantExpr::create(offset, Expr::Int32));
 }
 
-void PersistentState::persistCacheLineAtOffset(ref<Expr> offset) {
+void PersistentState::persistCacheLineAtOffset(const ExecutionState &state,
+                                               ref<Expr> offset) {
   /* llvm::errs() << getObject()->name << ":\n"; */
   /* ExprPPrinter::printOne(llvm::errs(), "persistCacheLineAtOffset", offset); */
   ref<Expr> cacheLine = getCacheLine(offset);
   pendingCacheLineUpdates.extend(cacheLine, getPersistedExpr());
-  // Update the root cause to be empty.
-  pendingRootCauseLocations.extend(cacheLine, getNullptr());
+
+  // Now update root cause.
+  std::string info = getLocationInfo(state);
+  if (!allRootLocations[info]) {
+    allRootLocations[info] = nextLocId;
+    nextLocId++;
+  }
+
+  ref<Expr> rootCauseExpr = 
+    ConstantExpr::create(allRootLocations[info], rootCauseLocations.root->range);
+  rootCauseLocations.extend(cacheLine, rootCauseExpr);
+
+  // Root cause 
+  // pendingRootCauseLocations.extend(cacheLine, getNullptr());
 }
 
-void PersistentState::commitPendingPersists() {
+void PersistentState::commitPendingPersists(const ExecutionState &state) {
   /* llvm::errs() << getObject()->name << ": "; */
   /* llvm::errs() << "commitPendingPersists\n"; */
 
   // Apply the writes and flushes accumulated during this epoch.
   // The UpdateList will clean up orphaned UpdateNodes from cacheLineUpdates.
   cacheLineUpdates = pendingCacheLineUpdates;
-  rootCauseLocations = pendingRootCauseLocations;
+  // rootCauseLocations = pendingRootCauseLocations;
+  lastCommit = getLocationInfo(state); 
 }
 
 ref<Expr> PersistentState::getIsOffsetPersistedExpr(ref<Expr> offset,
@@ -849,6 +868,7 @@ PersistentState::getRootCause(TimingSolver *solver,
   ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second); 
   assert(!lo.isNull() && !hi.isNull());
   if (lo->getZExtValue() == 0 && hi->getZExtValue() == 0) {
+    llvm::errs() << "all 0\n";
     return possible;
   }
 
@@ -941,6 +961,8 @@ PersistentState::getRootCause(TimingSolver *solver,
   }
   #endif
 
+  if (!possible.size()) possible.insert(lastCommit);
+
   return possible;
 }
 
@@ -1018,3 +1040,5 @@ std::string PersistentState::getLocationInfo(const ExecutionState &state) {
 
   return infoStr;
 }
+
+/* #endregion */

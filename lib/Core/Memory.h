@@ -383,6 +383,7 @@ class PersistentState : public ObjectState {
     // due to copies, but we can make unique IDs
     uint64_t nextLocId = 1; // Start at 1
     std::unordered_map<std::string, uint64_t> allRootLocations;
+    std::string lastCommit;
 
     /// DO NOT USE. Use clone() instead.
     PersistentState(const PersistentState &ps);
@@ -417,10 +418,10 @@ class PersistentState : public ObjectState {
     void dirtyCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset);
 
     // Make a *pending* persist of the cache line containing offset.
-    void persistCacheLineAtOffset(unsigned offset);
-    void persistCacheLineAtOffset(ref<Expr> offset);
+    void persistCacheLineAtOffset(const ExecutionState &state, unsigned offset);
+    void persistCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset);
 
-    void commitPendingPersists();
+    void commitPendingPersists(const ExecutionState &state);
     
     /**
      * Get an expression which will evaluate to 1 if all writes to the given
