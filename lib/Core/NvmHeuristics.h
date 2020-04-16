@@ -118,6 +118,7 @@ namespace klee {
   };
   /* #endregion */
 
+  /* #region NvmValueDesc */
   /**
    * This class represents the state of all values at any point during  
    * symbolic execution. If this ever changes on a fork or on the resolution
@@ -132,7 +133,6 @@ namespace klee {
    * ---
    * This is the runtime state.
    */
-  /* #region NvmValueDesc */
   class NvmValueDesc final {
     private:
       friend class NvmInstructionDesc;
@@ -256,10 +256,6 @@ namespace klee {
       friend bool operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs);
   };
   /* #endregion */
-
-  // Two concrete initializations of NvmInstructionDesc:
-  // -- Static version
-  // -- Dynamic version
 
 
   /* #region NvmHeuristicInfo (super class) */
@@ -453,6 +449,60 @@ namespace klee {
       virtual void dump(void) const override;
   };
 
+  /* #endregion */
+
+  /* #region NvmContextDynamicHeuristic */
+
+  /**
+   * We keep call stack information with our values, but not flow information.
+   */
+  #if 0
+  class NvmContextDynamicHeuristic : public NvmHeuristicInfo {
+    friend class NvmHeuristicBuilder;
+    protected:
+      
+      /**
+       * Since we have context, we can track globals and locals.
+       */
+      ValueSet nvmSites_;
+      ValueSet activeNvmSites_;
+      ValueSet nvmGlobals_;
+      struct ContextDesc {
+        NvmStackFrameDesc stackFrame;
+        ValueSet localVolatiles;
+      }
+
+      NvmContextDynamicHeuristic(Executor *executor, KFunction *mainFn);
+
+      virtual const ValueSet &getCurrentNvmSites() const override { 
+        return activeNvmSites_;
+      }
+
+      /**
+       * Since we track volatiles, we know something modifies NVM if:
+       * - It can point to an active NVM allocation.
+       * - There is no known volatile that has the same points-to set.
+       */
+      virtual bool modifiesNvm(llvm::Instruction *i) const override;
+
+      virtual bool needsRecomputation() const override;
+
+    public:
+
+      NvmContextDynamicHeuristic(const NvmContextDynamicHeuristic &other) = default;
+
+      virtual ~NvmContextDynamicHeuristic() {}
+
+      /**
+       * May change one of the current states, or could not.
+       */
+      virtual void updateCurrentState(ExecutionState *es, 
+                                      KInstruction *pc, 
+                                      bool isNvm) override;
+
+      virtual void dump(void) const override;
+  };
+  #endif
   /* #endregion */
 
   /* #region NvmHeuristicBuilder */

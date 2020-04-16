@@ -747,6 +747,23 @@ ref<Expr> PersistentState::isPersistedUnconstrained() const {
   return EqExpr::create(getPersistedExpr(), isCacheLinePersisted(idxUnbounded));
 }
 
+ref<Expr> PersistentState::isPersisted(TimingSolver *solver, 
+                                       ExecutionState &state) const {
+  static ref<ConstantExpr> alwaysTrue = ConstantExpr::create(true, Expr::Bool);
+  static ref<ConstantExpr> alwaysFalse = ConstantExpr::create(false, Expr::Bool);
+
+  std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, isCacheLinePersisted(idxUnbounded));
+  assert(isa<ConstantExpr>(range.first) && isa<ConstantExpr>(range.second));
+  ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
+  ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);
+  if (lo->getZExtValue() == 0) {
+    assert(cacheLineUpdates.getSize() > 1 && "doesn't make sense");
+    return alwaysFalse;
+  }
+  assert(lo->getZExtValue() == 1 && hi->getZExtValue() == 1);
+  return alwaysTrue;
+}
+
 void PersistentState::clearRootCauses() {
   allRootLocations.clear();
 }
@@ -795,6 +812,77 @@ std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solv
   
   std::unordered_set<std::string> possible;
 
+  #if 1
+  std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, result);
+  ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
+  ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second); 
+  assert(!lo.isNull() && !hi.isNull());
+  if (lo->getZExtValue() == 0 && hi->getZExtValue() == 0) {
+    return possible;
+  }
+
+  for (uint64_t cl = 0; cl < numCacheLines(); ++cl) {
+    ref<Expr> clExpr = ConstantExpr::create(cl, rootCauseLocations.root->range);
+    ref<Expr> clVal = ReadExpr::create(rootCauseLocations, 
+                                       ZExtExpr::create(clExpr, Expr::Int32));
+    std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, clVal);
+
+    ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
+    ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);  
+    assert(!lo.isNull() && !hi.isNull());
+    // llvm::errs() << "Range for CL #" << cl << ": [" << lo->getZExtValue() 
+    //     << ", " << hi->getZExtValue() << "]\n";
+    uint64_t loVal = lo->getZExtValue();
+    uint64_t hiVal = hi->getZExtValue();
+    if (loVal == 0 && hiVal == 0) continue;
+
+    if (loVal == 0) loVal++;
+    assert(loVal <= hiVal);
+
+    if (loVal == hiVal) {
+      uint64_t id = loVal;
+      for (const auto &p : allRootLocations) {
+        if (p.second == id) possible.insert(p.first); // copy
+      } 
+    } else {
+      for (uint64_t id = loVal; id <= hiVal; ++id) {
+        ref<Expr> eqId = EqExpr::create(ConstantExpr::create(id, rootCauseLocations.root->range),
+                                        clVal);
+        bool mayBeCause = false;
+        bool success = solver->mayBeTrue(state, eqId, mayBeCause);
+        assert(success);
+        if (!mayBeCause) continue;
+        for (const auto &p : allRootLocations) {
+          if (p.second == id) possible.insert(p.first); // copy
+        } 
+      }
+    }
+  }
+  #elif 0
+  std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, result);
+  if (!isa<ConstantExpr>(range.first) || !isa<ConstantExpr>(range.second)) {
+    llvm::errs() << *range.first << "\n" << *range.second << "\n";
+    assert(false);
+  }
+
+  ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
+  ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);
+  llvm::errs() << *range.first << "\n" << *range.second << "\n";
+  for (uint64_t locId = lo->getZExtValue(); locId <= hi->getZExtValue(); ++locId) {
+    ref<Expr> locIdExpr = ConstantExpr::create(locId, rootCauseLocations.root->range);
+    ref<Expr> isCause = EqExpr::create(result, locIdExpr);
+    bool mayBeCause = false;
+    bool success = solver->mayBeTrue(state, isCause, mayBeCause);
+    if (success && mayBeCause) {
+      for (const auto &p : allRootLocations) {
+        if (p.second == locId) possible.insert(p.first); // copy
+      }
+    } else if (!success) {
+      klee_warning("Did not succeed at finding the root cause!");
+    }
+  }
+
+  #else
   for (const auto &p : allRootLocations) {
     ref<Expr> locId = ConstantExpr::create(p.second, rootCauseLocations.root->range);
     ref<Expr> isCause = EqExpr::create(result, locId);
@@ -806,7 +894,9 @@ std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solv
       klee_warning("Did not succeed at finding the root cause!");
     }
   }
+  #endif
 
+  #if 0
   // If there are no causes, then there must be no updates.
   if (!possible.size()) {
     ref<Expr> nullId = ConstantExpr::create(0, rootCauseLocations.root->range);
@@ -815,8 +905,10 @@ std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solv
     bool success = solver->mustBeTrue(state, isNullptr, mustBeNull);
 
     assert(success && "Could not solve!");
+    if (!mustBeNull) llvm::errs() << *isNullptr << "\n"; 
     assert(mustBeNull && "Could not prove null!");
   }
+  #endif
 
   return possible;
 }

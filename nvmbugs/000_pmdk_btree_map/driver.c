@@ -83,6 +83,21 @@ int main(int argc, const char *argv[]) {
         printf("Size is now %lu!\n", D_RO(root)->num_nodes);
     }
 
+    TX_BEGIN(pop) {
+        assert(!btree_map_clear(pop, D_RO(root)->tree) && "Could not clear tree!");
+    } TX_END
+
+    TX_BEGIN(pop) {
+        for (uint64_t i = 0; i < n_entries; ++i) {  
+            TOID(uint64_t) val = TX_NEW(uint64_t);
+            TX_ADD(val);
+            *D_RW(val) = i; 
+            assert(!btree_map_insert(pop, D_RO(root)->tree, i, val.oid));
+            TX_SET(root, num_nodes, D_RO(root)->num_nodes + 1);   
+            printf("Size is now %lu!\n", D_RO(root)->num_nodes);
+        }
+    } TX_END
+
     for (uint64_t i = 0; i < n_entries; ++i) {
         PMEMoid val = btree_map_get(pop, D_RO(root)->tree, i);
         uint64_t *ptr = pmemobj_direct(val);

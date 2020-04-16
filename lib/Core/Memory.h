@@ -439,6 +439,7 @@ class PersistentState : public ObjectState {
      * state's constraint manager.
      */
     ref<Expr> isPersistedUnconstrained() const;
+    ref<Expr> isPersisted(TimingSolver *solver, ExecutionState &state) const;
 
     const std::vector<ref<Expr>> getConstraints() const { 
       return idxConstraints; 

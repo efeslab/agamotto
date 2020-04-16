@@ -3373,6 +3373,8 @@ void Executor::terminateStateOnPmemError(ExecutionState &state,
   Instruction * lastInst;
   const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
 
+  assert(errors.size() && "no errors to terminate with!");
+
   std::string info_str;
   llvm::raw_string_ostream info(info_str);
 
