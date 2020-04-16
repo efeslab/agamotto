@@ -773,6 +773,7 @@ ref<Expr> PersistentState::getAnyOffsetExpr() const {
   return ZExtExpr::create(idxUnbounded, Context::get().getPointerWidth());
 }
 
+#if 0
 ref<Expr> PersistentState::isPersisted(TimingSolver *solver, 
                                        ExecutionState &state) const {
   static ref<ConstantExpr> alwaysTrue = ConstantExpr::create(true, Expr::Bool);
@@ -789,6 +790,7 @@ ref<Expr> PersistentState::isPersisted(TimingSolver *solver,
   assert(lo->getZExtValue() == 1 && hi->getZExtValue() == 1);
   return alwaysTrue;
 }
+#endif
 
 void PersistentState::clearRootCauses() {
   allRootLocations.clear();
@@ -803,7 +805,7 @@ PersistentState::getRootCauses(TimingSolver *solver,
   auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
 
   state.constraints.addConstraint(inBoundsConstraint);
-  causes = getRootCause(solver, state, idx);
+  causes = getRootCause(solver, state, getCacheLine(idx));
   state.constraints.removeConstraint(inBoundsConstraint);
   
   return causes;
@@ -839,6 +841,8 @@ PersistentState::getRootCause(TimingSolver *solver,
   
   std::unordered_set<std::string> possible;
 
+  llvm::errs() << "getRootCause: " << *cacheLine << "\n";
+
   #if 1
   std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, result);
   ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
@@ -857,8 +861,8 @@ PersistentState::getRootCause(TimingSolver *solver,
     ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
     ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);  
     assert(!lo.isNull() && !hi.isNull());
-    // llvm::errs() << "Range for CL #" << cl << ": [" << lo->getZExtValue() 
-    //     << ", " << hi->getZExtValue() << "]\n";
+    llvm::errs() << "Range for CL #" << cl << ": [" << lo->getZExtValue() 
+        << ", " << hi->getZExtValue() << "]\n";
     uint64_t loVal = lo->getZExtValue();
     uint64_t hiVal = hi->getZExtValue();
     if (loVal == 0 && hiVal == 0) continue;

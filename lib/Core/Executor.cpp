@@ -3977,7 +3977,7 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
         // llvm::errs() << "Unnecessary Flush\n";
 
         // avoid masking later bugs; emit error, but continue
-        emitPmemError(*errState, { ps->getLocationInfo(*errState) });
+        emitPmemError(*errState, ps->getRootCauses(solver, *errState));
       }
 
       // Process normally if not yet persisted.
