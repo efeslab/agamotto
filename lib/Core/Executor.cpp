@@ -3210,15 +3210,12 @@ void Executor::terminateStateEarlyPmem(ExecutionState &state) {
   // (iangneal): Sometimes, a program can forget to call close or unmap.
   // We need to ensure that the persistence of a program is checked at least
   // once.
-  ExecutionState *toTerm = &state;
-  if (state.persistentObjects.size()) {
-    for (const MemoryObject *mo : state.persistentObjects) {
-      toTerm = executeCheckPersistence(*toTerm, mo);
-      if (!toTerm) return;
-    }
+  std::unordered_set<std::string> errors;
+  if (!isStatePersisted(state, errors)) {
+    terminateStateOnPmemError(state, errors);
+  } else {
+    terminateState(state);
   }
-
-  terminateState(*toTerm);
 }
 
 void Executor::terminateStateOnExit(ExecutionState &state) {
@@ -3977,7 +3974,7 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
         // llvm::errs() << "Unnecessary Flush\n";
 
         // avoid masking later bugs; emit error, but continue
-        emitPmemError(*errState, ps->getRootCauses(solver, *errState));
+        emitPmemError(*errState, ps->getLastFlush(solver, *errState, offset));
       }
 
       // Process normally if not yet persisted.
@@ -4008,8 +4005,11 @@ void Executor::executePersistentMemoryFence(ExecutionState &state) {
   }
 }
 
-ExecutionState *Executor::executeCheckPersistence(ExecutionState &state,
-                                                  const MemoryObject *mo) {
+
+bool Executor::isObjectPersisted(ExecutionState &state,
+                                 const MemoryObject *mo,
+                                 std::unordered_set<std::string> &errors) {
+
   const ObjectState *os = state.addressSpace.findObject(mo);
   assert(os);
   const PersistentState *ps = dyn_cast<PersistentState>(os);
@@ -4021,29 +4021,68 @@ ExecutionState *Executor::executeCheckPersistence(ExecutionState &state,
   auto inBoundsConstraint = mo->getBoundsCheckOffset(anyOffset);
   state.constraints.addConstraint(inBoundsConstraint);
 
-  StatePair isPersisted = fork(state, ps->getIsOffsetPersistedExpr(anyOffset), true);
+  bool isPersisted;
+  bool success = solver->mustBeTrue(state, ps->getIsOffsetPersistedExpr(anyOffset),
+                                    isPersisted);
+  assert(success && "FIXME: Unhandled solver failure");
 
-  if (isPersisted.first) {
-    isPersisted.first->constraints.removeConstraint(inBoundsConstraint);
-  }
-  if (isPersisted.second) {
-    isPersisted.second->constraints.removeConstraint(inBoundsConstraint);
-  }
+  state.constraints.removeConstraint(inBoundsConstraint);
 
-  // If there's a state where it's not definitely persisted, terminate it.
-  ExecutionState *notPersisted = isPersisted.second;
-  if (notPersisted) {
-    const ObjectState *nos = notPersisted->addressSpace.findObject(mo);
-    assert(nos);
-    const PersistentState *nps = dyn_cast<PersistentState>(nos);
-    assert(nps);
-
-    terminateStateOnPmemError(*notPersisted, 
-                              nps->getRootCauses(solver, *notPersisted));
+  // If not definitely persisted, terminate it.
+  if (!isPersisted) {
+    auto rootCauses = ps->getReasonsNotPersisted(solver, state);
+    errors.insert(rootCauses.begin(), rootCauses.end());
   }
 
-  ExecutionState *goodState = isPersisted.first;
-  return goodState;
+  return isPersisted;
+}
+
+bool Executor::isStatePersisted(ExecutionState &state,
+                                std::unordered_set<std::string> &errors) {
+  bool isPersisted = true;
+  if (state.persistentObjects.size()) {
+    for (const MemoryObject *mo : state.persistentObjects) {
+      bool objPersisted = isObjectPersisted(state, mo, errors);
+      isPersisted = isPersisted && objPersisted;
+    }
+  }
+
+  return isPersisted;
+}
+
+
+ExecutionState *Executor::executeGetUnpersisted(ExecutionState &state,
+                                                const std::unordered_set<const MemoryObject*> &mos) {
+
+  ref<Expr> allPersisted = ConstantExpr::create(true, Expr::Bool);
+  std::list<ref<Expr>> allCons;
+  for (const MemoryObject *mo : mos) {
+    const ObjectState *os = state.addressSpace.findObject(mo);
+    assert(os);
+    const PersistentState *ps = dyn_cast<PersistentState>(os);
+    assert(ps);
+    // Get a symbolic offset into the object and constrain it to be within
+    // the object's bounds.
+    auto anyOffset = ps->getAnyOffsetExpr();
+    auto inBoundsConstraint = mo->getBoundsCheckOffset(anyOffset);
+    allCons.push_back(inBoundsConstraint);
+    state.constraints.addConstraint(inBoundsConstraint);
+    allPersisted = AndExpr::create(allPersisted, 
+                                   ps->getIsOffsetPersistedExpr(anyOffset));
+  }
+  
+  StatePair isPersisted = fork(state, allPersisted, true);
+
+  for (auto cons : allCons) {
+    if (isPersisted.first) {
+      isPersisted.first->constraints.removeConstraint(cons);
+    }
+    if (isPersisted.second) {
+      isPersisted.second->constraints.removeConstraint(cons);
+    }
+  }
+
+  return isPersisted.second;
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state,

@@ -5,3 +5,9 @@ klee_add_test_object(
   SOURCES symbolic_offset_test.c
   EXTRA_OPTIONS -mclwb
 ) 
+
+klee_add_test_object(
+  TARGET 002_TwoObjectTest
+  SOURCES symbolic_two_object.c
+  EXTRA_OPTIONS -mclwb
+) 

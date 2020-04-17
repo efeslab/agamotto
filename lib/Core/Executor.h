@@ -342,12 +342,16 @@ private:
   /// Resolve the address to update the nvmInfo in the state.
   void executeUpdateNvmInfo(ExecutionState &state, KInstruction *loc, const ObjectState *cos);
 
-  /// Asserts the persistence of a given MemoryObject, forking if necessary.
+  /// Check persistence of all memory objects. Return ALL errors.
+  /// Credit to @bgreeves
+  bool isStatePersisted(ExecutionState &state, std::unordered_set<std::string> &errors);
+  bool isObjectPersisted(ExecutionState &state, const MemoryObject *mo, std::unordered_set<std::string> &errors);
+
+  /// Asserts the persistence of a given state, forking if necessary.
   /// A state in which mo is definitely not persisted will terminate with error.
-  /// Return: a pointer to the remaining state, or nullptr if all states were
-  ///         killed due to pmem errors.
-  ExecutionState *executeCheckPersistence(ExecutionState &state, 
-                                          const MemoryObject *mo);
+  /// Return: a pointer to the unpersisted state.
+  ExecutionState *executeGetUnpersisted(ExecutionState &state, 
+                                        const std::unordered_set<const MemoryObject*> &mos);
 
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included

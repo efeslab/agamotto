@@ -1183,12 +1183,23 @@ void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,
     pmemObjs.push_back(res);
   }
   
+  std::unordered_set<std::string> errors;
+  std::unordered_set<const MemoryObject *> mos;
+  bool isPersisted = true;
   for (ObjectPair &op : pmemObjs) {
     const MemoryObject *mo = op.first; 
+    mos.insert(mo);
     const ObjectState *os = op.second;
     assert(isa<PersistentState>(os) && "trying to check if non-pmem is persisted!");
 
-    executor.executeCheckPersistence(state, mo);
+    bool objPersisted = executor.isObjectPersisted(state, mo, errors);
+    isPersisted = isPersisted && objPersisted;
+  }
+
+  if (!isPersisted) {
+    ExecutionState *errState = executor.executeGetUnpersisted(state, mos);
+    assert(errState && "we did something bad chief");
+    executor.terminateStateOnPmemError(*errState, errors);
   }
 }
 

@@ -642,8 +642,11 @@ PersistentState::PersistentState(const ObjectState *os)
   : ObjectState(*os),
     cacheLineUpdates(nullptr, nullptr),
     pendingCacheLineUpdates(nullptr, nullptr),
-    rootCauseLocations(nullptr, nullptr),
-    pendingRootCauseLocations(nullptr, nullptr) {
+    rootCauseWrites(nullptr, nullptr),
+    pendingRootCauseWrites(nullptr, nullptr),
+    rootCauseFlushes(nullptr, nullptr),
+    pendingRootCauseFlushes(nullptr, nullptr),
+    rootCauseWidth(Expr::Int64) {
 
   // Set up all the symbolic Arrays we need.
   ArrayCache *arrayCache = getArrayCache();
@@ -665,12 +668,20 @@ PersistentState::PersistentState(const ObjectState *os)
 
   // Set up the root causes symbolic array (initialize to nullptr).
   Init.assign(size, getNullptr());
-  const Array *rootCauses = arrayCache->CreateArray(baseName + "_rootCauses", size,
+  const Array *rootWrites = arrayCache->CreateArray(baseName + "_rootCauseWrites", size,
                                                     &Init[0], &Init[0] + size,
                                                     Expr::Int32 /* domain */,
-                                                    Expr::Int64 /* range */);
-  rootCauseLocations = UpdateList(rootCauses, nullptr);
-  pendingRootCauseLocations = UpdateList(rootCauseLocations);
+                                                    rootCauseWidth /* range */);
+  rootCauseWrites = UpdateList(rootWrites, nullptr);
+  pendingRootCauseWrites = UpdateList(rootCauseWrites);
+
+  Init.assign(size, getNullptr());
+  const Array *rootFlushes = arrayCache->CreateArray(baseName + "_rootCauseFlushes", size,
+                                                     &Init[0], &Init[0] + size,
+                                                     Expr::Int32 /* domain */,
+                                                     rootCauseWidth /* range */);
+  rootCauseFlushes = UpdateList(rootFlushes, nullptr);
+  pendingRootCauseFlushes = UpdateList(rootCauseFlushes);
 
   // Set up a symbolic integer to act as an "arbitrary offset" into this.
   const Array *idxArray = arrayCache->CreateArray(baseName + "_idx", 1,
@@ -685,12 +696,22 @@ PersistentState::PersistentState(const ObjectState *os)
 
 PersistentState::PersistentState(const PersistentState &ps)
   : ObjectState(ps),
+
     cacheLineUpdates(ps.cacheLineUpdates),
     pendingCacheLineUpdates(ps.pendingCacheLineUpdates),
+
     idxUnbounded(ps.idxUnbounded),
-    rootCauseLocations(ps.rootCauseLocations),
-    pendingRootCauseLocations(ps.rootCauseLocations),
+
+    rootCauseWrites(ps.rootCauseWrites),
+    pendingRootCauseWrites(ps.rootCauseWrites),
+
+    rootCauseFlushes(ps.rootCauseFlushes),
+    pendingRootCauseFlushes(ps.pendingRootCauseFlushes),
+
+    rootCauseWidth(ps.rootCauseWidth),
     nextLocId(ps.nextLocId),
+    lastCommit(ps.lastCommit),
+    
     allRootLocations(ps.allRootLocations) {}
 
 ObjectState *PersistentState::clone() const {
@@ -733,16 +754,9 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
   pendingCacheLineUpdates.extend(cacheLine, falseExpr);
 
   // Now update root cause.
-  std::string info = getLocationInfo(state);
-  if (!allRootLocations[info]) {
-    allRootLocations[info] = nextLocId;
-    nextLocId++;
-  }
-
-  ref<Expr> rootCauseExpr = 
-    ConstantExpr::create(allRootLocations[info], rootCauseLocations.root->range);
-  rootCauseLocations.extend(cacheLine, rootCauseExpr);
-  // pendingRootCauseLocations.extend(cacheLine, rootCauseExpr);
+  ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, cacheLine, "write");
+  rootCauseWrites.extend(cacheLine, rootCauseExpr);
+  pendingRootCauseWrites.extend(cacheLine, rootCauseExpr);
 }
 
 void PersistentState::persistCacheLineAtOffset(const ExecutionState &state, 
@@ -758,18 +772,17 @@ void PersistentState::persistCacheLineAtOffset(const ExecutionState &state,
   pendingCacheLineUpdates.extend(cacheLine, getPersistedExpr());
 
   // Now update root cause.
-  std::string info = getLocationInfo(state);
+  std::string info = getLocationInfo(state, cacheLine, "persist");
   if (!allRootLocations[info]) {
     allRootLocations[info] = nextLocId;
     nextLocId++;
   }
 
-  ref<Expr> rootCauseExpr = 
-    ConstantExpr::create(allRootLocations[info], rootCauseLocations.root->range);
-  rootCauseLocations.extend(cacheLine, rootCauseExpr);
-
-  // Root cause 
-  // pendingRootCauseLocations.extend(cacheLine, getNullptr());
+  ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, cacheLine, "flush");
+  rootCauseFlushes.extend(cacheLine, rootCauseExpr);
+  pendingRootCauseFlushes.extend(cacheLine, rootCauseExpr);
+  // Pending clear
+  pendingRootCauseWrites.extend(cacheLine, getNullptr());
 }
 
 void PersistentState::commitPendingPersists(const ExecutionState &state) {
@@ -779,8 +792,10 @@ void PersistentState::commitPendingPersists(const ExecutionState &state) {
   // Apply the writes and flushes accumulated during this epoch.
   // The UpdateList will clean up orphaned UpdateNodes from cacheLineUpdates.
   cacheLineUpdates = pendingCacheLineUpdates;
-  // rootCauseLocations = pendingRootCauseLocations;
-  lastCommit = getLocationInfo(state); 
+  rootCauseWrites = pendingRootCauseWrites;
+  // clear
+  pendingRootCauseFlushes = UpdateList(pendingRootCauseFlushes.root, nullptr);
+  lastCommit = getLocationInfo(state, idxUnbounded, "fence"); 
 }
 
 ref<Expr> PersistentState::getIsOffsetPersistedExpr(ref<Expr> offset,
@@ -792,39 +807,41 @@ ref<Expr> PersistentState::getAnyOffsetExpr() const {
   return ZExtExpr::create(idxUnbounded, Context::get().getPointerWidth());
 }
 
-#if 0
-ref<Expr> PersistentState::isPersisted(TimingSolver *solver, 
-                                       ExecutionState &state) const {
-  static ref<ConstantExpr> alwaysTrue = ConstantExpr::create(true, Expr::Bool);
-  static ref<ConstantExpr> alwaysFalse = ConstantExpr::create(false, Expr::Bool);
-
-  std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, isCacheLinePersisted(idxUnbounded));
-  assert(isa<ConstantExpr>(range.first) && isa<ConstantExpr>(range.second));
-  ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
-  ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);
-  if (lo->getZExtValue() == 0) {
-    assert(cacheLineUpdates.getSize() > 1 && "doesn't make sense");
-    return alwaysFalse;
-  }
-  assert(lo->getZExtValue() == 1 && hi->getZExtValue() == 1);
-  return alwaysTrue;
-}
-#endif
-
 void PersistentState::clearRootCauses() {
-  allRootLocations.clear();
+  assert(false && "todo!");
+}
+
+/**
+ * Get the last flush to the location at a given offset. Helps get
+ * the root cause for unnecessary flushes.
+ */
+std::unordered_set<std::string> 
+PersistentState::getLastFlush(TimingSolver *solver, 
+                              ExecutionState &state,
+                              ref<Expr> offset) const {
+  return getRootCause(solver, state, rootCauseFlushes, getCacheLine(offset));
+}
+
+/**
+ * Get all the unflushed writes remaining.
+ */
+std::unordered_set<std::string> 
+PersistentState::getReasonsNotPersisted(TimingSolver *solver, 
+                                        ExecutionState &state) const {
+  return getRootCauses(solver, state, rootCauseWrites);
 }
 
 std::unordered_set<std::string>
 PersistentState::getRootCauses(TimingSolver *solver,
-                               ExecutionState &state) const {
+                               ExecutionState &state,
+                               const UpdateList &ul) const {
   std::unordered_set<std::string> causes;
 
   auto idx = getAnyOffsetExpr();
   auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
 
   state.constraints.addConstraint(inBoundsConstraint);
-  causes = getRootCause(solver, state, getCacheLine(idx));
+  causes = getRootCause(solver, state, ul, getCacheLine(idx));
   state.constraints.removeConstraint(inBoundsConstraint);
   
   return causes;
@@ -845,18 +862,20 @@ ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine,
   return result;
 }
 
-std::unordered_set<std::string> PersistentState::getRootCause(TimingSolver *solver, 
-                                                              ExecutionState &state, 
-                                                              unsigned cacheLine) const {
-  return getRootCause(solver, state, ConstantExpr::create(cacheLine, Expr::Int32));
+std::unordered_set<std::string> 
+PersistentState::getRootCause(TimingSolver *solver, 
+                              ExecutionState &state,
+                              const UpdateList &ul,
+                              unsigned cacheLine) const {
+  return getRootCause(solver, state, ul, ConstantExpr::create(cacheLine, Expr::Int32));
 }
 
 std::unordered_set<std::string>
 PersistentState::getRootCause(TimingSolver *solver,
                               ExecutionState &state,
+                              const UpdateList &ul,
                               ref<Expr> cacheLine) const {
-  ref<Expr> result = ReadExpr::create(rootCauseLocations,
-                                      ZExtExpr::create(cacheLine, Expr::Int32));
+  ref<Expr> result = ReadExpr::create(ul, ZExtExpr::create(cacheLine, Expr::Int32));
   
   std::unordered_set<std::string> possible;
 
@@ -873,8 +892,8 @@ PersistentState::getRootCause(TimingSolver *solver,
   }
 
   for (uint64_t cl = 0; cl < numCacheLines(); ++cl) {
-    ref<Expr> clExpr = ConstantExpr::create(cl, rootCauseLocations.root->range);
-    ref<Expr> clVal = ReadExpr::create(rootCauseLocations, 
+    ref<Expr> clExpr = ConstantExpr::create(cl, rootCauseWidth);
+    ref<Expr> clVal = ReadExpr::create(ul, 
                                        ZExtExpr::create(clExpr, Expr::Int32));
     std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, clVal);
 
@@ -897,7 +916,7 @@ PersistentState::getRootCause(TimingSolver *solver,
       } 
     } else {
       for (uint64_t id = loVal; id <= hiVal; ++id) {
-        ref<Expr> eqId = EqExpr::create(ConstantExpr::create(id, rootCauseLocations.root->range),
+        ref<Expr> eqId = EqExpr::create(ConstantExpr::create(id, rootCauseWidth),
                                         clVal);
         bool mayBeCause = false;
         bool success = solver->mayBeTrue(state, eqId, mayBeCause);
@@ -909,59 +928,7 @@ PersistentState::getRootCause(TimingSolver *solver,
       }
     }
   }
-  #elif 0
-  std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, result);
-  if (!isa<ConstantExpr>(range.first) || !isa<ConstantExpr>(range.second)) {
-    llvm::errs() << *range.first << "\n" << *range.second << "\n";
-    assert(false);
-  }
-
-  ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
-  ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);
-  llvm::errs() << *range.first << "\n" << *range.second << "\n";
-  for (uint64_t locId = lo->getZExtValue(); locId <= hi->getZExtValue(); ++locId) {
-    ref<Expr> locIdExpr = ConstantExpr::create(locId, rootCauseLocations.root->range);
-    ref<Expr> isCause = EqExpr::create(result, locIdExpr);
-    bool mayBeCause = false;
-    bool success = solver->mayBeTrue(state, isCause, mayBeCause);
-    if (success && mayBeCause) {
-      for (const auto &p : allRootLocations) {
-        if (p.second == locId) possible.insert(p.first); // copy
-      }
-    } else if (!success) {
-      klee_warning("Did not succeed at finding the root cause!");
-    }
-  }
-
-  #else
-  for (const auto &p : allRootLocations) {
-    ref<Expr> locId = ConstantExpr::create(p.second, rootCauseLocations.root->range);
-    ref<Expr> isCause = EqExpr::create(result, locId);
-    bool mayBeCause = false;
-    bool success = solver->mayBeTrue(state, isCause, mayBeCause);
-    if (success && mayBeCause) {
-      possible.insert(p.first); // copy
-    } else if (!success) {
-      klee_warning("Did not succeed at finding the root cause!");
-    }
-  }
   #endif
-
-  #if 0
-  // If there are no causes, then there must be no updates.
-  if (!possible.size()) {
-    ref<Expr> nullId = ConstantExpr::create(0, rootCauseLocations.root->range);
-    ref<Expr> isNullptr = EqExpr::create(result, getNullptr());
-    bool mustBeNull = false;
-    bool success = solver->mustBeTrue(state, isNullptr, mustBeNull);
-
-    assert(success && "Could not solve!");
-    if (!mustBeNull) llvm::errs() << *isNullptr << "\n"; 
-    assert(mustBeNull && "Could not prove null!");
-  }
-  #endif
-
-  if (!possible.size()) possible.insert(lastCommit);
 
   return possible;
 }
@@ -1021,15 +988,34 @@ ref<Expr> PersistentState::ptrAsExpr(void *ptr) {
   return ConstantExpr::create((uint64_t)ptr, Expr::Int64);
 }
 
-std::string PersistentState::getLocationInfo(const ExecutionState &state) {
+ref<ConstantExpr> 
+PersistentState::createRootCauseIdExpr(const ExecutionState &state, 
+                                       ref<Expr> cacheLineOffset,
+                                       const char *type) {
+
+  std::string info = getLocationInfo(state, cacheLineOffset, type);
+  if (!allRootLocations[info]) {
+    allRootLocations[info] = nextLocId;
+    nextLocId++;
+    assert(nextLocId <= UINT64_MAX && "run out of causes!");
+  }
+
+  return ConstantExpr::create(allRootLocations[info], rootCauseWidth);                               
+}
+
+std::string PersistentState::getLocationInfo(const ExecutionState &state, 
+                                             ref<Expr> offset, 
+                                             const char *type) const {
   const InstructionInfo *iip = state.prevPC->info;
 
   std::string infoStr;
   llvm::raw_string_ostream msg(infoStr);
   msg << "Persistent Memory Info:\n";
   msg << "\tName: " << getObject()->name << "\n";
-  msg << "\tAddress: " << getObject()->address << "\n";
+  msg << "\tAddress: " << llvm::format_hex(getObject()->address, 18) << "\n";
+  msg << "\t\tOffset:" << *offset << "\n";
   msg << "\tSize: " << getObject()->size << "\n";
+  msg << "\tType of modification: " << type << "\n";
   if (iip->file != "") {
     msg << "File: " << iip->file << "\n";
     msg << "Line: " << iip->line << "\n";
