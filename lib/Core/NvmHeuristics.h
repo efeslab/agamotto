@@ -455,6 +455,7 @@ namespace klee {
 
   /**
    * We keep call stack information with our values, but not flow information.
+   * We forgo a flow-sensitive analysis as it is extremely costly.
    */
   #if 0
   class NvmContextDynamicHeuristic : public NvmHeuristicInfo {
@@ -463,12 +464,17 @@ namespace klee {
       
       /**
        * Since we have context, we can track globals and locals.
+       * 
+       * The context sensitivity gives us an idea of which values are relevant.
+       * In the insensitive version, we have to check a lot of values.
        */
       ValueSet nvmSites_;
       ValueSet activeNvmSites_;
       ValueSet nvmGlobals_;
       struct ContextDesc {
         NvmStackFrameDesc stackFrame;
+        // Describe the input NVM state: args and globals
+
         ValueSet localVolatiles;
       }
 
@@ -502,7 +508,7 @@ namespace klee {
 
       virtual void dump(void) const override;
   };
-  #endif
+  #endif 
   /* #endregion */
 
   /* #region NvmHeuristicBuilder */

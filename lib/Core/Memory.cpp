@@ -638,7 +638,7 @@ void ObjectState::print() const {
 
 uint64_t PersistentState::MaxSize = 4lu * (4096lu);
 
-PersistentState::PersistentState(const ObjectState *os)
+PersistentState::PersistentState(ExecutionState &state, const ObjectState *os)
   : ObjectState(*os),
     cacheLineUpdates(nullptr, nullptr),
     pendingCacheLineUpdates(nullptr, nullptr),
@@ -651,7 +651,6 @@ PersistentState::PersistentState(const ObjectState *os)
   // Set up all the symbolic Arrays we need.
   ArrayCache *arrayCache = getArrayCache();
   const MemoryObject *object = getObject();
-  std::string baseName = object->name;
   uint64_t size = object->parent->getSizeInCacheLines(object->size);
 
   // For initializing values
@@ -659,7 +658,8 @@ PersistentState::PersistentState(const ObjectState *os)
 
   // First, the symbolic cache line tracking array (initialize to persisted).
   Init.assign(size, getPersistedExpr());
-  const Array *cacheLines = arrayCache->CreateArray(baseName + "_cacheLines", size,
+  auto cacheLinesName = getUniqueArrayName(state, "_cacheLines");
+  const Array *cacheLines = arrayCache->CreateArray(cacheLinesName, size,
                                                     &Init[0], &Init[0] + size,
                                                     Expr::Int32 /* domain */,
                                                     Expr::Int8 /* range */);
@@ -668,7 +668,8 @@ PersistentState::PersistentState(const ObjectState *os)
 
   // Set up the root causes symbolic array (initialize to nullptr).
   Init.assign(size, getNullptr());
-  const Array *rootWrites = arrayCache->CreateArray(baseName + "_rootCauseWrites", size,
+  auto rootWritesName = getUniqueArrayName(state, "_rootCauseWrites");
+  const Array *rootWrites = arrayCache->CreateArray(rootWritesName, size,
                                                     &Init[0], &Init[0] + size,
                                                     Expr::Int32 /* domain */,
                                                     rootCauseWidth /* range */);
@@ -676,7 +677,8 @@ PersistentState::PersistentState(const ObjectState *os)
   pendingRootCauseWrites = UpdateList(rootCauseWrites);
 
   Init.assign(size, getNullptr());
-  const Array *rootFlushes = arrayCache->CreateArray(baseName + "_rootCauseFlushes", size,
+  auto rootFlushesName = getUniqueArrayName(state, "_rootCauseFlushes");
+  const Array *rootFlushes = arrayCache->CreateArray(rootFlushesName, size,
                                                      &Init[0], &Init[0] + size,
                                                      Expr::Int32 /* domain */,
                                                      rootCauseWidth /* range */);
@@ -684,7 +686,8 @@ PersistentState::PersistentState(const ObjectState *os)
   pendingRootCauseFlushes = UpdateList(rootCauseFlushes);
 
   // Set up a symbolic integer to act as an "arbitrary offset" into this.
-  const Array *idxArray = arrayCache->CreateArray(baseName + "_idx", 1,
+  auto idxArrayName = getUniqueArrayName(state, "_idx");
+  const Array *idxArray = arrayCache->CreateArray(idxArrayName, 1,
                                                   nullptr, nullptr,
                                                   Expr::Int32,
                                                   Expr::Int32);
@@ -692,6 +695,7 @@ PersistentState::PersistentState(const ObjectState *os)
   // no need to store one as a member variable.
   idxUnbounded = ReadExpr::create(UpdateList(idxArray, nullptr),
                                   ConstantExpr::create(0, idxArray->range));
+  state.addSymbolic(getObject(), idxArray);
 }
 
 PersistentState::PersistentState(const PersistentState &ps)
@@ -1045,6 +1049,21 @@ std::string PersistentState::getAllocInfo(ref<Expr> offset,
   msg << tmp << "\n";
 
   return infoStr;
+}
+
+std::string PersistentState::getUniqueArrayName(ExecutionState &state, 
+                                                const char *suffix) const {
+  static uint64_t id = 0;
+  std::string baseName = getObject()->name + suffix;
+  std::string uniqueName = baseName + "_" + llvm::utostr(++id);
+  assert(id < UINT64_MAX);
+
+  while (!state.arrayNames.insert(uniqueName).second) {
+    uniqueName = baseName + "_" + llvm::utostr(++id);
+    assert(id < UINT64_MAX);
+  }
+
+  return uniqueName;
 }
 
 /* #endregion */

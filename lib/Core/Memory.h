@@ -399,7 +399,7 @@ class PersistentState : public ObjectState {
     /// Create a new persistent object state from the given non-persistent
     /// object state and symbolic bool array of cache lines. Also requires
     /// a symbolic void* array (int64) for root cause.
-    PersistentState(const ObjectState *os);
+    PersistentState(ExecutionState &state, const ObjectState *os);
 
     ObjectState *clone() const override;
 
@@ -500,6 +500,8 @@ class PersistentState : public ObjectState {
     ref<Expr> getCacheLine(ref<Expr> offset) const;
     unsigned numCacheLines() const;
     unsigned cacheLineSize() const;
+
+    std::string getUniqueArrayName(ExecutionState &state, const char *suffix) const;
 };
   
 } // End klee namespace

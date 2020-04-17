@@ -270,8 +270,6 @@ static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
       klee_warning("done!");
     }
   }
-  // FIXME: proper name, not just "data"
-  klee_pmem_mark_persistent(dfile->contents, dfile->size, "pmem_file_data");
   
   if (!__exe_fs.sym_pmem_init_concrete || __exe_fs.sym_pmem_init_to_zero) {
     __setup_pmem_struct_stat(s, dfile, defaults, sname);

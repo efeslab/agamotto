@@ -3903,7 +3903,7 @@ void Executor::executeMarkPersistent(ExecutionState &state,
   assert(os && "Cannot mark unbound MemoryObject persistent");
 
   // Construct a persistent ObjectState and bind it to the memory object.
-  state.addressSpace.bindObject(mo, new PersistentState(os));
+  state.addressSpace.bindObject(mo, new PersistentState(state, os));
 
   /* std::string name; */
   /* mo->getAllocInfo(name); */
