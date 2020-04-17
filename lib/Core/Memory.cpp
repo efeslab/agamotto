@@ -655,7 +655,7 @@ PersistentState::PersistentState(const ObjectState *os)
   uint64_t size = object->parent->getSizeInCacheLines(object->size);
 
   // For initializing values
-  std::vector<ref<ConstantExpr> > Init(size);
+  std::vector<ref<ConstantExpr>> Init(size);
 
   // First, the symbolic cache line tracking array (initialize to persisted).
   Init.assign(size, getPersistedExpr());
@@ -685,9 +685,9 @@ PersistentState::PersistentState(const ObjectState *os)
 
   // Set up a symbolic integer to act as an "arbitrary offset" into this.
   const Array *idxArray = arrayCache->CreateArray(baseName + "_idx", 1,
-                                                       nullptr, nullptr,
-                                                       Expr::Int32,
-                                                       Expr::Int32);
+                                                  nullptr, nullptr,
+                                                  Expr::Int32,
+                                                  Expr::Int32);
   // ReadExpr just copies the UpdateList you give it;
   // no need to store one as a member variable.
   idxUnbounded = ReadExpr::create(UpdateList(idxArray, nullptr),
@@ -771,12 +771,8 @@ void PersistentState::persistCacheLineAtOffset(const ExecutionState &state,
   ref<Expr> cacheLine = getCacheLine(offset);
   pendingCacheLineUpdates.extend(cacheLine, getPersistedExpr());
 
-  // Now update root cause.
-  std::string info = getLocationInfo(state, cacheLine, "persist");
-  if (!allRootLocations[info]) {
-    allRootLocations[info] = nextLocId;
-    nextLocId++;
-  }
+  // llvm::errs() << "persist: " << *offset << "\n";
+  // llvm::errs() << "\t" << getLocationInfo(state, cacheLine, "test") << "\n";
 
   ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, cacheLine, "flush");
   rootCauseFlushes.extend(cacheLine, rootCauseExpr);
@@ -819,7 +815,13 @@ std::unordered_set<std::string>
 PersistentState::getLastFlush(TimingSolver *solver, 
                               ExecutionState &state,
                               ref<Expr> offset) const {
-  return getRootCause(solver, state, rootCauseFlushes, getCacheLine(offset));
+  auto errs = getRootCause(solver, state, rootCauseFlushes, getCacheLine(offset));
+  if (!errs.size()) {
+    // Can be uninitialized.
+    errs.insert(getAllocInfo(offset, "flush (no flushes)"));
+  }
+  
+  return errs;
 }
 
 /**
@@ -855,11 +857,11 @@ ref<Expr> PersistentState::isCacheLinePersisted(unsigned cacheLine,
 
 ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine,
                                                 bool pending) const {
+  // llvm::errs() << "isCacheLinePersisted: " << *cacheLine << "\n";
   auto &updateList = pending ? pendingCacheLineUpdates : cacheLineUpdates;
   ref<Expr> result = ReadExpr::create(updateList,
                                       ZExtExpr::create(cacheLine, Expr::Int32));
-  result = EqExpr::create(result, getPersistedExpr());
-  return result;
+  return EqExpr::create(result, getPersistedExpr());
 }
 
 std::unordered_set<std::string> 
@@ -879,7 +881,7 @@ PersistentState::getRootCause(TimingSolver *solver,
   
   std::unordered_set<std::string> possible;
 
-  llvm::errs() << "getRootCause: " << *cacheLine << "\n";
+  // llvm::errs() << "getRootCause: " << *cacheLine << "\n";
 
   #if 1
   std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, result);
@@ -887,7 +889,7 @@ PersistentState::getRootCause(TimingSolver *solver,
   ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second); 
   assert(!lo.isNull() && !hi.isNull());
   if (lo->getZExtValue() == 0 && hi->getZExtValue() == 0) {
-    llvm::errs() << "all 0\n";
+    // llvm::errs() << "all 0\n";
     return possible;
   }
 
@@ -900,8 +902,8 @@ PersistentState::getRootCause(TimingSolver *solver,
     ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
     ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);  
     assert(!lo.isNull() && !hi.isNull());
-    llvm::errs() << "Range for CL #" << cl << ": [" << lo->getZExtValue() 
-        << ", " << hi->getZExtValue() << "]\n";
+    // llvm::errs() << "Range for CL #" << cl << ": [" << lo->getZExtValue() 
+    //     << ", " << hi->getZExtValue() << "]\n";
     uint64_t loVal = lo->getZExtValue();
     uint64_t hiVal = hi->getZExtValue();
     if (loVal == 0 && hiVal == 0) continue;
@@ -1023,6 +1025,24 @@ std::string PersistentState::getLocationInfo(const ExecutionState &state,
   }
   msg << "Stack: \n";
   state.dumpStack(msg);
+
+  return infoStr;
+}
+
+std::string PersistentState::getAllocInfo(ref<Expr> offset, 
+                                          const char *type) const {
+  std::string infoStr;
+  llvm::raw_string_ostream msg(infoStr);
+  msg << "Persistent Memory Info:\n";
+  msg << "\tName: " << getObject()->name << "\n";
+  msg << "\tAddress: " << llvm::format_hex(getObject()->address, 18) << "\n";
+  msg << "\t\tOffset: " << *offset << "\n";
+  msg << "\tSize: " << getObject()->size << "\n";
+  msg << "\tType of modification: " << type << "\n";
+  msg << "\tAlloc at: ";
+  std::string tmp;
+  getObject()->getAllocInfo(tmp);
+  msg << tmp << "\n";
 
   return infoStr;
 }

@@ -3978,7 +3978,7 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
       }
 
       // Process normally if not yet persisted.
-      if (isAlreadyPersisted.second) {
+      if (goodState) {
         os = goodState->addressSpace.findObject(mo);
         assert(os);
         wos = goodState->addressSpace.getWriteable(mo, os);

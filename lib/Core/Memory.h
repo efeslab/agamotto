@@ -470,6 +470,7 @@ class PersistentState : public ObjectState {
     std::string getLocationInfo(const ExecutionState &state, 
                                 ref<Expr> offset,
                                 const char *type) const;
+    std::string getAllocInfo(ref<Expr> offset, const char *type) const;
     // check from PENDING cache line updates if it's clean or not
     ref<Expr> isOffsetAlreadyPersisted(ref<Expr> offset) const;
 
