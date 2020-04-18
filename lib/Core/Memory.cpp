@@ -898,9 +898,7 @@ PersistentState::getRootCause(TimingSolver *solver,
   }
 
   for (uint64_t cl = 0; cl < numCacheLines(); ++cl) {
-    ref<Expr> clExpr = ConstantExpr::create(cl, rootCauseWidth);
-    ref<Expr> clVal = ReadExpr::create(ul, 
-                                       ZExtExpr::create(clExpr, Expr::Int32));
+    ref<Expr> clVal = ReadExpr::create(ul, ConstantExpr::create(cl, Expr::Int32));
     std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, clVal);
 
     ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
