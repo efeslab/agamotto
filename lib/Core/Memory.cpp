@@ -903,7 +903,7 @@ PersistentState::getRootCause(TimingSolver *solver,
 
     ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
     ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);  
-    assert(!lo.isNull() && !hi.isNull());
+    assert(!lo.isNull() && !hi.isNull() && "FIXME: unhandled solver failure");
     // llvm::errs() << "Range for CL #" << cl << ": [" << lo->getZExtValue() 
     //     << ", " << hi->getZExtValue() << "]\n";
     uint64_t loVal = lo->getZExtValue();
