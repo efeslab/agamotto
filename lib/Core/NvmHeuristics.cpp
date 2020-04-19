@@ -62,7 +62,7 @@ std::shared_ptr<NvmStackFrameDesc> NvmStackFrameDesc::doReturn(void) const {
 }
 
 NvmStackFrameDesc::Shared NvmStackFrameDesc::doCall(Instruction *caller, 
-                                                    Instruction *retLoc) const {
+                                                    Instruction *retLoc) {
   NvmStackFrameDesc desc(shared_from_this(), caller, retLoc);
   return std::make_shared<NvmStackFrameDesc>(desc);
 }
@@ -132,10 +132,10 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(CallInst *ci,
     // errs() << *op << "\n";
     {
       TimerStatIncrementer timer(stats::nvmAndersenTime);
-      bool ret = apa->getResult().getPointsToSet(op, ptsSet);
+      bool ret = andersen_->getResult().getPointsToSet(op, ptsSet);
       assert(ret && "could not get points-to set!");
       for (const Value *ptsTo : ptsSet) {
-        if (!isNvm(apa, ptsTo)) {
+        if (!isNvm(ptsTo)) {
           pointsToNvm = false;
           break;
         }
@@ -169,10 +169,10 @@ NvmValueDesc::Shared NvmValueDesc::doReturn(ReturnInst *i) const {
     TimerStatIncrementer timer(stats::nvmAndersenTime);
     // errs() << *retVal << "\n";
     std::vector<const Value*> ptsTo;
-    bool success = apa->getResult().getPointsToSet(retVal, ptsTo);
+    bool success = andersen_->getResult().getPointsToSet(retVal, ptsTo);
     if (success && ptsTo.size()) {
       // errs() << "doRet " << *retVal << "\n";
-      retDesc = retDesc->updateState(call_site_, isNvm(apa, retVal));
+      retDesc = retDesc->updateState(call_site_, isNvm(retVal));
     } else {
       //  errs() << "doRet doesn't point to a memory object! " << success << " " << ptsTo.size() << "\n";
     }
@@ -185,11 +185,11 @@ bool NvmValueDesc::mayPointTo(const Value *a, const Value *b) const {
   TimerStatIncrementer timer(stats::nvmAndersenTime);
 
   std::vector<const Value*> aSet, bSet, interSet;
-  bool ret = apa->getResult().getPointsToSet(a, aSet);
+  bool ret = andersen_->getResult().getPointsToSet(a, aSet);
   if (!ret) errs() << *a << "\n";
   assert(ret && "could not get points-to set!");
 
-  ret = apa->getResult().getPointsToSet(b, bSet);
+  ret = andersen_->getResult().getPointsToSet(b, bSet);
   if (!ret) errs() << *b << "\n";
   assert(ret && "could not get points-to set!");
 
@@ -212,11 +212,11 @@ bool NvmValueDesc::pointsToIsEq(const Value *a, const Value *b) const {
   TimerStatIncrementer timer(stats::nvmAndersenTime);
 
   std::vector<const Value*> aSet, bSet, interSet;
-  bool ret = apa->getResult().getPointsToSet(a, aSet);
+  bool ret = andersen_->getResult().getPointsToSet(a, aSet);
   if (!ret) errs() << *a << "\n";
   assert(ret && "could not get points-to set!");
 
-  ret = apa->getResult().getPointsToSet(b, bSet);
+  ret = andersen_->getResult().getPointsToSet(b, bSet);
   if (!ret) errs() << *b << "\n";
   assert(ret && "could not get points-to set!");
 
@@ -238,14 +238,14 @@ bool NvmValueDesc::pointsToIsEq(const Value *a, const Value *b) const {
 bool NvmValueDesc::matchesKnownVolatile(const Value *posNvm) const {
   if (isa<GlobalValue>(posNvm)) {
     for (const Value *vol : not_global_nvm_) {
-      if (pointsToIsEq(apa, posNvm, vol)) {
+      if (pointsToIsEq(posNvm, vol)) {
         // errs() << "known is " << *vol << "\n";
         return true;
       }
     }
   } else {
     for (const Value *vol : not_local_nvm_) {
-      if (pointsToIsEq(apa, posNvm, vol)) {
+      if (pointsToIsEq(posNvm, vol)) {
         // errs() << "known is " << *vol << "\n";
         return true;
       }
@@ -272,7 +272,7 @@ bool NvmValueDesc::isNvm(const Value *ptr) const {
   TimerStatIncrementer timer(stats::nvmAndersenTime);
 
   std::vector<const Value*> ptsSet;
-  bool ret = apa->getResult().getPointsToSet(ptr, ptsSet);
+  bool ret = andersen_->getResult().getPointsToSet(ptr, ptsSet);
   if (!ret) errs() << *ptr << "\n";
   assert(ret && "could not get points-to set!");
 
@@ -282,7 +282,7 @@ bool NvmValueDesc::isNvm(const Value *ptr) const {
 
   bool may_point_nvm_alloc = false;
   for (const Value *mm : mmap_calls_) {
-    if (mayPointTo(apa, ptr, mm)) {
+    if (mayPointTo(ptr, mm)) {
       may_point_nvm_alloc = true;
       // errs() << "\t++++may point to NVM!\n\t\t";
       // errs() << *ptr << "\n\t\t" << *mm << "\n";
@@ -305,10 +305,10 @@ bool NvmValueDesc::isNvm(const Value *ptr) const {
       }
       #else
       for (const Value *l : not_local_nvm_) {
-        if (pointsToIsEq(apa, l, ptr)) return false;
+        if (pointsToIsEq(l, ptr)) return false;
       }
       for (const Value *l : not_global_nvm_) {
-        if (pointsToIsEq(apa, l, ptr)) return false;
+        if (pointsToIsEq(l, ptr)) return false;
       }
       
       #endif
@@ -403,49 +403,82 @@ NvmContextDesc::NvmContextDesc(SharedAndersen anders,
     parent(p),
     function(f) {}
 
+NvmContextDesc::NvmContextDesc(SharedAndersen anders, 
+                               Module *m, 
+                               Function *main) 
+  : andersen(anders),
+    stackFrame(NvmStackFrameDesc::empty()),
+    valueState(NvmValueDesc::staticState(anders, m)),
+    parent(nullptr),
+    function(main) { 
+  setPriorities();
+}
+
+uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci, 
+                                                llvm::Function *f) {
+  assert(ci && f && "get out of here with your null parameters");
+  Instruction *retLoc = ci->getNextNode();
+  assert(retLoc && "could not get the return instruction");
+  NvmContextDesc calledCtx(andersen, 
+                            stackFrame->doCall(ci, ci->getNextNode()), 
+                            valueState->doCall(ci, f),
+                            shared_from_this(),
+                            f);
+  auto sharedCtx = std::make_shared<NvmContextDesc>(calledCtx);
+  sharedCtx->setPriorities();
+  contexts[ci] = sharedCtx;
+
+  return sharedCtx->getRootPriority();
+}
 
 uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci) {
   if (Function *f = ci->getCalledFunction()) {
-    Instruction *retLoc = ci->getNextNode();
-    assert(retLoc && "could not get the return instruction");
-    NvmContextDesc calledCtx(andersen, 
-                             stackFrame->doCall(ci, ci->getNextNode()), 
-                             valueState->doCall(ci, f),
-                             shared_from_this(),
-                             f);
-    auto sharedCtx = std::make_shared<NvmContextDesc>(calledCtx);
-    sharedCtx->setPriorities();
-    contexts[ci] = sharedCtx;
-
-    return sharedCtx->getRootPriority();
+    return constructCalledContext(ci, f);
   } 
 
   // We will wait until runtime to resolve this function pointer.
   return 1lu;
 }
 
+bool NvmContextDesc::isaCoreInst(Instruction *i) const {
+  if (NvmHeuristicInfo::isFence(i)) return true;
 
-void NvmContextDesc::setPriorities(void) {
-  // I will accumulate these as I iterate so we don't have to re-iterate over
-  // the entire function as we resolve core instructions.
-  std::list<Instruction*> auxInsts;
-  std::list<BasicBlock*> toProp;
+  if (utils::isFlush(*i)) {
+    CallInst *ci = dyn_cast<CallInst>(i);
+    assert(ci && "flushes should always be some kind of function call");
+    Value *v = ci->getArgOperand(0);
+    assert(v && "no arg0!");
 
-  for (BasicBlock &bb : *f) {
-    for (Instruction &i : bb) {
-      if (isaCoreInst(&i)) {
-        weights[&i] = computeCoreInstWeight(&i);
-        hasCoreWeight = true;
-      } else if (isaAuxInst(&i)) {
-        auxInsts.push_back(&i);
-      }
-    }
-
-    if (succ_empty(bb)) toProp.push_back(&bb);
+    return valueState->isNvm(v);
   }
 
-  for (Instruction *i : auxInsts) {
-    weights[i] = computeAuxInstWeight(i);
+  if (auto *si = dyn_cast<StoreInst>(i)) {
+    return valueState->isNvm(si->getPointerOperand());
+  }
+
+  return false;
+}
+
+bool NvmContextDesc::isaAuxInst(Instruction *i) const {
+  return isa<CallInst>(i) || isa<ReturnInst>(i);
+}
+
+uint64_t NvmContextDesc::computeAuxInstWeight(Instruction *i) const {
+  if (isa<ReturnInst>(i) && parent->hasCoreWeight) {
+    return 1lu;
+  } else if (auto *ci = dyn_cast<CallInst>(i)) {
+    return contexts.at(ci)->getRootPriority();
+  }
+
+  assert(false && "should never reach here!");
+  return 0lu;
+}
+
+void NvmContextDesc::doPriorityPropagation(void) {
+  std::list<BasicBlock*> toProp;
+
+  for (BasicBlock &bb : *function) {
+    if (succ_empty(&bb)) toProp.push_back(&bb);
   }
 
   // Now, we bubble up the priorities.
@@ -454,12 +487,93 @@ void NvmContextDesc::setPriorities(void) {
     BasicBlock *bb = toProp.front();
     toProp.pop_front();
 
-    // Bubble up priorities along the instructions in this basic block.
+    // Just in case this basic block is it's own predecessor or something.
+    traversed.insert(bb);
 
-    // For loops, if the predecessors have already been traversed, but this
-    // block changed the bottom-most priority, then we add it to the list
-    // to repropagate it anyways.
+    // Bubble up priorities along the instructions in this basic block.
+    Instruction *curr = bb->getTerminator();
+    if (!priorities[curr]) {
+      priorities[curr] = weights[curr];
+    }
+
+    while(Instruction *pred = curr->getPrevNode()) {
+      priorities[pred] = weights[pred] + priorities[curr];
+      curr = pred;
+    }
+
+    // Now, we need to get the predecessor basic blocks
+    for (BasicBlock *predBB : predecessors(bb)) {
+      Instruction *pterm = predBB->getTerminator();
+      uint64_t basePriority = priorities[curr];
+      uint64_t currPriority = priorities[pterm];
+      // For loops, if the predecessors have already been traversed, but this
+      // block changed the bottom-most priority, then we add it to the list
+      // to repropagate it anyways.
+      if (!traversed.count(bb) || basePriority != currPriority) {
+        priorities[pterm] = basePriority + weights[pterm];
+        toProp.push_back(predBB);
+      } 
+    }
   }
+}
+
+void NvmContextDesc::setPriorities(void) {
+  // I will accumulate these as I iterate so we don't have to re-iterate over
+  // the entire function as we resolve core instructions.
+  std::list<Instruction*> auxInsts;
+
+  for (BasicBlock &bb : *function) {
+    for (Instruction &i : bb) {
+      if (isaCoreInst(&i)) {
+        weights[&i] = 1lu;
+        hasCoreWeight = true;
+      } else if (isaAuxInst(&i)) {
+        auxInsts.push_back(&i);
+      }
+
+      assert(!isa<InvokeInst>(&i) && "we don't handle this!");
+    }
+  }
+
+  for (Instruction *i : auxInsts) {
+    weights[i] = computeAuxInstWeight(i);
+  }
+
+  doPriorityPropagation();
+}
+
+NvmContextDesc::Shared NvmContextDesc::tryGetNextContext(KInstruction *pc) {
+  if (isa<ReturnInst>(pc->inst)) return parent;
+  if (auto *ci = dyn_cast<CallInst>(pc->inst)) return contexts.at(ci);
+  return shared_from_this();
+}
+
+NvmContextDesc::Shared NvmContextDesc::tryUpdateContext(Value *v, bool isValNvm) {
+  NvmValueDesc::Shared newDesc = valueState->updateState(v, isValNvm);
+  if (valueState->isNvm(v) != newDesc->isNvm(v)) {
+    assert(false && "implement!");
+  }
+
+  return shared_from_this();
+}
+
+NvmContextDesc::Shared NvmContextDesc::tryResolveFnPtr(CallInst *ci, Function *f) {
+  if (contexts.count(ci) && contexts.at(ci)->function == f) {
+    return shared_from_this(); 
+  }
+
+  NvmContextDesc copy = *this;
+
+  copy.constructCalledContext(ci, f);
+  copy.doPriorityPropagation();
+  return std::make_shared<NvmContextDesc>(copy);
+}
+
+std::string NvmContextDesc::str() const {
+  std::stringstream s;
+  s << stackFrame->str() << "\n";
+  s << valueState->str() << "\n";
+  return s.str();
 }
 
 /* #endregion */
@@ -1007,6 +1121,31 @@ void NvmInsensitiveDynamicHeuristic::dump(void) const {
                   "\t%% instructions with priority: %f%%\n",
                   activeNvmSites_.size(), nvmSites_.size(), 
                   pWeights, pPriorities);
+}
+
+/* #endregion */
+
+/* #region NvmContextDynamicHeuristic */
+
+NvmContextDynamicHeuristic::NvmContextDynamicHeuristic(Executor *executor,
+                                                       KFunction *mainFn)
+  : contextDesc(std::make_shared<NvmContextDesc>(createAndersen(*executor->kmodule->module), 
+                                                 executor->kmodule->module.get(),
+                                                 mainFn->function)),
+    curr(mainFn->getKInstruction(mainFn->function->getEntryBlock().getFirstNonPHIOrDbg())) {}
+
+
+void NvmContextDynamicHeuristic::stepState(ExecutionState *es, 
+                                           KInstruction *pc, 
+                                           KInstruction *nextPC) {
+  if (auto *ci = dyn_cast<CallInst>(pc->inst)) {
+    if (pc->inst->getFunction() != nextPC->inst->getFunction()) {
+      contextDesc = contextDesc->tryResolveFnPtr(ci, nextPC->inst->getFunction());
+    }
+  } 
+
+  contextDesc = contextDesc->tryGetNextContext(pc);
+  curr = nextPC;
 }
 
 /* #endregion */

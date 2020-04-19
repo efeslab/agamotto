@@ -60,6 +60,7 @@ bool utils::checkInstrinicInst(const Instruction *i...) {
 bool utils::isFlush(const Instruction &i) {
     return checkInstrinicInst(&i,
                               "clflush",
+                              "clflushopt",
                               "clwb",
                               nullptr) ||
            utils::checkInlineAsmEq(&i,
@@ -68,7 +69,7 @@ bool utils::isFlush(const Instruction &i) {
 }
 
 bool utils::isFence(const Instruction &i) {
-    return checkInstrinicInst(&i, "sfence", nullptr);
+    return checkInstrinicInst(&i, "sfence", "mfence", nullptr);
 }
 
 Value* utils::getPtrLoc(Value *v) {

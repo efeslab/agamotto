@@ -1990,6 +1990,11 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     Function *f = getTargetFunction(fp, state);
     InlineAsm *ia = nullptr;
 
+    // (iangneal): It helps NVM heuristics to resolve function pointers.
+    if (state.nvmInfo) {
+      state.nvmInfo->resolveFunctionCall(ki, f);
+    }
+
     if ((ia = dyn_cast<InlineAsm>(fp))) {
       // (iangneal): there's some inline assembly we want to run!
       // CPUID is treated as a call that returns an array which is then

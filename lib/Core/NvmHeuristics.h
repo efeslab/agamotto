@@ -110,7 +110,7 @@ namespace klee {
       NvmStackFrameDesc::Shared doReturn(void) const;
 
       NvmStackFrameDesc::Shared doCall(llvm::Instruction *caller, 
-                                       llvm::Instruction *retLoc) const;
+                                       llvm::Instruction *retLoc);
 
       std::string str(void) const;
 
@@ -300,21 +300,21 @@ namespace klee {
        * Generally used for generating contexts for calls.
        */
       NvmContextDesc(SharedAndersen anders,
-                     NvmStackFrameDesc stack, 
-                     NvmValueDesc initialArgs,
+                     NvmStackFrameDesc::Shared stack, 
+                     NvmValueDesc::Shared initialArgs,
                      NvmContextDesc::Shared p,
                      llvm::Function *f);
 
       /**
        * Returns the priority of the subcontext.
        */
+      uint64_t constructCalledContext(llvm::CallInst *ci, llvm::Function *f);
       uint64_t constructCalledContext(llvm::CallInst *ci);
 
       /**
        * Core instructions are instructions that impact NVM
        */
       bool isaCoreInst(llvm::Instruction *i) const;
-      uint64_t computeCoreInstWeight(llvm::Instruction *i);
 
       /**
        * Auxiliary instructions are instructions that have weight as a 
@@ -323,12 +323,13 @@ namespace klee {
        * For this version of the heuristic, this will just be call and return
        * instructions.
        */
-      bool isaAuxInst(llvm::Instruction *i);
-      uint64_t computeAuxInstWeight(llvm::Instruction *i);
+      bool isaAuxInst(llvm::Instruction *i) const;
+      uint64_t computeAuxInstWeight(llvm::Instruction *i) const;
 
       /**
        * After this, the context should be fully valid.
        */
+      void doPriorityPropagation(void);
       void setPriorities(void);
 
     public:
@@ -343,25 +344,31 @@ namespace klee {
        * Gets the next context if the given PC is a call or return instruction.
        * Otherwise, returns this.
        */
-      NvmContextDesc::Shared tryGetNextContext(KInstruction *pc) const;
+      NvmContextDesc::Shared tryGetNextContext(KInstruction *pc);
 
       /**
        * Gets the resulting context of updating the state. If updating the state
        * does not cause any change in priority, returns this.
        */
-      NvmContextDesc::Shared tryUpdateContext(llvm::Value *v, bool isNvm) const;
+      NvmContextDesc::Shared tryUpdateContext(llvm::Value *v, bool isNvm);
 
       NvmContextDesc::Shared tryResolveFnPtr(llvm::CallInst *ci, 
-                                             llvm::Function *f) const;
+                                             llvm::Function *f);
 
       /**
        * Gets the priority at the root of the function, i.e. at the first 
        * instruction.
        */
       uint64_t getRootPriority(void) const {
-        return priorities.at(f->getEntryBlock().getFirstNonPHIOrDbg());
+        return priorities.at(function->getEntryBlock().getFirstNonPHIOrDbg());
       }
-  }
+
+      uint64_t getPriority(KInstruction *pc) const {
+        return priorities.at(pc->inst);
+      }
+
+      std::string str() const;
+  };
 
   /* #endregion */
 
@@ -400,6 +407,11 @@ namespace klee {
        * May change one of the current states, or could not.
        */
       virtual void updateCurrentState(ExecutionState *es, KInstruction *pc, bool isNvm) = 0;
+
+      /**
+       * Resolve a function call. Useful for function pointer shenanigans.
+       */
+      virtual void resolveFunctionCall(KInstruction *pc, llvm::Function *f) {}
 
       /**
        * Advance the current state, if we can.
@@ -568,17 +580,8 @@ namespace klee {
     friend class NvmHeuristicBuilder;
     protected:
       
-      /**
-       * Since we have context, we can track globals and locals.
-       * 
-       * The context sensitivity gives us an idea of which values are relevant.
-       * In the insensitive version, we have to check a lot of values.
-       */
-      ValueSet nvmSites_;
-      ValueSet activeNvmSites_;
-      ValueSet nvmGlobals_;
-
-      
+      NvmContextDesc::Shared contextDesc;
+      KInstruction *curr;
 
       /**
        * We can map a function and it's context to a priority value. This makes
@@ -587,18 +590,9 @@ namespace klee {
 
       NvmContextDynamicHeuristic(Executor *executor, KFunction *mainFn);
 
-      virtual const ValueSet &getCurrentNvmSites() const override { 
-        return activeNvmSites_;
-      }
+      virtual void computePriority() override {}
 
-      /**
-       * Since we track volatiles, we know something modifies NVM if:
-       * - It can point to an active NVM allocation.
-       * - There is no known volatile that has the same points-to set.
-       */
-      virtual bool modifiesNvm(llvm::Instruction *i) const override;
-
-      virtual bool needsRecomputation() const override;
+      virtual bool needsRecomputation() const override { return false; }
 
     public:
 
@@ -606,14 +600,27 @@ namespace klee {
 
       virtual ~NvmContextDynamicHeuristic() {}
 
+      virtual uint64_t getCurrentPriority(void) const override {
+        return contextDesc->getPriority(curr);
+      }
+
       /**
        * May change one of the current states, or could not.
        */
       virtual void updateCurrentState(ExecutionState *es, 
                                       KInstruction *pc, 
-                                      bool isNvm) override;
+                                      bool isNvm) override {
+        contextDesc = contextDesc->tryUpdateContext(pc->inst, isNvm);
+      }
 
-      virtual void dump(void) const override;
+      virtual void stepState(ExecutionState *es, 
+                             KInstruction *pc, 
+                             KInstruction *nextPC) override;
+
+      virtual void dump(void) const override {
+        llvm::errs() << "NvmContext: " << contextDesc->str() << "\n";
+        llvm::errs() << "Current instruction: " << *curr->inst << "\n"; 
+      }
   };
   /* #endregion */
 
@@ -665,6 +672,7 @@ namespace klee {
             ptr = new NvmInsensitiveDynamicHeuristic(executor, main);
             break;
           case ContextDynamic:
+            ptr = new NvmContextDynamicHeuristic(executor, main);
           default:
             assert(false && "unsupported!");
             break;
@@ -688,11 +696,16 @@ namespace klee {
         }
 
         if (auto sptr = dynamic_cast<const NvmStaticHeuristic*>(info.get())) {
+          // Since it's never updated, we don't have to copy it. Just share.
           return info;
         }
 
         if (auto iptr = dynamic_cast<const NvmInsensitiveDynamicHeuristic*>(info.get())) {
           ptr = new NvmInsensitiveDynamicHeuristic(*iptr);
+        }
+
+        if (auto cptr = dynamic_cast<const NvmContextDynamicHeuristic*>(info.get())) {
+          ptr = new NvmContextDynamicHeuristic(*cptr);
         }
 
         assert(ptr && "null!");
