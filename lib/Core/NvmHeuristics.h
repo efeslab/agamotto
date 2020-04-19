@@ -66,6 +66,7 @@ namespace klee {
    */
   class Executor;
   class ExecutionState;
+  class NvmContextDynamicHeuristic;
   class NvmHeuristicBuilder; // Defined at the end
 
   typedef std::shared_ptr<AndersenAAWrapperPass> SharedAndersen;
@@ -79,7 +80,7 @@ namespace klee {
    * All we need to do is to store the return instruction, as we will inherit
    * the value state from the return instruction.
    */
-  class NvmStackFrameDesc : std::enable_shared_from_this<NvmStackFrameDesc> {
+  class NvmStackFrameDesc : public std::enable_shared_from_this<NvmStackFrameDesc> {
     public:
       typedef std::shared_ptr<NvmStackFrameDesc> Shared;
     private:
@@ -117,7 +118,7 @@ namespace klee {
       void dump(void) const { llvm::errs() << str() << "\n"; }
 
       static NvmStackFrameDesc::Shared empty() { 
-        return std::make_shared<NvmStackFrameDesc>(NvmStackFrameDesc()); 
+        return NvmStackFrameDesc::Shared(new NvmStackFrameDesc()); 
       }
 
       friend bool operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
@@ -148,13 +149,14 @@ namespace klee {
       SharedAndersen andersen_;
       // Here we track mmap locations to make weight calculation easier. Whether
       // or not 
-      std::unordered_set<llvm::Value*> mmap_calls_;
+      std::unordered_set<const llvm::Value*> mmap_calls_;
 
       /**
        * We conservatively assume that any modification site that points to one
        * of the "mmap" calls is an NVM-modifying instruction
        * 
-       * We count do global and local to avoid propagating unnecessary 
+       * We count do global and local to avoid propagating unnecessary local 
+       * variables when we go to the next context.
        */
       std::unordered_set<llvm::Value*> not_local_nvm_, not_global_nvm_;
 
@@ -269,6 +271,7 @@ namespace klee {
     public: 
       typedef std::shared_ptr<NvmContextDesc> Shared;
     private:
+      friend class NvmContextDynamicHeuristic;
       SharedAndersen andersen;
 
       NvmStackFrameDesc::Shared stackFrame;
@@ -324,7 +327,7 @@ namespace klee {
        * instructions.
        */
       bool isaAuxInst(llvm::Instruction *i) const;
-      uint64_t computeAuxInstWeight(llvm::Instruction *i) const;
+      uint64_t computeAuxInstWeight(llvm::Instruction *i);
 
       /**
        * After this, the context should be fully valid.
@@ -344,7 +347,8 @@ namespace klee {
        * Gets the next context if the given PC is a call or return instruction.
        * Otherwise, returns this.
        */
-      NvmContextDesc::Shared tryGetNextContext(KInstruction *pc);
+      NvmContextDesc::Shared tryGetNextContext(KInstruction *pc, 
+                                               KInstruction *nextPC);
 
       /**
        * Gets the resulting context of updating the state. If updating the state
@@ -367,6 +371,10 @@ namespace klee {
         return priorities.at(pc->inst);
       }
 
+      NvmContextDesc::Shared dup(void) const {
+        return std::make_shared<NvmContextDesc>(*this);
+      }
+
       std::string str() const;
   };
 
@@ -384,20 +392,12 @@ namespace klee {
 
       typedef std::unordered_set<const llvm::Value*> ValueSet;
       typedef std::vector<const llvm::Value*> ValueVector;
-
-      static SharedAndersen createAndersen(llvm::Module &m);
-      static ValueSet getNvmAllocationSites(llvm::Module *m, const SharedAndersen &ander);
       
       virtual void computePriority() = 0;
 
       virtual bool needsRecomputation() const = 0;
 
     public:
-
-      static bool isNvmAllocationSite(llvm::Module *m, const llvm::Value *v);
-      static bool isStore(llvm::Instruction *i);
-      static bool isFlush(llvm::Instruction *i);
-      static bool isFence(llvm::Instruction *i);
     
       virtual ~NvmHeuristicInfo() = 0;
 
@@ -464,7 +464,7 @@ namespace klee {
       }
 
       virtual bool mayHaveWeight(llvm::Instruction *i) const {
-        return isStore(i) || isFlush(i) || isFence(i) || isNvmAllocSite(i);
+        return isa<llvm::StoreInst>(i) || utils::isFlush(i) || utils::isFence(i) || isNvmAllocSite(i);
       }
 
       virtual const ValueSet &getCurrentNvmSites() const { return nvmSites_; }
@@ -590,7 +590,9 @@ namespace klee {
 
       NvmContextDynamicHeuristic(Executor *executor, KFunction *mainFn);
 
-      virtual void computePriority() override {}
+      virtual void computePriority() override {
+        contextDesc->setPriorities();
+      }
 
       virtual bool needsRecomputation() const override { return false; }
 
@@ -618,8 +620,20 @@ namespace klee {
                              KInstruction *nextPC) override;
 
       virtual void dump(void) const override {
+        uint64_t nonZeroWeights = 0, nonZeroPriorities = 0;
+
+        for (const auto &p : contextDesc->weights) 
+          nonZeroWeights += (p.second > 0);
+        for (const auto &p : contextDesc->priorities) 
+          nonZeroPriorities += (p.second > 0);
+
+        double pWeights = 100.0 * ((double)nonZeroWeights / (double)contextDesc->weights.size());
+        double pPriorities = 100.0 * ((double)nonZeroPriorities / (double)contextDesc->priorities.size());
+
         llvm::errs() << "NvmContext: " << contextDesc->str() << "\n";
-        llvm::errs() << "Current instruction: " << *curr->inst << "\n"; 
+        llvm::errs() << "\tCurrent instruction: " << *curr->inst << "\n"; 
+        llvm::errs() << "\t% insts with weight: " << pWeights << "%\n";
+        llvm::errs() << "\t% insts with priority: " << pPriorities << "%\n";
       }
   };
   /* #endregion */
@@ -673,6 +687,7 @@ namespace klee {
             break;
           case ContextDynamic:
             ptr = new NvmContextDynamicHeuristic(executor, main);
+            break;
           default:
             assert(false && "unsupported!");
             break;

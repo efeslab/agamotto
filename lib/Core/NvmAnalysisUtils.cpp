@@ -1,4 +1,6 @@
 #include "NvmAnalysisUtils.h"
+#include "klee/TimerStatIncrementer.h"
+#include "CoreStats.h"
 
 using namespace klee;
 using namespace llvm;
@@ -57,19 +59,41 @@ bool utils::checkInstrinicInst(const Instruction *i...) {
     return false;
 }
 
-bool utils::isFlush(const Instruction &i) {
-    return checkInstrinicInst(&i,
-                              "clflush",
-                              "clflushopt",
-                              "clwb",
-                              nullptr) ||
-           utils::checkInlineAsmEq(&i,
-                   ".byte 0x66; clflush $0",
-                   ".byte 0x66; xsaveopt $0", nullptr);
+bool utils::isFlush(const Instruction *i) {
+  if (const CallInst *ci = dyn_cast<CallInst>(i)) {
+    const Function *f = ci->getCalledFunction();
+    if (f && f->isDeclaration()) {
+      switch(f->getIntrinsicID()) {
+        case Intrinsic::x86_sse2_clflush:
+        case Intrinsic::x86_clflushopt:
+        case Intrinsic::x86_clwb:
+          return true;
+        default:
+          break;
+      }
+    }
+  }
+
+  return false;
 }
 
-bool utils::isFence(const Instruction &i) {
-    return checkInstrinicInst(&i, "sfence", "mfence", nullptr);
+bool utils::isFence(const Instruction *i) {
+  if (const CallInst *ci = dyn_cast<CallInst>(i)) {
+    const Function *f = ci->getCalledFunction();
+    if (f && f->isDeclaration()) {
+      switch(f->getIntrinsicID()) {
+        case Intrinsic::x86_sse_sfence:
+        case Intrinsic::x86_sse2_mfence:
+          return true;
+        default:
+          break;
+      }
+    }
+  } else if (isa<AtomicRMWInst>(i)) {
+    return true;
+  }
+
+  return false;
 }
 
 Value* utils::getPtrLoc(Value *v) {
@@ -143,7 +167,7 @@ void utils::getModifiers(const Value* ptr, unordered_set<const Value*> &s) {
             }
         }
 
-        if (isFlush(*dyn_cast<Instruction>(u))) {
+        if (isFlush(dyn_cast<Instruction>(u))) {
             s.insert(u);
         }
     }
@@ -234,6 +258,51 @@ unordered_set<const Value*> utils::getPtrsFromLoc(const Value *ptr_loc) {
   }
 
   return s;
+}
+
+std::shared_ptr<AndersenAAWrapperPass> utils::createAndersen(llvm::Module &m) {
+  TimerStatIncrementer timer(stats::nvmAndersenTime);
+
+  auto anders = std::make_shared<AndersenAAWrapperPass>();
+  assert(!anders->runOnModule(m) && "Analysis pass should return false!");
+
+  return anders;
+}
+
+std::unordered_set<const llvm::Value*> 
+utils::getNvmAllocationSites(Module *m, const std::shared_ptr<AndersenAAWrapperPass> &ander) {
+  std::vector<const llvm::Value*> all;
+  std::unordered_set<const llvm::Value*> onlyNvm;
+  ander->getResult().getAllAllocationSites(all);
+  
+  for (const Value *v : all) {
+    if (utils::isNvmAllocationSite(m, v)) {
+      // errs() << "\tNVM: " << *v << "\n";
+      onlyNvm.insert(v);
+    }
+  }
+
+  return onlyNvm;
+}
+
+bool utils::isNvmAllocationSite(Module *m, const llvm::Value *v) {
+  if (const CallInst *ci = dyn_cast<CallInst>(v)) {
+    if (const Function *f = ci->getCalledFunction()) {
+      if (f == m->getFunction("klee_pmem_mark_persistent") || 
+          f == m->getFunction("klee_pmem_alloc_pmem")) return true;
+      
+      if (f == m->getFunction("mmap") || f == m->getFunction("mmap64")) {
+        Value *arg = ci->getArgOperand(4);
+        if (Constant *cs = dyn_cast<Constant>(arg)) {
+          const APInt &ap = cs->getUniqueInteger();
+          if ((int32_t)ap.getLimitedValue() == -1) return false;
+        }
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2: */

@@ -29,6 +29,8 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/IR/Dominators.h"
 
+#include "AndersenAA.h"
+
 namespace klee {
 namespace utils {
 
@@ -63,13 +65,13 @@ namespace utils {
    *
    * TODO: generalize for non-x86-based systems.
    */
-  bool isFlush(const llvm::Instruction &i);
+  bool isFlush(const llvm::Instruction *i);
 
   /** Returns true if any instruction represents a store-fencing instruction.
    *
    * TODO: generalize for non-x86-based systems.
    */
-  bool isFence(const llvm::Instruction &i);
+  bool isFence(const llvm::Instruction *i);
 
 
   /** For a pointer of type T*, find where the pointer is stored, aka a value
@@ -160,6 +162,14 @@ namespace utils {
    * Do we need this and getPtrsFromStoredLocs?
    */
   std::unordered_set<const llvm::Value*> getPtrsFromLoc(const llvm::Value*);
+
+  std::shared_ptr<AndersenAAWrapperPass> createAndersen(llvm::Module &m);
+
+  std::unordered_set<const llvm::Value*> 
+  getNvmAllocationSites(llvm::Module *m, 
+                        const std::shared_ptr<AndersenAAWrapperPass> &ander);
+
+  bool isNvmAllocationSite(llvm::Module *m, const llvm::Value *v);
 }
 }
 #endif //__NVM_ANALYSIS_UTILS_H__

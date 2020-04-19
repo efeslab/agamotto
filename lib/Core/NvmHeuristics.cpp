@@ -105,9 +105,9 @@ bool klee::operator!=(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs
 
 /* #region NvmValueDesc */
 
-std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(CallInst *ci, 
-                                                   Function *f) const {
+NvmValueDesc::Shared NvmValueDesc::doCall(CallInst *ci, Function *f) const {
   NvmValueDesc newDesc;
+  newDesc.andersen_ = andersen_;
   newDesc.caller_values_ = std::make_shared<NvmValueDesc>(*this);
   newDesc.call_site_ = ci;
   newDesc.mmap_calls_ = mmap_calls_;
@@ -273,9 +273,10 @@ bool NvmValueDesc::isNvm(const Value *ptr) const {
 
   std::vector<const Value*> ptsSet;
   bool ret = andersen_->getResult().getPointsToSet(ptr, ptsSet);
-  if (!ret) errs() << *ptr << "\n";
-  assert(ret && "could not get points-to set!");
-
+  if (!ret) {
+    return false;
+  }
+  
   if (!mmap_calls_.size()) {
     errs() << "\t!!!!cannot point because no calls!\n"; 
   }
@@ -325,25 +326,7 @@ bool NvmValueDesc::isNvm(const Value *ptr) const {
 NvmValueDesc::Shared NvmValueDesc::staticState(SharedAndersen apa, llvm::Module *m) {
   NvmValueDesc desc;
   desc.andersen_ = apa;
-  #define N_FN 3
-  static const char *fn_names[N_FN] = {"mmap", "mmap64", "klee_pmem_mark_persistent"};
-  static Function* mmaps[N_FN];
-  for (uint64_t i = 0; i < N_FN; ++i) {
-    mmaps[i] = m->getFunction(fn_names[i]);
-    if (!mmaps[i]) {
-      klee_warning("Could not find function %s! (no calls)", fn_names[i]);
-    }
-  }
-  
-  for (Function *mmap : mmaps) {
-    if (!mmap) {
-      continue;
-    }
-
-    for (User *u : mmap->users()) {
-      desc.mmap_calls_.insert(u);
-    }
-  }
+  desc.mmap_calls_ = utils::getNvmAllocationSites(m, apa);
 
   assert(desc.mmap_calls_.size() && "No mmap calls?");
 
@@ -354,7 +337,7 @@ std::string NvmValueDesc::str(void) const {
   std::stringstream s;
   s << "Value State:\n";
   s << "\n\tNumber of nvm allocation sites: " << mmap_calls_.size();
-  for (Value *v : mmap_calls_) {
+  for (const Value *v : mmap_calls_) {
     std::string tmp;
     llvm::raw_string_ostream rs(tmp);
     v->print(rs);
@@ -410,20 +393,19 @@ NvmContextDesc::NvmContextDesc(SharedAndersen anders,
     stackFrame(NvmStackFrameDesc::empty()),
     valueState(NvmValueDesc::staticState(anders, m)),
     parent(nullptr),
-    function(main) { 
-  setPriorities();
-}
+    function(main) {}
 
 uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci, 
                                                 llvm::Function *f) {
   assert(ci && f && "get out of here with your null parameters");
   Instruction *retLoc = ci->getNextNode();
   assert(retLoc && "could not get the return instruction");
+  if (!ci->getNextNode()) errs() << *ci << "\n";
   NvmContextDesc calledCtx(andersen, 
-                            stackFrame->doCall(ci, ci->getNextNode()), 
-                            valueState->doCall(ci, f),
-                            shared_from_this(),
-                            f);
+                           stackFrame->doCall(ci, ci->getNextNode()), 
+                           valueState->doCall(ci, f),
+                           shared_from_this(),
+                           f);
   auto sharedCtx = std::make_shared<NvmContextDesc>(calledCtx);
   sharedCtx->setPriorities();
   contexts[ci] = sharedCtx;
@@ -433,7 +415,12 @@ uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci,
 
 uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci) {
   if (Function *f = ci->getCalledFunction()) {
-    return constructCalledContext(ci, f);
+    if (!stackFrame->containsFunction(f)) {
+      return constructCalledContext(ci, f);
+    } else {
+      // Recursion risk.
+      return hasCoreWeight ? 1lu : 0lu;
+    }
   } 
 
   // We will wait until runtime to resolve this function pointer.
@@ -441,9 +428,9 @@ uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci) {
 }
 
 bool NvmContextDesc::isaCoreInst(Instruction *i) const {
-  if (NvmHeuristicInfo::isFence(i)) return true;
+  if (utils::isFence(i)) return true;
 
-  if (utils::isFlush(*i)) {
+  if (utils::isFlush(i)) {
     CallInst *ci = dyn_cast<CallInst>(i);
     assert(ci && "flushes should always be some kind of function call");
     Value *v = ci->getArgOperand(0);
@@ -460,14 +447,27 @@ bool NvmContextDesc::isaCoreInst(Instruction *i) const {
 }
 
 bool NvmContextDesc::isaAuxInst(Instruction *i) const {
-  return isa<CallInst>(i) || isa<ReturnInst>(i);
+  if (auto *ci = dyn_cast<CallInst>(i)) {
+    if (auto *f = ci->getCalledFunction()) {
+      if (f->isDeclaration() || f->isIntrinsic()) return false;
+
+      // Has function body
+      return true;
+    }
+
+    // Is a function pointer
+    return true;
+  }
+
+  return isa<ReturnInst>(i);
 }
 
-uint64_t NvmContextDesc::computeAuxInstWeight(Instruction *i) const {
-  if (isa<ReturnInst>(i) && parent->hasCoreWeight) {
-    return 1lu;
+uint64_t NvmContextDesc::computeAuxInstWeight(Instruction *i) {
+  if (isa<ReturnInst>(i)) {
+    if (parent && parent->hasCoreWeight) return 1lu;
+    return 0lu;
   } else if (auto *ci = dyn_cast<CallInst>(i)) {
-    return contexts.at(ci)->getRootPriority();
+    return constructCalledContext(ci);
   }
 
   assert(false && "should never reach here!");
@@ -504,12 +504,12 @@ void NvmContextDesc::doPriorityPropagation(void) {
     // Now, we need to get the predecessor basic blocks
     for (BasicBlock *predBB : predecessors(bb)) {
       Instruction *pterm = predBB->getTerminator();
-      uint64_t basePriority = priorities[curr];
+      uint64_t basePriority = weights[pterm] + priorities[curr];
       uint64_t currPriority = priorities[pterm];
       // For loops, if the predecessors have already been traversed, but this
       // block changed the bottom-most priority, then we add it to the list
       // to repropagate it anyways.
-      if (!traversed.count(bb) || basePriority != currPriority) {
+      if (!traversed.count(predBB) || (basePriority && !currPriority)) {
         priorities[pterm] = basePriority + weights[pterm];
         toProp.push_back(predBB);
       } 
@@ -521,6 +521,7 @@ void NvmContextDesc::setPriorities(void) {
   // I will accumulate these as I iterate so we don't have to re-iterate over
   // the entire function as we resolve core instructions.
   std::list<Instruction*> auxInsts;
+  errs() << stackFrame->str() << "\n";
 
   for (BasicBlock &bb : *function) {
     for (Instruction &i : bb) {
@@ -542,9 +543,26 @@ void NvmContextDesc::setPriorities(void) {
   doPriorityPropagation();
 }
 
-NvmContextDesc::Shared NvmContextDesc::tryGetNextContext(KInstruction *pc) {
-  if (isa<ReturnInst>(pc->inst)) return parent;
-  if (auto *ci = dyn_cast<CallInst>(pc->inst)) return contexts.at(ci);
+NvmContextDesc::Shared NvmContextDesc::tryGetNextContext(KInstruction *pc,
+                                                         KInstruction *nextPC) {
+  if (auto *ri = dyn_cast<ReturnInst>(pc->inst)) {
+    auto retDesc = parent->dup();
+    retDesc->valueState = valueState->doReturn(ri);
+    return retDesc;
+  }
+
+  if (auto *ci = dyn_cast<CallInst>(pc->inst)) {
+    if (pc->inst->getNextNode() != nextPC->inst) {
+      errs() << "**********" << *pc->inst << "\n" << *nextPC->inst << "\n";
+      if (!contexts.count(ci)) {
+        constructCalledContext(ci, nextPC->inst->getFunction());
+        setPriorities();
+        return contexts.at(ci);
+      }
+      return contexts.at(ci);
+    }
+  }
+
   return shared_from_this();
 }
 
@@ -562,11 +580,11 @@ NvmContextDesc::Shared NvmContextDesc::tryResolveFnPtr(CallInst *ci, Function *f
     return shared_from_this(); 
   }
 
-  NvmContextDesc copy = *this;
+  auto copy = dup();
 
-  copy.constructCalledContext(ci, f);
-  copy.doPriorityPropagation();
-  return std::make_shared<NvmContextDesc>(copy);
+  copy->constructCalledContext(ci, f);
+  copy->doPriorityPropagation();
+  return copy;
 }
 
 std::string NvmContextDesc::str() const {
@@ -586,91 +604,6 @@ std::string NvmContextDesc::str() const {
 
 NvmHeuristicInfo::~NvmHeuristicInfo() {}
 
-SharedAndersen NvmHeuristicInfo::createAndersen(llvm::Module &m) {
-  TimerStatIncrementer timer(stats::nvmAndersenTime);
-
-  SharedAndersen anders = std::make_shared<AndersenAAWrapperPass>();
-  assert(!anders->runOnModule(m) && "Analysis pass should return false!");
-
-  return anders;
-}
-
-NvmHeuristicInfo::ValueSet NvmHeuristicInfo::getNvmAllocationSites(Module *m, const SharedAndersen &ander) {
-  NvmHeuristicInfo::ValueVector all;
-  NvmHeuristicInfo::ValueSet onlyNvm;
-  ander->getResult().getAllAllocationSites(all);
-  
-  for (const Value *v : all) {
-    if (isNvmAllocationSite(m, v)) {
-      // errs() << "\tNVM: " << *v << "\n";
-      onlyNvm.insert(v);
-    }
-  }
-
-  return onlyNvm;
-}
-
-bool NvmHeuristicInfo::isNvmAllocationSite(Module *m, const llvm::Value *v) {
-  if (const CallInst *ci = dyn_cast<CallInst>(v)) {
-    if (const Function *f = ci->getCalledFunction()) {
-      if (f == m->getFunction("klee_pmem_mark_persistent") || 
-          f == m->getFunction("klee_pmem_alloc_pmem")) return true;
-      
-      if (f == m->getFunction("mmap") || f == m->getFunction("mmap64")) {
-        Value *arg = ci->getArgOperand(4);
-        if (Constant *cs = dyn_cast<Constant>(arg)) {
-          const APInt &ap = cs->getUniqueInteger();
-          if ((int32_t)ap.getLimitedValue() == -1) return false;
-        }
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-bool NvmHeuristicInfo::isStore(llvm::Instruction *i) {
-  return isa<StoreInst>(i);
-}
-
-bool NvmHeuristicInfo::isFlush(llvm::Instruction *i) {
-  if (CallInst *ci = dyn_cast<CallInst>(i)) {
-    Function *f = ci->getCalledFunction();
-    if (f && f->isDeclaration()) {
-      switch(f->getIntrinsicID()) {
-        case Intrinsic::x86_sse2_clflush:
-        case Intrinsic::x86_clflushopt:
-        case Intrinsic::x86_clwb:
-          return true;
-        default:
-          break;
-      }
-    }
-  }
-
-  return false;
-}
-
-bool NvmHeuristicInfo::isFence(llvm::Instruction *i) {
-  if (CallInst *ci = dyn_cast<CallInst>(i)) {
-    Function *f = ci->getCalledFunction();
-    if (f && f->isDeclaration()) {
-      switch(f->getIntrinsicID()) {
-        case Intrinsic::x86_sse_sfence:
-        case Intrinsic::x86_sse2_mfence:
-          return true;
-        default:
-          break;
-      }
-    }
-  } else if (isa<AtomicRMWInst>(i)) {
-    return true;
-  }
-
-  return false;
-}
-
 /* #endregion */
 
 
@@ -678,17 +611,17 @@ bool NvmHeuristicInfo::isFence(llvm::Instruction *i) {
 
 NvmStaticHeuristic::NvmStaticHeuristic(Executor *executor, KFunction *mainFn) 
   : executor_(executor),
-    analysis_(createAndersen(*executor->kmodule->module)),
+    analysis_(utils::createAndersen(*executor->kmodule->module)),
     weights_(nullptr),
     priorities_(nullptr),
     curr_(mainFn->function->getEntryBlock().getFirstNonPHIOrDbgOrLifetime()),
     module_(executor->kmodule->module.get()),
-    nvmSites_(getNvmAllocationSites(module_, analysis_)) {}
+    nvmSites_(utils::getNvmAllocationSites(module_, analysis_)) {}
 
 bool NvmStaticHeuristic::modifiesNvm(Instruction *i) const {
-  if (isStore(i) || isFlush(i)) {
+  if (isa<StoreInst>(i) || utils::isFlush(i)) {
     Value *v = dyn_cast<Value>(i);
-    if (isFlush(i)) {
+    if (utils::isFlush(i)) {
       assert(isa<CallInst>(i));
       v = dyn_cast<CallInst>(i)->getArgOperand(0);
     }
@@ -726,7 +659,7 @@ uint64_t NvmStaticHeuristic::computeInstWeight(Instruction *i) const {
 
   if (modifiesNvm(i) || isNvmAllocSite(i)) {
     return 1u;
-  } else if (isFence(i) && getCurrentNvmSites().size()) {
+  } else if (utils::isFence(i) && getCurrentNvmSites().size()) {
     return 1u;
   }
 
@@ -976,7 +909,7 @@ void NvmStaticHeuristic::dump(void) const {
   double pWeights = 100.0 * ((double)nonZeroWeights / (double)weights_->size());
   double pPriorities = 100.0 * ((double)nonZeroPriorities / (double)priorities_->size());
 
-  for (auto *v : getNvmAllocationSites(executor_->kmodule->module.get(), analysis_)) {
+  for (auto *v : utils::getNvmAllocationSites(executor_->kmodule->module.get(), analysis_)) {
     errs() << *v << "\n";
   }
 
@@ -1008,9 +941,9 @@ bool NvmInsensitiveDynamicHeuristic::needsRecomputation() const {
 }
 
 bool NvmInsensitiveDynamicHeuristic::modifiesNvm(Instruction *i) const {
-  if (isStore(i) || isFlush(i)) {
+  if (isa<StoreInst>(i) || utils::isFlush(i)) {
     Value *v = dyn_cast<Value>(i);
-    if (isFlush(i)) {
+    if (utils::isFlush(i)) {
       assert(isa<CallInst>(i));
       v = dyn_cast<CallInst>(i)->getArgOperand(0);
     }
@@ -1111,7 +1044,7 @@ void NvmInsensitiveDynamicHeuristic::dump(void) const {
   double pWeights = 100.0 * ((double)nonZeroWeights / (double)weights_->size());
   double pPriorities = 100.0 * ((double)nonZeroPriorities / (double)priorities_->size());
 
-  for (auto *v : getNvmAllocationSites(executor_->kmodule->module.get(), analysis_)) {
+  for (auto *v : utils::getNvmAllocationSites(executor_->kmodule->module.get(), analysis_)) {
     errs() << *v << "\n";
   }
 
@@ -1129,7 +1062,7 @@ void NvmInsensitiveDynamicHeuristic::dump(void) const {
 
 NvmContextDynamicHeuristic::NvmContextDynamicHeuristic(Executor *executor,
                                                        KFunction *mainFn)
-  : contextDesc(std::make_shared<NvmContextDesc>(createAndersen(*executor->kmodule->module), 
+  : contextDesc(std::make_shared<NvmContextDesc>(utils::createAndersen(*executor->kmodule->module), 
                                                  executor->kmodule->module.get(),
                                                  mainFn->function)),
     curr(mainFn->getKInstruction(mainFn->function->getEntryBlock().getFirstNonPHIOrDbg())) {}
@@ -1144,7 +1077,8 @@ void NvmContextDynamicHeuristic::stepState(ExecutionState *es,
     }
   } 
 
-  contextDesc = contextDesc->tryGetNextContext(pc);
+  contextDesc = contextDesc->tryGetNextContext(pc, nextPC);
+  assert(contextDesc->function == nextPC->inst->getFunction() && "bad context!");
   curr = nextPC;
 }
 

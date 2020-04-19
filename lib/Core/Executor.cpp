@@ -1726,7 +1726,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           // (iangneal): update NVM allocation sites
           if (state.nvmInfo && 
               result->getWidth() == Context::get().getPointerWidth() &&
-              NvmHeuristicInfo::isNvmAllocationSite(kmodule->module.get(), kcaller->inst)) {
+              utils::isNvmAllocationSite(kmodule->module.get(), kcaller->inst)) {
             
             if (ri->getFunction() == kmodule->module->getFunction("mmap") ||
                 ri->getFunction() == kmodule->module->getFunction("mmap64")) {
