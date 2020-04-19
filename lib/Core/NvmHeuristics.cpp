@@ -397,6 +397,8 @@ NvmContextDesc::NvmContextDesc(SharedAndersen anders,
 
 uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci, 
                                                 llvm::Function *f) {
+  // errs() << "/////////\n" << stackFrame->str() << "\n";
+  // errs() << f->getName() << "\n---------\n";
   assert(ci && f && "get out of here with your null parameters");
   Instruction *retLoc = ci->getNextNode();
   assert(retLoc && "could not get the return instruction");
@@ -521,7 +523,6 @@ void NvmContextDesc::setPriorities(void) {
   // I will accumulate these as I iterate so we don't have to re-iterate over
   // the entire function as we resolve core instructions.
   std::list<Instruction*> auxInsts;
-  errs() << stackFrame->str() << "\n";
 
   for (BasicBlock &bb : *function) {
     for (Instruction &i : bb) {
@@ -553,7 +554,6 @@ NvmContextDesc::Shared NvmContextDesc::tryGetNextContext(KInstruction *pc,
 
   if (auto *ci = dyn_cast<CallInst>(pc->inst)) {
     if (pc->inst->getNextNode() != nextPC->inst) {
-      errs() << "**********" << *pc->inst << "\n" << *nextPC->inst << "\n";
       if (!contexts.count(ci)) {
         constructCalledContext(ci, nextPC->inst->getFunction());
         setPriorities();
@@ -569,7 +569,10 @@ NvmContextDesc::Shared NvmContextDesc::tryGetNextContext(KInstruction *pc,
 NvmContextDesc::Shared NvmContextDesc::tryUpdateContext(Value *v, bool isValNvm) {
   NvmValueDesc::Shared newDesc = valueState->updateState(v, isValNvm);
   if (valueState->isNvm(v) != newDesc->isNvm(v)) {
-    assert(false && "implement!");
+    auto updated = dup();
+    updated->valueState = newDesc;
+    updated->setPriorities();
+    return updated;
   }
 
   return shared_from_this();

@@ -612,7 +612,11 @@ namespace klee {
       virtual void updateCurrentState(ExecutionState *es, 
                                       KInstruction *pc, 
                                       bool isNvm) override {
-        contextDesc = contextDesc->tryUpdateContext(pc->inst, isNvm);
+        auto newDesc = contextDesc->tryUpdateContext(pc->inst, isNvm);
+        if (newDesc != contextDesc) {
+          contextDesc = newDesc;
+          dump();
+        }
       }
 
       virtual void stepState(ExecutionState *es, 
