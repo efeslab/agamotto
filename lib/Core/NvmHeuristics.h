@@ -1,3 +1,14 @@
+//===-- NvmHeuristics.h -----------------------------------------*- C++ -*-===//
+//
+//                     The KLEE Symbolic Virtual Machine
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+// Author: Ian Neal (iangneal@umich.edu)
+//
+//===----------------------------------------------------------------------===//
+
 #ifndef __NVM_HEURISTICS_H__
 #define __NVM_HEURISTICS_H__
 
@@ -46,24 +57,20 @@
 #include "AndersenAA.h"
 
 /**
- *
+ * This file 
  */
 
 namespace klee {
+  /**
+   * Forward declarations cuz that's KLEE's whole thing
+   */
   class Executor;
   class ExecutionState;
+  class NvmHeuristicBuilder; // Defined at the end
 
-  class NvmStackFrameDesc;
-  class NvmValueDesc;
-  class NvmInstructionDesc;
-
-  typedef std::shared_ptr<AndersenAAWrapperPass> andersen_sptr_t;
   typedef std::shared_ptr<AndersenAAWrapperPass> SharedAndersen;
-  // typedef std::shared_ptr<NvmStackFrameDesc> nsf_sptr_t;
-  // typedef std::shared_ptr<NvmValueDesc> nv_sptr_t;
-  // typedef std::shared_ptr<NvmInstructionDesc> ni_sptr_t;
 
-
+  /* #region NvmStackFrameDesc definition */
 
   /**
    * This describes the call stack information we need for the heuristic.
@@ -72,10 +79,11 @@ namespace klee {
    * All we need to do is to store the return instruction, as we will inherit
    * the value state from the return instruction.
    */
-  /* #region NvmStackFrameDesc definition */
-  class NvmStackFrameDesc final {
+  class NvmStackFrameDesc : std::enable_shared_from_this<NvmStackFrameDesc> {
+    public:
+      typedef std::shared_ptr<NvmStackFrameDesc> Shared;
     private:
-      std::shared_ptr<NvmStackFrameDesc> caller_desc;
+      NvmStackFrameDesc::Shared caller_desc;
       llvm::Instruction *caller_inst;
       llvm::Instruction *return_inst;
 
@@ -83,7 +91,7 @@ namespace klee {
                             caller_inst(nullptr),
                             return_inst(nullptr) {}
 
-      NvmStackFrameDesc(const std::shared_ptr<NvmStackFrameDesc> &caller_stack,
+      NvmStackFrameDesc(const NvmStackFrameDesc::Shared &caller_stack,
                         llvm::Instruction *caller, 
                         llvm::Instruction *retLoc) : caller_desc(caller_stack),
                                                      caller_inst(caller),
@@ -99,23 +107,23 @@ namespace klee {
 
       bool containsFunction(llvm::Function *f) const;
 
-      std::shared_ptr<NvmStackFrameDesc> doReturn(void) const;
+      NvmStackFrameDesc::Shared doReturn(void) const;
 
-      std::shared_ptr<NvmStackFrameDesc> doCall(const std::shared_ptr<NvmStackFrameDesc> &caller_stack,
-                                                llvm::Instruction *caller, 
-                                                llvm::Instruction *retLoc) const;
+      NvmStackFrameDesc::Shared doCall(llvm::Instruction *caller, 
+                                       llvm::Instruction *retLoc) const;
 
       std::string str(void) const;
 
       void dump(void) const { llvm::errs() << str() << "\n"; }
 
-      static std::shared_ptr<NvmStackFrameDesc> empty() { 
+      static NvmStackFrameDesc::Shared empty() { 
         return std::make_shared<NvmStackFrameDesc>(NvmStackFrameDesc()); 
       }
 
       friend bool operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
       friend bool operator!=(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
   };
+  
   /* #endregion */
 
   /* #region NvmValueDesc */
@@ -133,9 +141,11 @@ namespace klee {
    * ---
    * This is the runtime state.
    */
-  class NvmValueDesc final {
+  class NvmValueDesc : public std::enable_shared_from_this<NvmValueDesc> {
+    public:
+      typedef std::shared_ptr<NvmValueDesc> Shared;
     private:
-      friend class NvmInstructionDesc;
+      SharedAndersen andersen_;
       // Here we track mmap locations to make weight calculation easier. Whether
       // or not 
       std::unordered_set<llvm::Value*> mmap_calls_;
@@ -148,11 +158,11 @@ namespace klee {
        */
       std::unordered_set<llvm::Value*> not_local_nvm_, not_global_nvm_;
 
-      bool mayPointTo(andersen_sptr_t apa, const llvm::Value *a, const llvm::Value *b) const;
+      bool mayPointTo(const llvm::Value *a, const llvm::Value *b) const;
 
-      bool pointsToIsEq(andersen_sptr_t apa, const llvm::Value *a, const llvm::Value *b) const;
+      bool pointsToIsEq(const llvm::Value *a, const llvm::Value *b) const;
 
-      bool matchesKnownVolatile(andersen_sptr_t apa, const llvm::Value *posNvm) const;
+      bool matchesKnownVolatile(const llvm::Value *posNvm) const;
 
       /**
        * Vararg functions break the current assumption about passing around
@@ -164,7 +174,7 @@ namespace klee {
 
       // Storing the caller values makes it easier to update when "executing"
       // a return instruction.
-      std::shared_ptr<NvmValueDesc> caller_values_;
+      NvmValueDesc::Shared caller_values_;
       llvm::CallInst *call_site_;
 
       NvmValueDesc() {}
@@ -176,30 +186,25 @@ namespace klee {
        * We just return an instance with the global variables and the 
        * propagated state due to the function call arguments.
        */
-      std::shared_ptr<NvmValueDesc> doCall(andersen_sptr_t apa, 
-                                           llvm::CallInst *ci, 
-                                           llvm::Function *f=nullptr) const;
+      NvmValueDesc::Shared doCall(llvm::CallInst *ci, llvm::Function *f) const;
 
       /** 
        * Set up the value state when doing a return.
        * This essentially just pops the "stack" and propagates the return val.
        */
-      std::shared_ptr<NvmValueDesc> doReturn(andersen_sptr_t apa, 
-                                             llvm::ReturnInst *i) const;
+      NvmValueDesc::Shared doReturn(llvm::ReturnInst *i) const;
 
       /**
        * Directly create a new description. This is generally for when we actually
        * execute and want to update our assumptions.
        */
-      std::shared_ptr<NvmValueDesc> updateState(llvm::Value *val, 
-                                                bool nvm) const;
+      NvmValueDesc::Shared updateState(llvm::Value *val, bool nvm) const;
 
       /**
        * When we do an indirect function call, we can't propagate local nvm variables
        * cuz we don't know the arguments yet. This lets us do that.
        */
-      std::shared_ptr<NvmValueDesc> resolveFunctionPointer(andersen_sptr_t apa, 
-                                                           llvm::Function *f);
+      NvmValueDesc::Shared resolveFunctionPointer(llvm::Function *f);
 
       bool isMmapCall(llvm::CallInst *ci) const {
         return !!mmap_calls_.count(ci);
@@ -246,15 +251,118 @@ namespace klee {
       /**
        * The "points-to" set points to allocation sites.
        */
-      bool isNvm(andersen_sptr_t apa, const llvm::Value *ptr) const;
+      bool isNvm(const llvm::Value *ptr) const;
 
       std::string str(void) const;
 
       // Populate with all the calls to mmap.
-      static std::shared_ptr<NvmValueDesc> staticState(llvm::Module *m);
+      static NvmValueDesc::Shared staticState(SharedAndersen andersen, 
+                                              llvm::Module *m);
 
       friend bool operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs);
   };
+  /* #endregion */
+
+  /* #region NvmContextDesc */
+
+  class NvmContextDesc : public std::enable_shared_from_this<NvmContextDesc> {
+    public: 
+      typedef std::shared_ptr<NvmContextDesc> Shared;
+    private:
+      SharedAndersen andersen;
+
+      NvmStackFrameDesc::Shared stackFrame;
+      NvmValueDesc::Shared valueState;
+      NvmContextDesc::Shared parent;
+      llvm::Function *function;
+
+      /**
+       * This function has a bunch of instructions. They have weights based
+       * on the current context.
+       */
+      std::unordered_map<llvm::Instruction*, uint64_t> weights;
+
+      bool hasCoreWeight = false;
+
+      /**
+       * This functions's instructions also have a bunch of priorities.
+       */
+      std::unordered_map<llvm::Instruction*, uint64_t> priorities;
+
+      /**
+       * CallInsts have succeeding ContextDesc, which is nice to pre-compute
+       */
+      std::unordered_map<llvm::CallInst*, NvmContextDesc::Shared> contexts;
+
+      /* METHODS */
+
+      /**
+       * Generally used for generating contexts for calls.
+       */
+      NvmContextDesc(SharedAndersen anders,
+                     NvmStackFrameDesc stack, 
+                     NvmValueDesc initialArgs,
+                     NvmContextDesc::Shared p,
+                     llvm::Function *f);
+
+      /**
+       * Returns the priority of the subcontext.
+       */
+      uint64_t constructCalledContext(llvm::CallInst *ci);
+
+      /**
+       * Core instructions are instructions that impact NVM
+       */
+      bool isaCoreInst(llvm::Instruction *i) const;
+      uint64_t computeCoreInstWeight(llvm::Instruction *i);
+
+      /**
+       * Auxiliary instructions are instructions that have weight as a 
+       * consequency of control flow.
+       * 
+       * For this version of the heuristic, this will just be call and return
+       * instructions.
+       */
+      bool isaAuxInst(llvm::Instruction *i);
+      uint64_t computeAuxInstWeight(llvm::Instruction *i);
+
+      /**
+       * After this, the context should be fully valid.
+       */
+      void setPriorities(void);
+
+    public:
+
+      /**
+       * Constructs the first context, generally for whatever function KLEE is 
+       * using for a main function.
+       */
+      NvmContextDesc(SharedAndersen anders, llvm::Module *m, llvm::Function *main);
+
+      /**
+       * Gets the next context if the given PC is a call or return instruction.
+       * Otherwise, returns this.
+       */
+      NvmContextDesc::Shared tryGetNextContext(KInstruction *pc) const;
+
+      /**
+       * Gets the resulting context of updating the state. If updating the state
+       * does not cause any change in priority, returns this.
+       */
+      NvmContextDesc::Shared tryUpdateContext(llvm::Value *v, bool isNvm) const;
+
+      NvmContextDesc::Shared tryResolveFnPtr(llvm::CallInst *ci, 
+                                             llvm::Function *f) const;
+
+      /**
+       * Gets the priority at the root of the function, i.e. at the first 
+       * instruction.
+       */
+      uint64_t getRootPriority(void) const {
+        return priorities.at(f->getEntryBlock().getFirstNonPHIOrDbg());
+      }
+  }
+
   /* #endregion */
 
 
@@ -262,7 +370,6 @@ namespace klee {
   /**
    * This is per state.
    */
-  class NvmHeuristicBuilder;
 
   class NvmHeuristicInfo {
     friend class NvmHeuristicBuilder;
@@ -369,10 +476,6 @@ namespace klee {
 
       virtual uint64_t getCurrentPriority(void) const override {
         uint64_t priority = priorities_->count(curr_) ? priorities_->at(curr_) : 0lu;
-        if (!priority) {
-          // llvm::errs() << curr_->getFunction()->getName() << '\n';
-          // llvm::errs() << *curr_ << '\n';
-        }
         return priority;
       };
 
@@ -410,6 +513,10 @@ namespace klee {
   /* #endregion */
 
   /* #region NvmInsensitiveDynamicHeuristic */
+
+  /**
+   * TODO: resolve function pointers
+   */
   class NvmInsensitiveDynamicHeuristic : public NvmStaticHeuristic {
     friend class NvmHeuristicBuilder;
     protected:
@@ -457,7 +564,6 @@ namespace klee {
    * We keep call stack information with our values, but not flow information.
    * We forgo a flow-sensitive analysis as it is extremely costly.
    */
-  #if 0
   class NvmContextDynamicHeuristic : public NvmHeuristicInfo {
     friend class NvmHeuristicBuilder;
     protected:
@@ -471,12 +577,13 @@ namespace klee {
       ValueSet nvmSites_;
       ValueSet activeNvmSites_;
       ValueSet nvmGlobals_;
-      struct ContextDesc {
-        NvmStackFrameDesc stackFrame;
-        // Describe the input NVM state: args and globals
 
-        ValueSet localVolatiles;
-      }
+      
+
+      /**
+       * We can map a function and it's context to a priority value. This makes
+       * re-computing priority fairly efficient.
+       */
 
       NvmContextDynamicHeuristic(Executor *executor, KFunction *mainFn);
 
@@ -508,7 +615,6 @@ namespace klee {
 
       virtual void dump(void) const override;
   };
-  #endif 
   /* #endregion */
 
   /* #region NvmHeuristicBuilder */
@@ -583,9 +689,6 @@ namespace klee {
 
         if (auto sptr = dynamic_cast<const NvmStaticHeuristic*>(info.get())) {
           return info;
-          // return std::shared_ptr<NvmHeuristicInfo>(nullptr);
-          // return info;
-          // return new NvmStaticHeuristic(*ptr);
         }
 
         if (auto iptr = dynamic_cast<const NvmInsensitiveDynamicHeuristic*>(info.get())) {

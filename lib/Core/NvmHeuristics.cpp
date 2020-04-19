@@ -61,13 +61,10 @@ std::shared_ptr<NvmStackFrameDesc> NvmStackFrameDesc::doReturn(void) const {
   return caller_desc;
 }
 
-std::shared_ptr<NvmStackFrameDesc> 
-NvmStackFrameDesc::doCall(const std::shared_ptr<NvmStackFrameDesc> &caller_stack,
-                          Instruction *caller, 
-                          Instruction *retLoc) const {
-  return std::make_shared<NvmStackFrameDesc>(NvmStackFrameDesc(caller_stack, 
-                                                               caller, 
-                                                               retLoc));
+NvmStackFrameDesc::Shared NvmStackFrameDesc::doCall(Instruction *caller, 
+                                                    Instruction *retLoc) const {
+  NvmStackFrameDesc desc(shared_from_this(), caller, retLoc);
+  return std::make_shared<NvmStackFrameDesc>(desc);
 }
 
 std::string NvmStackFrameDesc::str(void) const {
@@ -108,10 +105,8 @@ bool klee::operator!=(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs
 
 /* #region NvmValueDesc */
 
-std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(andersen_sptr_t apa, 
-                                                   CallInst *ci, 
-                                                   Function *f) const 
-{
+std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(CallInst *ci, 
+                                                   Function *f) const {
   NvmValueDesc newDesc;
   newDesc.caller_values_ = std::make_shared<NvmValueDesc>(*this);
   newDesc.call_site_ = ci;
@@ -166,9 +161,8 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doCall(andersen_sptr_t apa,
   return std::make_shared<NvmValueDesc>(newDesc);
 }
 
-std::shared_ptr<NvmValueDesc> NvmValueDesc::doReturn(andersen_sptr_t apa, 
-                                                     ReturnInst *i) const {
-  std::shared_ptr<NvmValueDesc> retDesc = caller_values_;
+NvmValueDesc::Shared NvmValueDesc::doReturn(ReturnInst *i) const {
+  NvmValueDesc::Shared retDesc = caller_values_;
   
   Value *retVal = i->getReturnValue();
   if (retVal && retVal->getType()->isPtrOrPtrVectorTy()) {
@@ -187,7 +181,7 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::doReturn(andersen_sptr_t apa,
   return retDesc;
 }
 
-bool NvmValueDesc::mayPointTo(andersen_sptr_t apa, const Value *a, const Value *b) const {
+bool NvmValueDesc::mayPointTo(const Value *a, const Value *b) const {
   TimerStatIncrementer timer(stats::nvmAndersenTime);
 
   std::vector<const Value*> aSet, bSet, interSet;
@@ -214,7 +208,7 @@ bool NvmValueDesc::mayPointTo(andersen_sptr_t apa, const Value *a, const Value *
   return false;
 }
 
-bool NvmValueDesc::pointsToIsEq(andersen_sptr_t apa, const Value *a, const Value *b) const {
+bool NvmValueDesc::pointsToIsEq(const Value *a, const Value *b) const {
   TimerStatIncrementer timer(stats::nvmAndersenTime);
 
   std::vector<const Value*> aSet, bSet, interSet;
@@ -241,7 +235,7 @@ bool NvmValueDesc::pointsToIsEq(andersen_sptr_t apa, const Value *a, const Value
   return false;
 }
 
-bool NvmValueDesc::matchesKnownVolatile(andersen_sptr_t apa, const Value *posNvm) const {
+bool NvmValueDesc::matchesKnownVolatile(const Value *posNvm) const {
   if (isa<GlobalValue>(posNvm)) {
     for (const Value *vol : not_global_nvm_) {
       if (pointsToIsEq(apa, posNvm, vol)) {
@@ -261,9 +255,7 @@ bool NvmValueDesc::matchesKnownVolatile(andersen_sptr_t apa, const Value *posNvm
   return false;
 }
 
-std::shared_ptr<NvmValueDesc> NvmValueDesc::updateState(Value *val, 
-                                                        bool isNvm) const 
-{
+NvmValueDesc::Shared NvmValueDesc::updateState(Value *val, bool isNvm) const {
   NvmValueDesc vd = *this;
 
   if (!isNvm && val->getType()->isPtrOrPtrVectorTy()) {
@@ -275,7 +267,7 @@ std::shared_ptr<NvmValueDesc> NvmValueDesc::updateState(Value *val,
   return std::make_shared<NvmValueDesc>(vd);
 }
 
-bool NvmValueDesc::isNvm(andersen_sptr_t apa, const Value *ptr) const {
+bool NvmValueDesc::isNvm(const Value *ptr) const {
 
   TimerStatIncrementer timer(stats::nvmAndersenTime);
 
@@ -330,8 +322,9 @@ bool NvmValueDesc::isNvm(andersen_sptr_t apa, const Value *ptr) const {
   return may_point_nvm_alloc;
 }
 
-std::shared_ptr<NvmValueDesc> NvmValueDesc::staticState(llvm::Module *m) {
+NvmValueDesc::Shared NvmValueDesc::staticState(SharedAndersen apa, llvm::Module *m) {
   NvmValueDesc desc;
+  desc.andersen_ = apa;
   #define N_FN 3
   static const char *fn_names[N_FN] = {"mmap", "mmap64", "klee_pmem_mark_persistent"};
   static Function* mmaps[N_FN];
@@ -393,6 +386,80 @@ bool klee::operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs) {
          lhs.not_local_nvm_ == rhs.not_local_nvm_ &&
          lhs.call_site_ == rhs.call_site_ &&
          callerEq;
+}
+
+/* #endregion */
+
+/* #region NvmContextDesc */
+
+NvmContextDesc::NvmContextDesc(SharedAndersen anders,
+                               NvmStackFrameDesc::Shared stack, 
+                               NvmValueDesc::Shared initialArgs,
+                               NvmContextDesc::Shared p,
+                               Function *f) 
+  : andersen(anders),
+    stackFrame(stack),
+    valueState(initialArgs),
+    parent(p),
+    function(f) {}
+
+
+uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci) {
+  if (Function *f = ci->getCalledFunction()) {
+    Instruction *retLoc = ci->getNextNode();
+    assert(retLoc && "could not get the return instruction");
+    NvmContextDesc calledCtx(andersen, 
+                             stackFrame->doCall(ci, ci->getNextNode()), 
+                             valueState->doCall(ci, f),
+                             shared_from_this(),
+                             f);
+    auto sharedCtx = std::make_shared<NvmContextDesc>(calledCtx);
+    sharedCtx->setPriorities();
+    contexts[ci] = sharedCtx;
+
+    return sharedCtx->getRootPriority();
+  } 
+
+  // We will wait until runtime to resolve this function pointer.
+  return 1lu;
+}
+
+
+void NvmContextDesc::setPriorities(void) {
+  // I will accumulate these as I iterate so we don't have to re-iterate over
+  // the entire function as we resolve core instructions.
+  std::list<Instruction*> auxInsts;
+  std::list<BasicBlock*> toProp;
+
+  for (BasicBlock &bb : *f) {
+    for (Instruction &i : bb) {
+      if (isaCoreInst(&i)) {
+        weights[&i] = computeCoreInstWeight(&i);
+        hasCoreWeight = true;
+      } else if (isaAuxInst(&i)) {
+        auxInsts.push_back(&i);
+      }
+    }
+
+    if (succ_empty(bb)) toProp.push_back(&bb);
+  }
+
+  for (Instruction *i : auxInsts) {
+    weights[i] = computeAuxInstWeight(i);
+  }
+
+  // Now, we bubble up the priorities.
+  std::unordered_set<BasicBlock*> traversed; // Loop detection
+  while (toProp.size()) {
+    BasicBlock *bb = toProp.front();
+    toProp.pop_front();
+
+    // Bubble up priorities along the instructions in this basic block.
+
+    // For loops, if the predecessors have already been traversed, but this
+    // block changed the bottom-most priority, then we add it to the list
+    // to repropagate it anyways.
+  }
 }
 
 /* #endregion */

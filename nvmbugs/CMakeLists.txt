@@ -81,9 +81,8 @@ add_custom_target(set_wllvm_env COMMAND export LLVM_COMPILER=clang; export LLVM_
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 add_subdirectory(000_pmdk_btree_map)
-add_subdirectory(001_simple)
-#add_subdirectory(002_simple_symbolic)
-add_subdirectory(003_pmdk_rbtree_map)
+add_subdirectory(001_simple)  
 add_subdirectory(002_simple_symbolic)
+add_subdirectory(003_pmdk_rbtree_map)
 add_subdirectory(003_heuristic_functional)
 add_subdirectory(004_heuristic_correctness)

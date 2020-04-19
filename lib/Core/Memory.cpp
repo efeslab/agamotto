@@ -1014,11 +1014,11 @@ std::string PersistentState::getLocationInfo(const ExecutionState &state,
 
   std::string infoStr;
   llvm::raw_string_ostream msg(infoStr);
-  msg << "Persistent Memory Info:\n";
-  msg << "\tName: " << getObject()->name << "\n";
-  msg << "\tAddress: " << llvm::format_hex(getObject()->address, 18) << "\n";
-  msg << "\t\tOffset:" << *offset << "\n";
-  msg << "\tSize: " << getObject()->size << "\n";
+  // msg << "Persistent Memory Info:\n";
+  // msg << "\tName: " << getObject()->name << "\n";
+  // msg << "\tAddress: " << llvm::format_hex(getObject()->address, 18) << "\n";
+  // msg << "\t\tOffset:" << *offset << "\n";
+  // msg << "\tSize: " << getObject()->size << "\n";
   msg << "\tType of modification: " << type << "\n";
   if (iip->file != "") {
     msg << "File: " << iip->file << "\n";
@@ -1035,11 +1035,11 @@ std::string PersistentState::getAllocInfo(ref<Expr> offset,
                                           const char *type) const {
   std::string infoStr;
   llvm::raw_string_ostream msg(infoStr);
-  msg << "Persistent Memory Info:\n";
-  msg << "\tName: " << getObject()->name << "\n";
-  msg << "\tAddress: " << llvm::format_hex(getObject()->address, 18) << "\n";
-  msg << "\t\tOffset: " << *offset << "\n";
-  msg << "\tSize: " << getObject()->size << "\n";
+  // msg << "Persistent Memory Info:\n";
+  // msg << "\tName: " << getObject()->name << "\n";
+  // msg << "\tAddress: " << llvm::format_hex(getObject()->address, 18) << "\n";
+  // msg << "\t\tOffset: " << *offset << "\n";
+  // msg << "\tSize: " << getObject()->size << "\n";
   msg << "\tType of modification: " << type << "\n";
   msg << "\tAlloc at: ";
   std::string tmp;
