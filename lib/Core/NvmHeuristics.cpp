@@ -43,75 +43,10 @@ namespace klee {
 }
 /* #endregion */
 
-
-/* #region NvmStackFrameDesc */
-
-bool NvmStackFrameDesc::containsFunction(llvm::Function *f) const {
-  const NvmStackFrameDesc *st = this;
-  while (st && !st->isEmpty()) {
-    if (st->caller_inst->getFunction() == f) return true;
-    st = st->caller_desc.get();
-  }
-
-  return false;
-}
-
-std::shared_ptr<NvmStackFrameDesc> NvmStackFrameDesc::doReturn(void) const {
-  assert(caller_desc && "We returned too far!");
-  return caller_desc;
-}
-
-NvmStackFrameDesc::Shared NvmStackFrameDesc::doCall(Instruction *caller, 
-                                                    Instruction *retLoc) {
-  NvmStackFrameDesc desc(shared_from_this(), caller, retLoc);
-  return std::make_shared<NvmStackFrameDesc>(desc);
-}
-
-std::string NvmStackFrameDesc::str(void) const {
-  std::stringstream s;
-
-  s << "Stackframe: ";
-  const NvmStackFrameDesc *st = this;
-  while (st && !st->isEmpty()) {
-    Instruction *i = st->caller_inst;
-
-    Function *f = i->getFunction();
-    s << "\n\t" << f->getName().data() << " @ ";
-    std::string tmp;
-    llvm::raw_string_ostream rs(tmp); 
-    i->print(rs);
-    s << tmp;
-
-    st = st->caller_desc.get();
-  }
-
-  return s.str();
-}
-
-bool klee::operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs) {
-  bool callerEq = (!lhs.caller_desc && !rhs.caller_desc) || 
-                  (lhs.caller_desc && rhs.caller_desc &&
-                    (*lhs.caller_desc == *rhs.caller_desc));
-  return callerEq && 
-         lhs.caller_inst == rhs.caller_inst &&
-         lhs.return_inst == rhs.return_inst;
-}
-
-bool klee::operator!=(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs) {
-  return !(lhs == rhs);
-}
-
-/* #endregion */
-
 /* #region NvmValueDesc */
 
 NvmValueDesc::Shared NvmValueDesc::doCall(CallInst *ci, Function *f) const {
-  NvmValueDesc newDesc;
-  newDesc.andersen_ = andersen_;
-  newDesc.caller_values_ = std::make_shared<NvmValueDesc>(*this);
-  newDesc.call_site_ = ci;
-  newDesc.mmap_calls_ = mmap_calls_;
-  newDesc.not_global_nvm_ = not_global_nvm_;
+  NvmValueDesc newDesc(andersen_, mmap_calls_, not_global_nvm_);
 
   if (!f) {
     f = utils::getCallInstFunction(ci);
@@ -161,10 +96,10 @@ NvmValueDesc::Shared NvmValueDesc::doCall(CallInst *ci, Function *f) const {
   return std::make_shared<NvmValueDesc>(newDesc);
 }
 
-NvmValueDesc::Shared NvmValueDesc::doReturn(ReturnInst *i) const {
-  NvmValueDesc::Shared retDesc = caller_values_;
-  
-  Value *retVal = i->getReturnValue();
+NvmValueDesc::Shared NvmValueDesc::doReturn(NvmValueDesc::Shared callerVals,
+                                            ReturnInst *ri,
+                                            Instruction *dest) const {
+  Value *retVal = ri->getReturnValue();
   if (retVal && retVal->getType()->isPtrOrPtrVectorTy()) {
     TimerStatIncrementer timer(stats::nvmAndersenTime);
     // errs() << *retVal << "\n";
@@ -172,13 +107,13 @@ NvmValueDesc::Shared NvmValueDesc::doReturn(ReturnInst *i) const {
     bool success = andersen_->getResult().getPointsToSet(retVal, ptsTo);
     if (success && ptsTo.size()) {
       // errs() << "doRet " << *retVal << "\n";
-      retDesc = retDesc->updateState(call_site_, isNvm(retVal));
+      return callerVals->updateState(dest, isNvm(retVal));
     } else {
       //  errs() << "doRet doesn't point to a memory object! " << success << " " << ptsTo.size() << "\n";
     }
   }
 
-  return retDesc;
+  return callerVals;
 }
 
 bool NvmValueDesc::mayPointTo(const Value *a, const Value *b) const {
@@ -361,68 +296,69 @@ std::string NvmValueDesc::str(void) const {
 }
 
 bool klee::operator==(const NvmValueDesc &lhs, const NvmValueDesc &rhs) {
-  bool callerEq = (!lhs.caller_values_ && !rhs.caller_values_) ||
-                  (lhs.caller_values_ && rhs.caller_values_ &&
-                    (*lhs.caller_values_ == *rhs.caller_values_));
   return lhs.mmap_calls_ == rhs.mmap_calls_ &&
          lhs.not_global_nvm_ == rhs.not_global_nvm_ &&
-         lhs.not_local_nvm_ == rhs.not_local_nvm_ &&
-         lhs.call_site_ == rhs.call_site_ &&
-         callerEq;
+         lhs.not_local_nvm_ == rhs.not_local_nvm_;
 }
 
 /* #endregion */
 
 /* #region NvmContextDesc */
 
+std::unordered_map<NvmContextDesc::ContextCacheKey, 
+                   NvmContextDesc::Shared,
+                   NvmContextDesc::ContextCacheKey::Hash> NvmContextDesc::contextCache;
+
 NvmContextDesc::NvmContextDesc(SharedAndersen anders,
-                               NvmStackFrameDesc::Shared stack, 
+                               Function *f,
                                NvmValueDesc::Shared initialArgs,
-                               NvmContextDesc::Shared p,
-                               Function *f) 
+                               bool parentHasWeight) 
   : andersen(anders),
-    stackFrame(stack),
+    function(f),
     valueState(initialArgs),
-    parent(p),
-    function(f) {}
+    returnHasWeight(parentHasWeight) {}
 
 NvmContextDesc::NvmContextDesc(SharedAndersen anders, 
                                Module *m, 
                                Function *main) 
   : andersen(anders),
-    stackFrame(NvmStackFrameDesc::empty()),
+    function(main),
     valueState(NvmValueDesc::staticState(anders, m)),
-    parent(nullptr),
-    function(main) {}
+    returnHasWeight(false) {}
 
 uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci, 
                                                 llvm::Function *f) {
-  // errs() << "/////////\n" << stackFrame->str() << "\n";
-  // errs() << f->getName() << "\n---------\n";
   assert(ci && f && "get out of here with your null parameters");
+
+  // First, we check the cache.
+  ContextCacheKey key(f, valueState->doCall(ci, f));
+  auto res = contextCache[key];
+  if (res) {
+    return res->getRootPriority();
+  }
+
   Instruction *retLoc = ci->getNextNode();
   assert(retLoc && "could not get the return instruction");
   if (!ci->getNextNode()) errs() << *ci << "\n";
-  NvmContextDesc calledCtx(andersen, 
-                           stackFrame->doCall(ci, ci->getNextNode()), 
-                           valueState->doCall(ci, f),
-                           shared_from_this(),
-                           f);
+  NvmContextDesc calledCtx(andersen,
+                           key.function,
+                           key.initialState,
+                           hasCoreWeight);
   auto sharedCtx = std::make_shared<NvmContextDesc>(calledCtx);
-  sharedCtx->setPriorities();
-  contexts[ci] = sharedCtx;
 
+  // We add it first to avoid infinite recursion.
+  contexts[ci] = sharedCtx;
+  contextCache[key] = sharedCtx;
+
+  // We can do this later as it mutates the object
+  sharedCtx->setPriorities();
+  
   return sharedCtx->getRootPriority();
 }
 
 uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci) {
   if (Function *f = ci->getCalledFunction()) {
-    if (!stackFrame->containsFunction(f)) {
-      return constructCalledContext(ci, f);
-    } else {
-      // Recursion risk.
-      return hasCoreWeight ? 1lu : 0lu;
-    }
+    return constructCalledContext(ci, f);
   } 
 
   // We will wait until runtime to resolve this function pointer.
@@ -466,8 +402,7 @@ bool NvmContextDesc::isaAuxInst(Instruction *i) const {
 
 uint64_t NvmContextDesc::computeAuxInstWeight(Instruction *i) {
   if (isa<ReturnInst>(i)) {
-    if (parent && parent->hasCoreWeight) return 1lu;
-    return 0lu;
+    return returnHasWeight ? 1lu : 0lu;
   } else if (auto *ci = dyn_cast<CallInst>(i)) {
     return constructCalledContext(ci);
   }
@@ -546,11 +481,7 @@ void NvmContextDesc::setPriorities(void) {
 
 NvmContextDesc::Shared NvmContextDesc::tryGetNextContext(KInstruction *pc,
                                                          KInstruction *nextPC) {
-  if (auto *ri = dyn_cast<ReturnInst>(pc->inst)) {
-    auto retDesc = parent->dup();
-    retDesc->valueState = valueState->doReturn(ri);
-    return retDesc;
-  }
+  assert(!isa<ReturnInst>(pc->inst) && "Need to handle returns elsewhere!");
 
   if (auto *ci = dyn_cast<CallInst>(pc->inst)) {
     if (pc->inst->getNextNode() != nextPC->inst) {
@@ -592,7 +523,6 @@ NvmContextDesc::Shared NvmContextDesc::tryResolveFnPtr(CallInst *ci, Function *f
 
 std::string NvmContextDesc::str() const {
   std::stringstream s;
-  s << stackFrame->str() << "\n";
   s << valueState->str() << "\n";
   return s.str();
 }
@@ -1070,6 +1000,15 @@ NvmContextDynamicHeuristic::NvmContextDynamicHeuristic(Executor *executor,
                                                  mainFn->function)),
     curr(mainFn->getKInstruction(mainFn->function->getEntryBlock().getFirstNonPHIOrDbg())) {}
 
+void NvmContextDynamicHeuristic::updateCurrentState(ExecutionState *es, 
+                                                    KInstruction *pc, 
+                                                    bool isNvm) {
+  auto newDesc = contextDesc->tryUpdateContext(pc->inst, isNvm);
+  if (newDesc != contextDesc) {
+    contextDesc = newDesc;
+    dump();
+  }
+}
 
 void NvmContextDynamicHeuristic::stepState(ExecutionState *es, 
                                            KInstruction *pc, 
@@ -1078,9 +1017,23 @@ void NvmContextDynamicHeuristic::stepState(ExecutionState *es,
     if (pc->inst->getFunction() != nextPC->inst->getFunction()) {
       contextDesc = contextDesc->tryResolveFnPtr(ci, nextPC->inst->getFunction());
     }
-  } 
+    auto childCtx = contextDesc->tryGetNextContext(pc, nextPC);
+    if (childCtx->function != contextDesc->function) {
+      contextStack.push_back(contextDesc);
+      contextDesc = childCtx;
+    }
 
-  contextDesc = contextDesc->tryGetNextContext(pc, nextPC);
+  } else if (auto *ri = dyn_cast<ReturnInst>(pc->inst)) {
+    auto parentCtx = contextStack.back();
+    contextStack.pop_back();
+    parentCtx->valueState = contextDesc->valueState->doReturn(parentCtx->valueState, 
+                                                              ri,
+                                                              nextPC->inst);
+    parentCtx->setPriorities();
+    contextDesc = parentCtx;
+  }
+
+  
   assert(contextDesc->function == nextPC->inst->getFunction() && "bad context!");
   curr = nextPC;
 }

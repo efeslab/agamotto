@@ -71,62 +71,6 @@ namespace klee {
 
   typedef std::shared_ptr<AndersenAAWrapperPass> SharedAndersen;
 
-  /* #region NvmStackFrameDesc definition */
-
-  /**
-   * This describes the call stack information we need for the heuristic.
-   * Different than the runtime stack information.
-   * 
-   * All we need to do is to store the return instruction, as we will inherit
-   * the value state from the return instruction.
-   */
-  class NvmStackFrameDesc : public std::enable_shared_from_this<NvmStackFrameDesc> {
-    public:
-      typedef std::shared_ptr<NvmStackFrameDesc> Shared;
-    private:
-      NvmStackFrameDesc::Shared caller_desc;
-      llvm::Instruction *caller_inst;
-      llvm::Instruction *return_inst;
-
-      NvmStackFrameDesc() : caller_desc(nullptr),
-                            caller_inst(nullptr),
-                            return_inst(nullptr) {}
-
-      NvmStackFrameDesc(const NvmStackFrameDesc::Shared &caller_stack,
-                        llvm::Instruction *caller, 
-                        llvm::Instruction *retLoc) : caller_desc(caller_stack),
-                                                     caller_inst(caller),
-                                                     return_inst(retLoc) {}
-
-    public:
-
-      bool isEmpty(void) const { return !caller_inst; }
-
-      llvm::Instruction *getCaller(void) const { return caller_inst; }
-
-      llvm::Instruction *getReturnLocation(void) const { return return_inst; }
-
-      bool containsFunction(llvm::Function *f) const;
-
-      NvmStackFrameDesc::Shared doReturn(void) const;
-
-      NvmStackFrameDesc::Shared doCall(llvm::Instruction *caller, 
-                                       llvm::Instruction *retLoc);
-
-      std::string str(void) const;
-
-      void dump(void) const { llvm::errs() << str() << "\n"; }
-
-      static NvmStackFrameDesc::Shared empty() { 
-        return NvmStackFrameDesc::Shared(new NvmStackFrameDesc()); 
-      }
-
-      friend bool operator==(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
-      friend bool operator!=(const NvmStackFrameDesc &lhs, const NvmStackFrameDesc &rhs);
-  };
-  
-  /* #endregion */
-
   /* #region NvmValueDesc */
   /**
    * This class represents the state of all values at any point during  
@@ -174,12 +118,11 @@ namespace klee {
        */ 
       // bool varargs_contain_nvm_;
 
-      // Storing the caller values makes it easier to update when "executing"
-      // a return instruction.
-      NvmValueDesc::Shared caller_values_;
-      llvm::CallInst *call_site_;
-
       NvmValueDesc() {}
+      NvmValueDesc(SharedAndersen apa, 
+                   std::unordered_set<const llvm::Value*> mmap,
+                   std::unordered_set<llvm::Value*> globals) 
+                   : andersen_(apa), mmap_calls_(mmap), not_global_nvm_(globals) {}
 
     public:
 
@@ -194,7 +137,9 @@ namespace klee {
        * Set up the value state when doing a return.
        * This essentially just pops the "stack" and propagates the return val.
        */
-      NvmValueDesc::Shared doReturn(llvm::ReturnInst *i) const;
+      NvmValueDesc::Shared doReturn(NvmValueDesc::Shared callerVals,
+                                    llvm::ReturnInst *ret, 
+                                    llvm::Instruction *dest) const;
 
       /**
        * Directly create a new description. This is generally for when we actually
@@ -267,6 +212,7 @@ namespace klee {
 
   /* #region NvmContextDesc */
 
+
   class NvmContextDesc : public std::enable_shared_from_this<NvmContextDesc> {
     public: 
       typedef std::shared_ptr<NvmContextDesc> Shared;
@@ -274,10 +220,38 @@ namespace klee {
       friend class NvmContextDynamicHeuristic;
       SharedAndersen andersen;
 
-      NvmStackFrameDesc::Shared stackFrame;
-      NvmValueDesc::Shared valueState;
-      NvmContextDesc::Shared parent;
+      /**
+       * These are the core pieces that define a context.
+       */
       llvm::Function *function;
+      NvmValueDesc::Shared valueState;
+      bool returnHasWeight; 
+
+      /**
+       * Many function contexts will be the same.
+       */
+      struct ContextCacheKey {
+        llvm::Function *function;
+        NvmValueDesc::Shared initialState;
+
+        ContextCacheKey(llvm::Function *f, NvmValueDesc::Shared init) 
+          : function(f), initialState(init) {}
+
+        bool operator==(const ContextCacheKey &rhs) const {
+          return function == rhs.function && initialState == rhs.initialState;
+        }
+
+        struct Hash {
+          uint64_t operator()(const ContextCacheKey &cck) const {
+            return std::hash<void*>{}(cck.function) ^ 
+                   std::hash<void*>{}(cck.initialState.get());
+          }
+        };
+      };
+
+      static std::unordered_map<ContextCacheKey, 
+                                NvmContextDesc::Shared,
+                                ContextCacheKey::Hash> contextCache;
 
       /**
        * This function has a bunch of instructions. They have weights based
@@ -303,10 +277,9 @@ namespace klee {
        * Generally used for generating contexts for calls.
        */
       NvmContextDesc(SharedAndersen anders,
-                     NvmStackFrameDesc::Shared stack, 
+                     llvm::Function *fn,
                      NvmValueDesc::Shared initialArgs,
-                     NvmContextDesc::Shared p,
-                     llvm::Function *f);
+                     bool parentHasWeight);
 
       /**
        * Returns the priority of the subcontext.
@@ -580,6 +553,7 @@ namespace klee {
     friend class NvmHeuristicBuilder;
     protected:
       
+      std::list<NvmContextDesc::Shared> contextStack;
       NvmContextDesc::Shared contextDesc;
       KInstruction *curr;
 
@@ -611,13 +585,7 @@ namespace klee {
        */
       virtual void updateCurrentState(ExecutionState *es, 
                                       KInstruction *pc, 
-                                      bool isNvm) override {
-        auto newDesc = contextDesc->tryUpdateContext(pc->inst, isNvm);
-        if (newDesc != contextDesc) {
-          contextDesc = newDesc;
-          dump();
-        }
-      }
+                                      bool isNvm) override;
 
       virtual void stepState(ExecutionState *es, 
                              KInstruction *pc, 
@@ -636,8 +604,8 @@ namespace klee {
 
         llvm::errs() << "NvmContext: " << contextDesc->str() << "\n";
         llvm::errs() << "\tCurrent instruction: " << *curr->inst << "\n"; 
-        llvm::errs() << "\t% insts with weight: " << pWeights << "%\n";
-        llvm::errs() << "\t% insts with priority: " << pPriorities << "%\n";
+        fprintf(stderr, "\t%% insts with weight: %f%%\n", pWeights);
+        fprintf(stderr, "\t%% insts with priority: %f%%\n", pPriorities);
       }
   };
   /* #endregion */
