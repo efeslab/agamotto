@@ -62,8 +62,10 @@ static void __create_new_dfile(exe_disk_file_t *dfile, unsigned size,
 
   /* For broken tests */
   if (!klee_is_symbolic(s->st_ino) && 
-      (s->st_ino & 0x7FFFFFFF) == 0)
+      (s->st_ino & 0x7FFFFFFF) == 0) {
+    fprintf(stderr, "yeeting s->st_ino into %ju\n", defaults->st_ino);
     s->st_ino = defaults->st_ino;
+  }
   
   /* Important since we copy this out through getdents, and readdir
      will otherwise skip this entry. For same reason need to make sure

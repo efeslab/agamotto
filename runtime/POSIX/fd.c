@@ -239,6 +239,7 @@ static int __create_pmem_dfile(exe_disk_file_t *dfile, unsigned size,
       klee_set_forking(0);
       int fd = syscall(__NR_open, __exe_fs.sym_pmem_init_from, O_RDONLY, 0);
       assert(fd != -1);
+      klee_warning("Concrete file was opened!");
       // Confirm the region is the right size.
       struct stat64 init_stat;
       int sret = __concretize_int(syscall(__NR_fstat, fd, &init_stat));
@@ -294,11 +295,13 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
   /* Special case Persistent-Memory handling */
   // file to be used for persistent memory-mapping
   int isPmemFile = !strcmp(pathname, __exe_fs.sym_pmem_filename);
+  fprintf(stderr, "__fd_open invoked on \'%s\'\n", pathname);
   if (isPmemFile && !__exe_fs.sym_pmem) {
   // if (isPmemFile) {
     // stealing this code from fd_init.c:klee_init_fds
     struct stat64 s;
     stat64(".", &s); // For the defaults.
+    fprintf(stderr, "ispmemfile, but not initialized yet. Initializing now...\n");
     __exe_fs.sym_pmem = malloc(sizeof(*__exe_fs.sym_pmem) * 1);
     if (-1 == __create_pmem_dfile(__exe_fs.sym_pmem, __exe_fs.sym_pmem_size, pathname, &s)) {
       return -1;
@@ -336,7 +339,9 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
     }
     
     if ((flags & O_CREAT) && (flags & O_EXCL)) {
-      if (isPmemFile && __exe_fs.sym_pmem_delay_create && !__exe_fs.sym_pmem_created) {
+      //TODO: determine if this shit is correct
+      //if (isPmemFile && __exe_fs.sym_pmem_delay_create && !__exe_fs.sym_pmem_created) {
+      if (isPmemFile && !__exe_fs.sym_pmem_created) {
         __exe_fs.sym_pmem_created = true;
       } else {
         errno = EEXIST;
@@ -389,10 +394,12 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
     f->flags |= eReadable | eWriteable;
   }
   
+  fprintf(stderr, "\tSuccess, fd = %d\n", fd);
   return fd;
 }
 
 int __fd_openat(int basefd, const char *pathname, int flags, mode_t mode) {
+  klee_warning("__fd_openat invoked? unsure if we support this");
   exe_file_t *f;
   int fd;
   if (basefd != AT_FDCWD) {
@@ -523,6 +530,25 @@ int close(int fd) {
   
   return r;
 }
+
+// TODO: (stolerbs) fix this monstrosity
+ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
+	off_t orig = lseek(fd, 0, SEEK_CUR);
+	lseek(fd, offset, SEEK_SET);
+	ssize_t s = read(fd, buf, count);
+	lseek(fd, orig, SEEK_SET);
+	return s;
+}
+ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset) {
+	off_t orig = lseek(fd, 0, SEEK_CUR);
+	lseek(fd, offset, SEEK_SET);
+	ssize_t s = write(fd, buf, count);
+	lseek(fd, orig, SEEK_SET);
+	return s;
+}
+
+
+
 
 ssize_t read(int fd, void *buf, size_t count) {
   static int n_calls = 0;
@@ -1241,6 +1267,10 @@ int fcntl(int fd, int cmd, ...) {
       */
       return 0;
     }
+    case F_SETLK: {
+      // TODO: idk, do stuff here? called by nvm-direct's nvms_lock_region
+      return 0;
+    }
     default:
       klee_warning("symbolic file, ignoring (EINVAL)");
       errno = EINVAL;
@@ -1353,11 +1383,17 @@ int rmdir(const char *pathname) {
 }
 
 int unlink(const char *pathname) {
+  int isPmemFile = !strcmp(pathname, __exe_fs.sym_pmem_filename);
   exe_disk_file_t *dfile = __get_sym_file(pathname);
   if (dfile) {
     /* XXX check access */ 
     if (S_ISREG(dfile->stat->st_mode)) {
       dfile->stat->st_ino = 0;
+      if (isPmemFile) {
+        //TODO: handle deletion more thoroughly? in other places too?
+        __exe_fs.sym_pmem_created = false;
+        __exe_fs.sym_pmem = 0;
+      }
       return 0;
     } else if (S_ISDIR(dfile->stat->st_mode)) {
       errno = EISDIR;

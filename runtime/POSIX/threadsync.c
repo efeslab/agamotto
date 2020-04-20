@@ -243,6 +243,10 @@ int pthread_mutex_destroy(pthread_mutex_t *mutex) {
 
 int pthread_mutex_lock(pthread_mutex_t *mutex) {
   return 0;
+
+}
+int pthread_mutex_trylock(pthread_mutex_t *mutex) {
+  return 0;
 }
 
 int pthread_mutex_unlock(pthread_mutex_t *mutex) {
@@ -301,6 +305,7 @@ int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 }
 
 static int _atomic_cond_wait(condvar_data_t *cdata, mutex_data_t *mdata) {
+#if 0
   if (cdata->queued > 0) {
     if (cdata->mutex != mdata) {
       errno = EINVAL;
@@ -324,6 +329,7 @@ static int _atomic_cond_wait(condvar_data_t *cdata, mutex_data_t *mdata) {
     return -1;
   }
 
+#endif
   return 0;
 }
 
@@ -340,6 +346,7 @@ int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex) {
 }
 
 static int _atomic_cond_notify(condvar_data_t *cdata, char all) {
+#if 0
   if (cdata->queued > 0) {
     if (all)
       __thread_notify_all(cdata->wlist);
@@ -347,6 +354,7 @@ static int _atomic_cond_notify(condvar_data_t *cdata, char all) {
       __thread_notify_one(cdata->wlist);
   }
 
+#endif
   return 0;
 }
 

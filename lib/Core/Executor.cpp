@@ -3418,6 +3418,7 @@ void Executor::emitPmemError(ExecutionState &state, const std::unordered_set<std
 void Executor::terminateStateOnPmemError(ExecutionState &state,
                                          const std::unordered_set<std::string> &errors) {
 
+  llvm::errs() << "\t" << errors.size() << " root causes.\n";
   emitPmemError(state, errors);
   terminateState(state);
 
@@ -4006,6 +4007,7 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
       PersistentState *ps = dyn_cast<PersistentState>(wos);
       ref<Expr> offset = mo->getOffsetExpr(address);
 
+#if 0
       ref<Expr> alreadyPersisted = ps->isOffsetAlreadyPersisted(offset);
       StatePair notPersisted = fork(state, Expr::createIsZero(alreadyPersisted) , true);
       if (notPersisted.first) {
@@ -4017,7 +4019,6 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
         ps = dyn_cast<PersistentState>(wos);
         assert(ps && "Could not get PersistentState from notPersisted.first");
         ps->persistCacheLineAtOffset(offset);
-        llvm::errs() << "Good Flush\n";
       }
       // offset must already persisted, should error!
       if (notPersisted.second && !notPersisted.first) {
@@ -4033,6 +4034,9 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
         // avoid masking later bugs; emit error, but continue
         emitPmemError(errState, errors);
       }
+#else
+      ps->persistCacheLineAtOffset(offset);
+#endif
     }
   } else {
     terminateStateEarly(state, "Cannot singly resolve address to memory object");
@@ -4085,20 +4089,7 @@ ExecutionState *Executor::executeCheckPersistence(ExecutionState &state,
       assert(nos);
       const PersistentState *nps = dyn_cast<PersistentState>(nos);
       assert(nps);
-
-      // for (const ref<Expr> cons : notPersisted->constraints) {
-      //   cons->dump();
-      // }
-      // klee_warning("Non-persistence detected!");
-      // Should instead do the root cause analysis.
-      // std::string' addrInfo("\npmem persistence failures:\n");
-      // mo->getAllocInfo(addrInfo);
-      // uint64_t id = 1;
-      // for (const auto &str : ) {
-      //   addrInfo += std::to_string(id++) + ") " + str + std::string("\n");
-      // }
-      // klee_warning("addrInfo: '%s'", addrInfo.c_str());
-
+      llvm::errs() << "Unpersisted Memory\n";
       terminateStateOnPmemError(*notPersisted, 
                                 nps->getRootCauses(solver, *notPersisted));
     }
