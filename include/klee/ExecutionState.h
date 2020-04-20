@@ -20,8 +20,7 @@
 // FIXME: We do not want to be exposing these? :(
 #include "../../lib/Core/AddressSpace.h"
 #include "klee/Internal/Module/KInstIterator.h"
-#include "../../lib/Core/NvmFunctionInfo.h"
-#include "../../lib/Core/NvmHeuristicInfo.h"
+#include "../../lib/Core/NvmHeuristics.h"
 
 #include <map>
 #include <memory>
@@ -46,10 +45,6 @@ struct StackFrame {
   KInstIterator caller;
   KFunction *kf;
   CallPathNode *callPathNode;
-
-  /// (iangneal): Describe which of the function arguments were NVM.
-  std::unordered_set<unsigned> nvmArgs;
-  NvmFunctionCallDesc nvmDesc;
 
   std::vector<const MemoryObject *> allocas;
   Cell *locals;
@@ -102,7 +97,7 @@ public:
   // Overall state of the state - Data specific
 
   /// @brief (iangneal): Information about the current state of NVM and the predicted state
-  std::unique_ptr<NvmHeuristicInfo> nvmInfo;
+  std::shared_ptr<NvmHeuristicInfo> nvmInfo;
 
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;
@@ -178,8 +173,6 @@ public:
   ExecutionState *branch();
 
   void pushFrame(KInstIterator caller, KFunction *kf);
-  // (iangneal): To propagate NVM argument information.
-  void pushFrame(KInstIterator caller, KFunction *kf, const NvmFunctionInfo &nvmInfo);
   void popFrame();
 
   void addSymbolic(const MemoryObject *mo, const Array *array);

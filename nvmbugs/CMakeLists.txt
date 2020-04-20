@@ -22,7 +22,8 @@ set(PMDK_LIB_DIR ${PMDK_INSTALL_DIR}/lib/pmdk_debug)
 if(NOT EXISTS "${PMDK_ROOT_DIR}")
     message("no pmdk at ${PMDK_ROOT_DIR}")
     execute_process(COMMAND git clone https://github.com/pmem/pmdk.git ${PMDK_ROOT_DIR})
-    execute_process(COMMAND git -C ${PMDK_ROOT_DIR} checkout tags/1.7)
+    # execute_process(COMMAND git -C ${PMDK_ROOT_DIR} checkout tags/1.7)
+    execute_process(COMMAND git -C ${PMDK_ROOT_DIR} checkout master)
 endif()
 
 include(ProcessorCount)
@@ -76,8 +77,13 @@ endif()
 # Shared
 add_custom_target(set_wllvm_env COMMAND export LLVM_COMPILER=clang; export LLVM_CC_NAME=clang-8)
 
+# Subdirectories can access header files in this directory
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
 add_subdirectory(000_pmdk_btree_map)
-add_subdirectory(001_simple)
-#add_subdirectory(002_simple_symbolic)
+add_subdirectory(001_simple)  
+add_subdirectory(002_simple_symbolic)
 add_subdirectory(003_pmdk_rbtree_map)
+add_subdirectory(003_heuristic_functional)
+add_subdirectory(004_heuristic_correctness)
 add_subdirectory(005_nvm_direct)

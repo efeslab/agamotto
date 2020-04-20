@@ -1362,18 +1362,6 @@ static inline const llvm::fltSemantics *fpWidthToSemantics(unsigned width) {
   }
 }
 
-static llvm::StringRef getAnnotationStringFromAnnotationCall(KInstruction *ki) {
-  llvm::Value *annotation = ki->inst->getOperand(1)->stripPointerCasts();
-  // Get first operand of GEP instruction.
-  auto *constant = ValueAsMetadata::getConstant(annotation)->getValue();
-  if (auto *global = dyn_cast<GlobalVariable>(constant)) {
-    if (auto *initter = dyn_cast<ConstantDataSequential>(global->getInitializer())) {
-      return initter->getAsCString();
-    }
-  }
-  return llvm::StringRef();
-}
-
 void Executor::executeCall(ExecutionState &state,
                            KInstruction *ki,
                            Function *f,
@@ -1403,7 +1391,7 @@ void Executor::executeCall(ExecutionState &state,
     }
     // va_arg is handled by caller and intrinsic lowering, see comment for
     // ExecutionState::varargs
-    case Intrinsic::vastart:  {
+    case Intrinsic::vastart: {
       StackFrame &sf = state.stack.back();
 
       // varargs can be zero if no varargs were provided
@@ -1453,8 +1441,6 @@ void Executor::executeCall(ExecutionState &state,
 
       // Non-volatile memory intrinsics
     case Intrinsic::x86_sse2_clflush: {
-      klee_warning_once(
-        0, "program contains not-yet-supported clflush intrinsic. Treating as clwb+sfence.");
       llvm::Value *v = ki->inst->getOperand(0);
       v = v->stripPointerCasts();
       KInstruction *kv = kmodule->getKInstruction(dyn_cast<Instruction>(v));
@@ -1465,7 +1451,7 @@ void Executor::executeCall(ExecutionState &state,
     }
     case Intrinsic::x86_clflushopt:
       klee_warning_once(
-        0, "program contains not-yet-supported clflushopt intrinsic. Treating as clwb.");
+        0, "For our purposes, clflushopt ~ clwb, so implementing as fallthrough");
     case Intrinsic::x86_clwb: {
       llvm::Value *v = ki->inst->getOperand(0);
       v = v->stripPointerCasts();
@@ -1474,32 +1460,11 @@ void Executor::executeCall(ExecutionState &state,
       executePersistentMemoryFlush(state, address);
       break;
     }
+      // TODO: performance warning for mfence instead of sfence?
+    case Intrinsic::x86_sse2_mfence:
     case Intrinsic::x86_sse_sfence:
       executePersistentMemoryFence(state);
       break;
-
-      // XXX: For now, we detect non-volatile memory using an
-      // annotation __attribute__. In future we should detect these addresses
-      // automatically.
-    case Intrinsic::var_annotation: {
-      // Check if it is the "nvmvar" annotation.
-      // The first operand to the annotation is a pointer, the second
-      // is which annotation is being applied.
-      auto annotationStr = getAnnotationStringFromAnnotationCall(ki);
-      if (annotationStr == "nvmvar") {
-        llvm::Instruction *bitcastInst =
-          dyn_cast<Instruction>(ki->inst->getOperand(0));
-        KInstruction *bitcastKInst = kmodule->getKInstruction(bitcastInst);
-        // Get the address of the variable being annotated.
-        ref<Expr> address = eval(bitcastKInst, 0, state).value;
-        executeMarkPersistent(state, cast<ConstantExpr>(address));
-      } else if (annotationStr == "nvmptr") {
-        klee_warning_once(0, "Skipping over 'nvmptr' annotation");
-      } else {
-        klee_warning("Unsupported annotation: %s", annotationStr.str().c_str());
-      }
-      break;
-    }
 
     case Intrinsic::vacopy:
       // va_copy should have been lowered.
@@ -1757,6 +1722,22 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           }
 
           bindLocal(kcaller, state, result);
+
+          // (iangneal): update NVM allocation sites
+          if (state.nvmInfo && 
+              result->getWidth() == Context::get().getPointerWidth() &&
+              utils::isNvmAllocationSite(kmodule->module.get(), kcaller->inst)) {
+            
+            if (ri->getFunction() == kmodule->module->getFunction("mmap") ||
+                ri->getFunction() == kmodule->module->getFunction("mmap64")) {
+              ObjectPair op;
+          
+              bool success;
+              assert(state.addressSpace.resolveOne(state, solver, result, op, success));
+              assert(success);
+              executeUpdateNvmInfo(state, kcaller, op.second);
+            }
+          }
         }
       } else {
         // We check that the return value has no users instead of
@@ -2009,13 +1990,16 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     Function *f = getTargetFunction(fp, state);
     InlineAsm *ia = nullptr;
 
+    // (iangneal): It helps NVM heuristics to resolve function pointers.
+    if (state.nvmInfo) {
+      state.nvmInfo->resolveFunctionCall(ki, f);
+    }
+
     if ((ia = dyn_cast<InlineAsm>(fp))) {
       // (iangneal): there's some inline assembly we want to run!
       // CPUID is treated as a call that returns an array which is then
       // extracted from.
       if (ia->getAsmString().find("cpuid") != std::string::npos) {
-        errs() << *ia << " " << numArgs << "\n";
-        errs() << *(i->getParent()->getParent());
 
         // Set up the output of the call.
         Type *t = i->getType();
@@ -2395,7 +2379,9 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   case Instruction::Store: {
     ref<Expr> base = eval(ki, 1, state).value;
     ref<Expr> value = eval(ki, 0, state).value;
-    executeMemoryOperation(state, true, base, value, 0);
+    bool isNontemporal =
+      ki->inst->getMetadata(LLVMContext::MD_nontemporal) != nullptr;
+    executeMemoryOperation(state, true, base, value, 0, isNontemporal);
     break;
   }
 
@@ -2863,47 +2849,23 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 }
 
 void Executor::updateStates(ExecutionState *current) {
+  /**
+   * (iangneal): Update the heuristic first, so that the priorities are up
+   * to date for the NvmPathSearcher.
+   */ 
+  if (current && current->nvmInfo) {
+    std::vector<ExecutionState*> toUpdate;
+    toUpdate.push_back(current);
+    toUpdate.insert(toUpdate.end(), addedStates.begin(), addedStates.end());
+
+    for (ExecutionState *s : toUpdate) {
+      assert(s && s->nvmInfo);
+      s->nvmInfo->stepState(s, s->prevPC, s->pc);
+    }
+  }
+
   if (searcher) {
     searcher->update(current, addedStates, removedStates);
-  }
-  
-  // (iangneal): Update the heuristic as well.
-  std::vector<ExecutionState*> toUpdate;
-  toUpdate.push_back(current);
-  toUpdate.insert(toUpdate.end(), addedStates.begin(), addedStates.end());
-
-  for (ExecutionState *s : toUpdate) {
-    if (s && s->nvmInfo) {
-      
-      // TODO: this all needs to be timed
-      if (current->prevPC->dest < s->stack.back().kf->numRegisters) {
-        ref<Expr> val = getDestCell(*s, s->prevPC).value;
-        // update for prevPC, then set the instruction to the current pc for the
-        // next round.
-        // errs() << "prevPC = " << *current->prevPC->inst << "\n";
-        // errs() << "nvmPC  = " << *current->nvmInfo->currentInst() << "\n";
-        // errs() << "pc     = " << *current->pc->inst << "\n";
-
-        ObjectPair op;
-        bool success;
-        solver->setTimeout(coreSolverTimeout);
-        if (!val.isNull() && 
-            val->getWidth() == Context::get().getPointerWidth() &&
-            s->addressSpace.resolveOne(*s, solver, val, op, success) &&
-            success &&
-            isa<PersistentState>(op.second))
-        {
-          // This value is a pointer into nvm.
-          s->nvmInfo->updateCurrentState(s, s->prevPC, true);
-        } else {
-          s->nvmInfo->updateCurrentState(s, s->prevPC, false);
-        }
-        solver->setTimeout(time::Span());
-      }
-
-      // Now go to the next
-      s->nvmInfo->stepState(s, s->pc);
-    }
   }
 
   states.insert(addedStates.begin(), addedStates.end());
@@ -3249,24 +3211,25 @@ void Executor::terminateStateEarly(ExecutionState &state,
   terminateState(state);
 }
 
+void Executor::terminateStateEarlyPmem(ExecutionState &state) {
+  // (iangneal): Sometimes, a program can forget to call close or unmap.
+  // We need to ensure that the persistence of a program is checked at least
+  // once.
+  std::unordered_set<std::string> errors;
+  if (!isStatePersisted(state, errors)) {
+    terminateStateOnPmemError(state, errors);
+  } else {
+    terminateState(state);
+  }
+}
+
 void Executor::terminateStateOnExit(ExecutionState &state) {
   if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state))) {
     interpreterHandler->processTestCase(state, 0, 0);
   }
   
-  // (iangneal): Sometimes, a program can forget to call close or unmap.
-  // We need to ensure that the persistence of a program is checked at least
-  // once.
-  ExecutionState *toTerm = &state;
-  if (state.persistentObjects.size()) {
-    for (const MemoryObject *mo : state.persistentObjects) {
-      toTerm = executeCheckPersistence(*toTerm, mo);
-      if (!toTerm) return;
-    }
-  }
-
-  terminateState(*toTerm);
+  terminateStateEarlyPmem(state);
 }
 
 const InstructionInfo & Executor::getLastNonKleeInternalInstruction(const ExecutionState &state,
@@ -3374,9 +3337,12 @@ void Executor::terminateStateOnError(ExecutionState &state,
     haltExecution = true;
 }
 
-void Executor::emitPmemError(ExecutionState &state, const std::unordered_set<std::string> &errors) {
+void Executor::emitPmemError(ExecutionState &state,
+                             const std::unordered_set<std::string> &errors) {
   Instruction * lastInst;
   const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
+
+  assert(errors.size() && "no errors to terminate with!");
 
   std::string info_str;
   llvm::raw_string_ostream info(info_str);
@@ -3786,10 +3752,46 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                                       bool isWrite,
                                       ref<Expr> address,
                                       ref<Expr> value /* undef if read */,
-                                      KInstruction *target /* undef if write */) {
+                                      KInstruction *target /* undef if write */,
+                                      bool isNontemporal /* false if read */) {
   Expr::Width type = (isWrite ? value->getWidth() :
                      getWidthForLLVMType(target->inst->getType()));
   unsigned bytes = Expr::getMinBytesForWidth(type);
+
+  // To reduce duplicated code between fast and slow cases
+  auto doOperation =
+    [&](ExecutionState &state,
+        const MemoryObject *mo,
+        const ObjectState *os,
+        ref<Expr> offset) {
+
+      if (isWrite) {
+        if (os->readOnly) {
+          terminateStateOnError(state, "memory error: object read only",
+                                ReadOnly);
+        } else {
+          ObjectState *wos = state.addressSpace.getWriteable(mo, os);
+          wos->write(state, offset, value);
+          if (PersistentState *ps = dyn_cast<PersistentState>(wos)) {
+            if (isNontemporal) {
+              // llvm::errs() << "nontemporal store!\n";
+
+              // Nontemporal writes don't dirty the cache, but they must
+              // still cause an error until a fence happens.
+              ps->persistCacheLineAtOffset(state, offset);
+            }
+          }
+        }
+      } else {
+        ref<Expr> result = os->read(offset, type);
+
+        if (interpreterOpts.MakeConcreteSymbolic)
+          result = replaceReadWithSymbolic(state, result);
+
+        bindLocal(target, state, result);
+      }
+    };
+
 
   if (SimplifySymIndices) {
     if (!isa<ConstantExpr>(address))
@@ -3809,6 +3811,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     success = state.addressSpace.resolveOne(cast<ConstantExpr>(address), op);
   }
   solver->setTimeout(time::Span());
+
 
   if (success) {
     const MemoryObject *mo = op.first;
@@ -3833,26 +3836,9 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     if (inBounds) {
       const ObjectState *os = op.second;
-      if (isWrite) {
-        if (os->readOnly) {
-          terminateStateOnError(state, "memory error: object read only",
-                                ReadOnly);
-        } else {
-          // if (isPersistentMemory(state, mo)) {
-          //   klee_message("Modifying non-volatile MemoryObject");
-          // }
-          ObjectState *wos = state.addressSpace.getWriteable(mo, os);
-          wos->write(state, offset, value);
-        }
-      } else {
-        ref<Expr> result = os->read(offset, type);
-
-        if (interpreterOpts.MakeConcreteSymbolic)
-          result = replaceReadWithSymbolic(state, result);
-
-        bindLocal(target, state, result);
-      }
-
+      executeUpdateNvmInfo(state, state.prevPC, os);
+      // Actually do the read or write
+      doOperation(state, mo, os, offset);
       return;
     }
   }
@@ -3880,23 +3866,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     // bound can be 0 on failure or overlapped
     if (bound) {
-      if (isWrite) {
-        if (os->readOnly) {
-          terminateStateOnError(*bound, "memory error: object read only",
-                                ReadOnly);
-        } else {
-          if (isPersistentMemory(state, mo)) {
-            // klee_message("Modifying non-volatile MemoryObject");
-            // klee_message("Modifying non-volatile MemoryObject (%p)", 
-            //     (void*)dyn_cast<ConstantExpr>(address)->getZExtValue());
-          }
-          ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
-          wos->write(state, mo->getOffsetExpr(address), value);
-        }
-      } else {
-        ref<Expr> result = os->read(mo->getOffsetExpr(address), type);
-        bindLocal(target, *bound, result);
-      }
+      // Actually do the read or write
+      doOperation(*bound, mo, os, mo->getOffsetExpr(address));
     }
 
     unbound = branches.second;
@@ -3937,34 +3908,8 @@ void Executor::executeMarkPersistent(ExecutionState &state,
   const ObjectState *os = state.addressSpace.findObject(mo);
   assert(os && "Cannot mark unbound MemoryObject persistent");
 
-  // Create a symbolic bit array to track the state of each cache line.
-  // Initialize all cache lines to persisted (1).
-  unsigned nCacheLines = memory->getSizeInCacheLines(mo->size);
-  ref<ConstantExpr> Persisted = PersistentState::getPersistedExpr();
-  std::vector< ref<ConstantExpr> > InitialValues(nCacheLines, Persisted);
-  const std::string &baseName = mo->name;
-  const Array *cacheLines = arrayCache.CreateArray(
-      baseName + "_cacheLines", nCacheLines,
-      &InitialValues[0], &InitialValues[0] + InitialValues.size(),
-      Expr::Int32 /* domain */, Expr::Int8 /* range */);
-
-  // Create a symbolic pointer array to track the source of modifications 
-  // to persistent cache lines. Initialize to nullptr (64-bit 0)
-  ref<ConstantExpr> nullInst = PersistentState::getNullptr();
-  std::vector<ref<ConstantExpr>> initPtrs(nCacheLines, nullInst);
-  const Array *rootCauseArr = arrayCache.CreateArray(
-      baseName + "_rootCause", nCacheLines,
-      &initPtrs[0], &initPtrs[0] + initPtrs.size(),
-      Expr::Int32 /* indicies */, Expr::Int64 /* value size */);
-
-  // Create array so we can create an unbounded value.
-  const Array *idxArray = arrayCache.CreateArray(
-      baseName + "_idxArray", 1, nullptr, nullptr,
-      Expr::Int32, Expr::Int32);
-
   // Construct a persistent ObjectState and bind it to the memory object.
-  state.addressSpace.bindObject(mo, 
-      new PersistentState(os, cacheLines, rootCauseArr, idxArray));
+  state.addressSpace.bindObject(mo, new PersistentState(state, os));
 
   /* std::string name; */
   /* mo->getAllocInfo(name); */
@@ -3984,6 +3929,14 @@ bool Executor::isPersistentMemory(ExecutionState &state, const MemoryObject *mo)
     return true;
   }
   return false;
+}
+
+void Executor::executeUpdateNvmInfo(ExecutionState &state, 
+                                    KInstruction *loc, 
+                                    const ObjectState *cos) {
+  if (state.nvmInfo && loc && cos) {
+    state.nvmInfo->updateCurrentState(&state, loc, isa<PersistentState>(cos));
+  }
 }
 
 void Executor::executePersistentMemoryFlush(ExecutionState &state,
@@ -4008,34 +3961,42 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
       ref<Expr> offset = mo->getOffsetExpr(address);
 
 #if 0
-      ref<Expr> alreadyPersisted = ps->isOffsetAlreadyPersisted(offset);
-      StatePair notPersisted = fork(state, Expr::createIsZero(alreadyPersisted) , true);
-      if (notPersisted.first) {
-        auto& goodState = *notPersisted.first;
-        os = goodState.addressSpace.findObject(mo);
-        assert(os && "Could not get ObjectState from notPersisted.first");
-        wos = goodState.addressSpace.getWriteable(mo, os);
-        assert(wos && "Could not get writeable ObjectState from notPersisted.first");
+      // Check if offset already flushed.
+      ref<Expr> check = ps->getIsOffsetPersistedExpr(offset,
+                                                     true /* allow pending */);
+
+      StatePair isAlreadyPersisted = fork(state, check, true);
+
+      auto *errState = isAlreadyPersisted.first;
+      auto *goodState = isAlreadyPersisted.second;
+
+      // Warn if already persisted.
+      if (errState) {
+        os = errState->addressSpace.findObject(mo);
+        assert(os);
+        wos = errState->addressSpace.getWriteable(mo, os);
+        assert(wos);
         ps = dyn_cast<PersistentState>(wos);
-        assert(ps && "Could not get PersistentState from notPersisted.first");
-        ps->persistCacheLineAtOffset(offset);
-      }
-      // offset must already persisted, should error!
-      if (notPersisted.second && !notPersisted.first) {
-        auto& errState = *notPersisted.second;
-        os = errState.addressSpace.findObject(mo);
-        assert(os && "Could not get ObjectState from notPersisted.second");
-        wos = errState.addressSpace.getWriteable(mo, os);
-        assert(wos && "Could not get writeable ObjectState from notPersisted.second");
-        ps = dyn_cast<PersistentState>(wos);
-        assert(ps && "Could not get PersistentState from notPersisted.second");
-        llvm::errs() << "Unnecessary Flush\n";
-        std::unordered_set<std::string> errors {ps->getLocationInfo(errState)};
+        assert(ps);
+        // llvm::errs() << "Unnecessary Flush\n";
+
         // avoid masking later bugs; emit error, but continue
-        emitPmemError(errState, errors);
+        emitPmemError(*errState, ps->getLastFlush(solver, *errState, offset));
+      }
+
+      // Process normally if not yet persisted.
+      if (goodState) {
+        os = goodState->addressSpace.findObject(mo);
+        assert(os);
+        wos = goodState->addressSpace.getWriteable(mo, os);
+        assert(wos);
+        ps = dyn_cast<PersistentState>(wos);
+        assert(ps);
+        ps->persistCacheLineAtOffset(state, offset);
+        // llvm::errs() << "Good Flush\n";
       }
 #else
-      ps->persistCacheLineAtOffset(offset);
+      ps->persistCacheLineAtOffset(state, offset);
 #endif
     }
   } else {
@@ -4044,60 +4005,93 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
 }
 
 void Executor::executePersistentMemoryFence(ExecutionState &state) {
+  // llvm::errs() << "Fence\n";
   for (const MemoryObject *mo : state.persistentObjects) {
     const ObjectState *os = state.addressSpace.findObject(mo);
     assert(os);
     ObjectState *wos = state.addressSpace.getWriteable(mo, os);
     PersistentState *ps = dyn_cast<PersistentState>(wos);
-    ps->commitPendingPersists();
+    ps->commitPendingPersists(state);
   }
 }
 
-/**
- * TODO: (iangneal): we can refactor the slice constraint stuff. Currently, 
- * there's only one set of constraints, so it's a little unnecessary.
- */
-ExecutionState *Executor::executeCheckPersistence(ExecutionState &state,
-                                                  const MemoryObject *mo) {
+
+bool Executor::isObjectPersisted(ExecutionState &state,
+                                 const MemoryObject *mo,
+                                 std::unordered_set<std::string> &errors) {
+
   const ObjectState *os = state.addressSpace.findObject(mo);
   assert(os);
   const PersistentState *ps = dyn_cast<PersistentState>(os);
   assert(ps);
 
-  ExecutionState *currState = &state;
+  // Get a symbolic offset into the object and constrain it to be within
+  // the object's bounds.
+  auto anyOffset = ps->getAnyOffsetExpr();
+  auto inBoundsConstraint = mo->getBoundsCheckOffset(anyOffset);
+  state.constraints.addConstraint(inBoundsConstraint);
 
-  for (const ref<Expr> &sliceConstraint : ps->getConstraints()) {
-    if (!currState) break;
+  bool isPersisted;
+  bool success = solver->mustBeTrue(state, ps->getIsOffsetPersistedExpr(anyOffset),
+                                    isPersisted);
+  assert(success && "FIXME: Unhandled solver failure");
 
-    // fprintf(stderr, "check slice for %p\n", (void*)mo->address);
-    // sliceConstraint->dump();
-    currState->constraints.addConstraint(sliceConstraint);
+  state.constraints.removeConstraint(inBoundsConstraint);
 
-    StatePair isPersisted = fork(*currState, ps->isPersistedUnconstrained(), true);
+  // If not definitely persisted, terminate it.
+  if (!isPersisted) {
+    auto rootCauses = ps->getReasonsNotPersisted(solver, state);
+    errors.insert(rootCauses.begin(), rootCauses.end());
+  }
 
+  return isPersisted;
+}
+
+bool Executor::isStatePersisted(ExecutionState &state,
+                                std::unordered_set<std::string> &errors) {
+  bool isPersisted = true;
+  if (state.persistentObjects.size()) {
+    for (const MemoryObject *mo : state.persistentObjects) {
+      bool objPersisted = isObjectPersisted(state, mo, errors);
+      isPersisted = isPersisted && objPersisted;
+    }
+  }
+
+  return isPersisted;
+}
+
+
+ExecutionState *Executor::executeGetUnpersisted(ExecutionState &state,
+                                                const std::unordered_set<const MemoryObject*> &mos) {
+
+  ref<Expr> allPersisted = ConstantExpr::create(true, Expr::Bool);
+  std::list<ref<Expr>> allCons;
+  for (const MemoryObject *mo : mos) {
+    const ObjectState *os = state.addressSpace.findObject(mo);
+    assert(os);
+    const PersistentState *ps = dyn_cast<PersistentState>(os);
+    assert(ps);
+    // Get a symbolic offset into the object and constrain it to be within
+    // the object's bounds.
+    auto anyOffset = ps->getAnyOffsetExpr();
+    auto inBoundsConstraint = mo->getBoundsCheckOffset(anyOffset);
+    allCons.push_back(inBoundsConstraint);
+    state.constraints.addConstraint(inBoundsConstraint);
+    allPersisted = AndExpr::create(allPersisted, 
+                                   ps->getIsOffsetPersistedExpr(anyOffset));
+  }
+  
+  StatePair isPersisted = fork(state, allPersisted, true);
+  for (auto cons : allCons) {
     if (isPersisted.first) {
-      isPersisted.first->constraints.removeConstraint(sliceConstraint);
+      isPersisted.first->constraints.removeConstraint(cons);
     }
     if (isPersisted.second) {
-      isPersisted.second->constraints.removeConstraint(sliceConstraint);
-    } 
-
-    // If there's a state where it's not definitely persisted, terminate it.
-    ExecutionState *notPersisted = isPersisted.second;
-    if (notPersisted) {
-      const ObjectState *nos = notPersisted->addressSpace.findObject(mo);
-      assert(nos);
-      const PersistentState *nps = dyn_cast<PersistentState>(nos);
-      assert(nps);
-      llvm::errs() << "Unpersisted Memory\n";
-      terminateStateOnPmemError(*notPersisted, 
-                                nps->getRootCauses(solver, *notPersisted));
+      isPersisted.second->constraints.removeConstraint(cons);
     }
+  }
 
-    currState = isPersisted.first;
-  } 
-
-  return currState;
+  return isPersisted.second;
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state,

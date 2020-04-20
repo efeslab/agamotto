@@ -94,6 +94,10 @@ class Executor : public Interpreter {
   friend class Searcher;
   friend class NvmPathSearcher;
   friend class NvmHeuristicInfo;
+  friend class NvmStaticHeuristic;
+  friend class NvmInsensitiveDynamicHeuristic;
+  friend class NvmContextDynamicHeuristic;
+  friend class NvmHeuristicBuilder;
   friend class NvmInstructionDesc;
 
 public:
@@ -321,7 +325,8 @@ private:
                               bool isWrite,
                               ref<Expr> address,
                               ref<Expr> value /* undef if read */,
-                              KInstruction *target /* undef if write */);
+                              KInstruction *target /* undef if write */,
+                              bool isNontemporal=false /* false if read */);
 
   void executePersistentMemoryFlush(ExecutionState &state,
                                     ref<Expr> address);
@@ -335,12 +340,19 @@ private:
   void executeMarkPersistent(ExecutionState &state, const MemoryObject *mo);
   bool isPersistentMemory(ExecutionState &state, const MemoryObject *mo);
 
-  /// Asserts the persistence of a given MemoryObject, forking if necessary.
+  /// Resolve the address to update the nvmInfo in the state.
+  void executeUpdateNvmInfo(ExecutionState &state, KInstruction *loc, const ObjectState *cos);
+
+  /// Check persistence of all memory objects. Return ALL errors.
+  /// Credit to @bgreeves
+  bool isStatePersisted(ExecutionState &state, std::unordered_set<std::string> &errors);
+  bool isObjectPersisted(ExecutionState &state, const MemoryObject *mo, std::unordered_set<std::string> &errors);
+
+  /// Asserts the persistence of a given state, forking if necessary.
   /// A state in which mo is definitely not persisted will terminate with error.
-  /// Return: a pointer to the remaining state, or nullptr if all states were
-  ///         killed due to pmem errors.
-  ExecutionState *executeCheckPersistence(ExecutionState &state, 
-                                          const MemoryObject *mo);
+  /// Return: a pointer to the unpersisted state.
+  ExecutionState *executeGetUnpersisted(ExecutionState &state, 
+                                        const std::unordered_set<const MemoryObject*> &mos);
 
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included
@@ -429,6 +441,8 @@ private:
 
   // remove state from queue and delete
   void terminateState(ExecutionState &state);
+  // remove state from queue and delete after checking for pmem errors
+  void terminateStateEarlyPmem(ExecutionState &state);
   // call exit handler and terminate state
   void terminateStateEarly(ExecutionState &state, const llvm::Twine &message);
   // call exit handler and terminate state

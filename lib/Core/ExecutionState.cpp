@@ -44,6 +44,10 @@ cl::opt<bool> DebugLogStateMerge(
     cl::cat(MergeCat));
 }
 
+namespace klee {
+  extern cl::opt<NvmHeuristicBuilder::Type> NvmCheck;
+}
+
 /***/
 
 StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
@@ -56,8 +60,6 @@ StackFrame::StackFrame(const StackFrame &s)
   : caller(s.caller),
     kf(s.kf),
     callPathNode(s.callPathNode),
-    nvmArgs(s.nvmArgs),
-    nvmDesc(s.nvmDesc),
     allocas(s.allocas),
     minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn),
     varargs(s.varargs) {
@@ -88,8 +90,8 @@ ExecutionState::ExecutionState(Executor *executor,
     ptreeNode(0),
     steppedInstructions(0) {
   pushFrame(0, kf);
-  if (modOpts.EnableNvmInfo) {
-    nvmInfo = std::make_unique<NvmHeuristicInfo>(executor, kf, this);
+  if (NvmCheck != NvmHeuristicBuilder::Type::None) {
+    nvmInfo = NvmHeuristicBuilder::create(NvmCheck, executor, kf);
   }
 }
 
@@ -110,7 +112,6 @@ ExecutionState::~ExecutionState() {
     cur_mergehandler->removeOpenState(this);
   }
 
-
   while (!stack.empty()) popFrame();
 }
 
@@ -120,9 +121,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     stack(state.stack),
     incomingBBIndex(state.incomingBBIndex),
 
-    // Copy constructor for NvmHeuristicInfo
-    nvmInfo(state.nvmInfo ? std::make_unique<NvmHeuristicInfo>(*state.nvmInfo)
-                          : nullptr),
+    nvmInfo(NvmHeuristicBuilder::copy(state.nvmInfo)),
 
     addressSpace(state.addressSpace),
     constraints(state.constraints),
@@ -159,19 +158,6 @@ ExecutionState *ExecutionState::branch() {
   falseState->coveredLines.clear();
 
   return falseState;
-}
-
-void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf,
-    const NvmFunctionInfo &nvmInfo) {
-  // klee_warning("NVM push frame!");
-  StackFrame new_frame(caller, kf);
-  const CallInst *ci = dyn_cast<CallInst>(caller->inst);
-  if (!stack.empty() && ci) {
-    new_frame.nvmArgs = nvmInfo.getNvmArgs(stack.back().nvmDesc, ci);
-  }
-  new_frame.nvmDesc = NvmFunctionCallDesc(kf->function, new_frame.nvmArgs);
-
-  stack.push_back(new_frame);
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {

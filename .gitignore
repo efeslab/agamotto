@@ -40,5 +40,8 @@ examples/**/*.ll
 examples/**/klee-last
 examples/**/klee-out-*
 
+# NVMBugs
+nvmbugs/**/*.bc
+
 # Google test
 googletest-release-*

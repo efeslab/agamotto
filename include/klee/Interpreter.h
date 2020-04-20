@@ -44,10 +44,7 @@ public:
 
   // (iangneal): for NVM heuristic stats. I want to know what kind of states we
   // got rid of.
-  virtual void incPathsCutEndTrace() = 0;
-  virtual void incPathsCutUninteresting() = 0;
   virtual void setNvm() = 0;
-  virtual void setNvmCoverage(double) = 0;
 
   virtual void processTestCase(const ExecutionState &state,
                                const char *err,
@@ -65,9 +62,6 @@ public:
     bool Optimize;
     bool CheckDivZero;
     bool CheckOvershift;
-    // (iangneal): NVM-KLEE feature
-    bool EnableNvmInfo;  // For counting NVM coverage and such.
-    bool CheckNvm;       // Actually doing bug detection.
 
     ModuleOptions() = default;
 
@@ -75,12 +69,10 @@ public:
                   const std::string &_EntryPoint, 
                   const std::string &_LibcMainFunction,
                   bool _Optimize,
-                  bool _CheckDivZero, bool _CheckOvershift,
-                  bool _EnableNvmInfo, bool _CheckNvm)
+                  bool _CheckDivZero, bool _CheckOvershift)
         : LibraryDir(_LibraryDir), EntryPoint(_EntryPoint), 
           LibcMainFunction(_LibcMainFunction), Optimize(_Optimize),
-          CheckDivZero(_CheckDivZero), CheckOvershift(_CheckOvershift),
-          EnableNvmInfo(_EnableNvmInfo || _CheckNvm), CheckNvm(_CheckNvm) {}
+          CheckDivZero(_CheckDivZero), CheckOvershift(_CheckOvershift) {}
   };
 
   enum LogType

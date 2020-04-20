@@ -13,8 +13,20 @@ klee_add_test_executable(TARGET 001_BranchMod SOURCES
   branch_nvm_mod.c
 )
 
+klee_add_test_object(TARGET 001_InlineAsm SOURCES
+  inline_asm.c
+)
+
 klee_add_test_object(TARGET 001_SimpleMod SOURCES
   simple_nvm_mod.c
+)
+
+klee_add_test_object(TARGET 001_FlushAndFence SOURCES
+  flush_and_fence.c
+)
+
+klee_add_test_object(TARGET 001_FlushNoFence SOURCES
+  flush_no_fence.c
 )
 
 klee_add_test_object(TARGET 001_SimpleBranchMod SOURCES
@@ -36,3 +48,14 @@ klee_add_test_object(TARGET 001_CleanFlushErr SOURCES
 klee_add_test_object(TARGET 001_MayFlushErr SOURCES
   may_flush_err.c
 )
+
+klee_add_test_object(TARGET 001_NontemporalErr SOURCES
+  nontemporal_err.c
+)
+
+klee_add_test_object(TARGET 001_NontemporalNoErr SOURCES
+  nontemporal_noerr.c
+)
+klee_add_test_object(TARGET 001_SimpleLoop SOURCES
+  simple_loop.c
+) 

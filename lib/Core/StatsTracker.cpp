@@ -332,16 +332,16 @@ void StatsTracker::done() {
 }
 
 void StatsTracker::markNvmBasicBlockVisited(const llvm::BasicBlock *visited) {
-  NvmFunctionInfo *info = executor.kmodule->getNvmFunctionInfo();
-  if (!info) return;
+  // NvmFunctionInfo *info = executor.kmodule->getNvmFunctionInfo();
+  // if (!info) return;
   
-  if (nvmBlockCoverage.empty()) {
-    for (const auto *bb : info->getAllInterestingBB()) {
-      nvmBlockCoverage[bb] = 0;
-    }
-  } 
+  // if (nvmBlockCoverage.empty()) {
+  //   for (const auto *bb : info->getAllInterestingBB()) {
+  //     nvmBlockCoverage[bb] = 0;
+  //   }
+  // } 
 
-  ++nvmBlockCoverage[visited];
+  // ++nvmBlockCoverage[visited];
 }
 
 void StatsTracker::stepInstruction(ExecutionState &es) {
@@ -484,6 +484,9 @@ void StatsTracker::writeStatsHeader() {
 #endif
              << "QueryCexCacheHits INTEGER,"
              // (iangneal): For NVM-KLEE
+             << "NvmHeuristicTime INTEGER, "
+             << "NvmGetSharedTime INTEGER, "
+             << "NvmAndersenTime INTEGER, "
              << "NvmNumBlocksTotal INTEGER,"
              << "NvmNumBlocksCovered INTEGER,"
              << "NvmNumBlocksUnique INTEGER,"
@@ -527,6 +530,9 @@ void StatsTracker::writeStatsHeader() {
 #endif
              << "QueryCexCacheHits ," 
              // (iangneal): For NVM-KLEE
+             << "NvmHeuristicTime ,"
+             << "NvmGetSharedTime ,"
+             << "NvmAndersenTime ,"
              << "NvmNumBlocksTotal ,"
              << "NvmNumBlocksCovered ,"
              << "NvmNumBlocksUnique ,"
@@ -534,6 +540,9 @@ void StatsTracker::writeStatsHeader() {
              << "NvmHeuristicStatesKilled ,"
              << "NvmHeuristicStatesDeferred "      
              << ") VALUES ( "
+             << "?, "
+             << "?, "
+             << "?, "
              << "?, "
              << "?, "
              << "?, "
@@ -596,14 +605,17 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, 19, stats::queryCexCacheMisses);
   sqlite3_bind_int64(insertStmt, 20, stats::queryCexCacheHits);
   // (iangneal): For NVM-KLEE
-  sqlite3_bind_int64(insertStmt, 21, nvmBlockCoverage.size());
-  sqlite3_bind_int64(insertStmt, 22, getNvmNumBlocksCovered());
-  sqlite3_bind_int64(insertStmt, 23, getNvmNumBlocksUnique());
-  sqlite3_bind_int64(insertStmt, 24, getNvmCoverage());
-  sqlite3_bind_int64(insertStmt, 25, stats::nvmStatesKilledEndTrace + stats::nvmStatesKilledIrrelevant);
-  sqlite3_bind_int64(insertStmt, 26, stats::nvmStatesDeferred);
+  sqlite3_bind_int64(insertStmt, 21, stats::nvmHeuristicTime);
+  sqlite3_bind_int64(insertStmt, 22, stats::nvmGetSharedTime);
+  sqlite3_bind_int64(insertStmt, 23, stats::nvmAndersenTime);
+  sqlite3_bind_int64(insertStmt, 24, nvmBlockCoverage.size());
+  sqlite3_bind_int64(insertStmt, 25, getNvmNumBlocksCovered());
+  sqlite3_bind_int64(insertStmt, 26, getNvmNumBlocksUnique());
+  sqlite3_bind_int64(insertStmt, 27, getNvmCoverage());
+  sqlite3_bind_int64(insertStmt, 28, stats::nvmStatesKilledEndTrace + stats::nvmStatesKilledIrrelevant);
+  sqlite3_bind_int64(insertStmt, 29, stats::nvmStatesDeferred);
 #ifdef KLEE_ARRAY_DEBUG
-  sqlite3_bind_int64(insertStmt, 27, stats::arrayHashTime);
+  sqlite3_bind_int64(insertStmt, 30, stats::arrayHashTime);
 #endif
   int errCode = sqlite3_step(insertStmt);
   if(errCode != SQLITE_DONE) klee_error("Error writing stats data: %s", sqlite3_errmsg(statsFile));
