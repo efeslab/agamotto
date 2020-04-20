@@ -126,6 +126,12 @@ namespace klee {
 
     public:
 
+      uint64_t hash(void) const {
+        return std::hash<uint64_t>{}((not_local_nvm_.size() << 16) | 
+                                     (not_global_nvm_.size() << 8) |
+                                      mmap_calls_.size());
+      }
+
       /**
        * Set up the value state when performing a function call.
        * We just return an instance with the global variables and the 
@@ -238,13 +244,12 @@ namespace klee {
           : function(f), initialState(init) {}
 
         bool operator==(const ContextCacheKey &rhs) const {
-          return function == rhs.function && initialState == rhs.initialState;
+          return function == rhs.function && *initialState == *rhs.initialState;
         }
 
         struct Hash {
           uint64_t operator()(const ContextCacheKey &cck) const {
-            return std::hash<void*>{}(cck.function) ^ 
-                   std::hash<void*>{}(cck.initialState.get());
+            return std::hash<void*>{}(cck.function) ^ cck.initialState->hash();
           }
         };
       };
@@ -305,7 +310,8 @@ namespace klee {
       /**
        * After this, the context should be fully valid.
        */
-      void doPriorityPropagation(void);
+      std::list<llvm::Instruction*> setCoreWeights(void);
+      void setAuxWeights(std::list<llvm::Instruction*> auxInsts);
       void setPriorities(void);
 
     public:
@@ -337,7 +343,10 @@ namespace klee {
        * instruction.
        */
       uint64_t getRootPriority(void) const {
-        return priorities.at(function->getEntryBlock().getFirstNonPHIOrDbg());
+        llvm::Instruction *i = function->getEntryBlock().getFirstNonPHIOrDbg();
+        if (priorities.count(i)) return priorities.at(i);
+        
+        return hasCoreWeight ? 1lu : 0lu;
       }
 
       uint64_t getPriority(KInstruction *pc) const {
@@ -565,6 +574,7 @@ namespace klee {
       NvmContextDynamicHeuristic(Executor *executor, KFunction *mainFn);
 
       virtual void computePriority() override {
+        contextDesc->setAuxWeights(contextDesc->setCoreWeights());
         contextDesc->setPriorities();
       }
 
@@ -602,10 +612,13 @@ namespace klee {
         double pWeights = 100.0 * ((double)nonZeroWeights / (double)contextDesc->weights.size());
         double pPriorities = 100.0 * ((double)nonZeroPriorities / (double)contextDesc->priorities.size());
 
-        llvm::errs() << "NvmContext: " << contextDesc->str() << "\n";
+        llvm::errs() << "NvmContext: \n" << contextDesc->str() << "\n";
         llvm::errs() << "\tCurrent instruction: " << *curr->inst << "\n"; 
         fprintf(stderr, "\t%% insts with weight: %f%%\n", pWeights);
         fprintf(stderr, "\t%% insts with priority: %f%%\n", pPriorities);
+        for (auto &p : contextDesc->priorities) {
+          llvm::errs() << *p.first << "=> " << p.second << "\n";
+        }
       }
   };
   /* #endregion */

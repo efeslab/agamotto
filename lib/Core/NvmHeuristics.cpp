@@ -332,9 +332,9 @@ uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci,
 
   // First, we check the cache.
   ContextCacheKey key(f, valueState->doCall(ci, f));
-  auto res = contextCache[key];
-  if (res) {
-    return res->getRootPriority();
+  if (contextCache.count(key)) {
+    contexts[ci] = contextCache[key];
+    return contextCache[key]->getRootPriority();
   }
 
   Instruction *retLoc = ci->getNextNode();
@@ -346,11 +346,14 @@ uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci,
                            hasCoreWeight);
   auto sharedCtx = std::make_shared<NvmContextDesc>(calledCtx);
 
+  auto auxInsts = sharedCtx->setCoreWeights();
+
   // We add it first to avoid infinite recursion.
   contexts[ci] = sharedCtx;
   contextCache[key] = sharedCtx;
 
   // We can do this later as it mutates the object
+  sharedCtx->setAuxWeights(std::move(auxInsts));
   sharedCtx->setPriorities();
   
   return sharedCtx->getRootPriority();
@@ -411,7 +414,7 @@ uint64_t NvmContextDesc::computeAuxInstWeight(Instruction *i) {
   return 0lu;
 }
 
-void NvmContextDesc::doPriorityPropagation(void) {
+void NvmContextDesc::setPriorities(void) {
   std::list<BasicBlock*> toProp;
 
   for (BasicBlock &bb : *function) {
@@ -454,7 +457,7 @@ void NvmContextDesc::doPriorityPropagation(void) {
   }
 }
 
-void NvmContextDesc::setPriorities(void) {
+std::list<Instruction*> NvmContextDesc::setCoreWeights(void) {
   // I will accumulate these as I iterate so we don't have to re-iterate over
   // the entire function as we resolve core instructions.
   std::list<Instruction*> auxInsts;
@@ -472,11 +475,13 @@ void NvmContextDesc::setPriorities(void) {
     }
   }
 
+  return auxInsts;
+}
+
+void NvmContextDesc::setAuxWeights(std::list<Instruction*> auxInsts) {
   for (Instruction *i : auxInsts) {
     weights[i] = computeAuxInstWeight(i);
   }
-
-  doPriorityPropagation();
 }
 
 NvmContextDesc::Shared NvmContextDesc::tryGetNextContext(KInstruction *pc,
@@ -517,7 +522,7 @@ NvmContextDesc::Shared NvmContextDesc::tryResolveFnPtr(CallInst *ci, Function *f
   auto copy = dup();
 
   copy->constructCalledContext(ci, f);
-  copy->doPriorityPropagation();
+  copy->setPriorities();
   return copy;
 }
 
