@@ -405,7 +405,8 @@ bool NvmContextDesc::isaAuxInst(Instruction *i) const {
 
 uint64_t NvmContextDesc::computeAuxInstWeight(Instruction *i) {
   if (isa<ReturnInst>(i)) {
-    return returnHasWeight ? 1lu : 0lu;
+    // return returnHasWeight ? 1lu : 0lu;
+    return 1lu;
   } else if (auto *ci = dyn_cast<CallInst>(i)) {
     return constructCalledContext(ci);
   }
