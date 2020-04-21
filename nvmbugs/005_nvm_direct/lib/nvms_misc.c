@@ -63,6 +63,7 @@ SOFTWARE.
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -122,6 +123,7 @@ void nvms_flush(
 void nvms_persist()
 {
 #ifdef LIBPMEM_H
+    printf("pmem_drain being invoked\n");
     pmem_drain();
 #else
     return; // need some ASM here
