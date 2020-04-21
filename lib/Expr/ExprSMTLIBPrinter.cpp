@@ -659,8 +659,8 @@ void ExprSMTLIBPrinter::printQueryInSingleAssert() {
   ref<Expr> queryAssert = Expr::createIsZero(query->expr);
 
   // Print constraints inside the main query to reuse the Expr bindings
-  for (std::vector<ref<Expr> >::const_iterator i = query->constraints.begin(),
-                                               e = query->constraints.end();
+  for (ConstraintManager::const_iterator i = query->constraints.begin(),
+                                         e = query->constraints.end();
        i != e; ++i) {
     queryAssert = AndExpr::create(queryAssert, *i);
   }

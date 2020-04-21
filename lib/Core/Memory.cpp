@@ -695,7 +695,7 @@ PersistentState::PersistentState(ExecutionState &state, const ObjectState *os)
   // no need to store one as a member variable.
   idxUnbounded = ReadExpr::create(UpdateList(idxArray, nullptr),
                                   ConstantExpr::create(0, idxArray->range));
-  state.addSymbolic(getObject(), idxArray);
+  
 }
 
 PersistentState::PersistentState(const PersistentState &ps)
@@ -1028,7 +1028,7 @@ std::string PersistentState::getLocationInfo(const ExecutionState &state,
   msg << "Stack: \n";
   state.dumpStack(msg);
 
-  return infoStr;
+  return msg.str();
 }
 
 std::string PersistentState::getAllocInfo(ref<Expr> offset, 
@@ -1046,22 +1046,23 @@ std::string PersistentState::getAllocInfo(ref<Expr> offset,
   getObject()->getAllocInfo(tmp);
   msg << tmp << "\n";
 
-  return infoStr;
+  return msg.str();
 }
 
 std::string PersistentState::getUniqueArrayName(ExecutionState &state, 
                                                 const char *suffix) const {
-  static uint64_t id = 0;
-  std::string baseName = getObject()->name + suffix;
-  std::string uniqueName = baseName + "_" + llvm::utostr(++id);
-  assert(id < UINT64_MAX);
+  std::string arrayName = getObject()->name + suffix;
 
-  while (!state.arrayNames.insert(uniqueName).second) {
-    uniqueName = baseName + "_" + llvm::utostr(++id);
-    assert(id < UINT64_MAX);
-  }
+  assert(state.arrayNames.insert(arrayName).second && "array names not unique!");
 
-  return uniqueName;
+  return arrayName;
+}
+
+void PersistentState::flushAll() {
+  rootCauseWrites = UpdateList(rootCauseWrites.root, nullptr);
+  pendingRootCauseWrites = UpdateList(pendingRootCauseWrites.root, nullptr);
+  cacheLineUpdates = UpdateList(cacheLineUpdates.root, nullptr);
+  pendingRootCauseWrites = UpdateList(pendingRootCauseWrites.root, nullptr);
 }
 
 /* #endregion */

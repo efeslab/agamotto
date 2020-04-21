@@ -3216,7 +3216,7 @@ void Executor::terminateStateEarlyPmem(ExecutionState &state) {
   // We need to ensure that the persistence of a program is checked at least
   // once.
   std::unordered_set<std::string> errors;
-  if (!isStatePersisted(state, errors)) {
+  if (getAllPersistenceErrors(state, errors)) {
     terminateStateOnPmemError(state, errors);
   } else {
     terminateState(state);
@@ -4011,9 +4011,9 @@ void Executor::executePersistentMemoryFence(ExecutionState &state) {
 }
 
 
-bool Executor::isObjectPersisted(ExecutionState &state,
-                                 const MemoryObject *mo,
-                                 std::unordered_set<std::string> &errors) {
+bool Executor::getPersistenceErrors(ExecutionState &state,
+                                    const MemoryObject *mo,
+                                    std::unordered_set<std::string> &errors) {
 
   const ObjectState *os = state.addressSpace.findObject(mo);
   assert(os);
@@ -4025,69 +4025,37 @@ bool Executor::isObjectPersisted(ExecutionState &state,
   auto anyOffset = ps->getAnyOffsetExpr();
   auto inBoundsConstraint = mo->getBoundsCheckOffset(anyOffset);
   state.constraints.addConstraint(inBoundsConstraint);
+  // auto inBoundsOffset = mo->getBoundsCheckOffset(anyOffset);
+  // auto anyOffset = mo->getBoundsCheckOffset(ps->getAnyOffsetExpr());
 
   bool isPersisted;
+  // bool success = solver->mustBeTrue(state, ps->getIsOffsetPersistedExpr(inBoundsOffset),
+  //                                   isPersisted);
   bool success = solver->mustBeTrue(state, ps->getIsOffsetPersistedExpr(anyOffset),
                                     isPersisted);
   assert(success && "FIXME: Unhandled solver failure");
 
   state.constraints.removeConstraint(inBoundsConstraint);
 
-  // If not definitely persisted, terminate it.
   if (!isPersisted) {
     auto rootCauses = ps->getReasonsNotPersisted(solver, state);
     errors.insert(rootCauses.begin(), rootCauses.end());
   }
 
-  return isPersisted;
+  return !isPersisted;
 }
 
-bool Executor::isStatePersisted(ExecutionState &state,
-                                std::unordered_set<std::string> &errors) {
-  bool isPersisted = true;
+bool Executor::getAllPersistenceErrors(ExecutionState &state,
+                                       std::unordered_set<std::string> &errors) {
+  bool hasErr = false;
   if (state.persistentObjects.size()) {
     for (const MemoryObject *mo : state.persistentObjects) {
-      bool objPersisted = isObjectPersisted(state, mo, errors);
-      isPersisted = isPersisted && objPersisted;
+      bool objHasErr = getPersistenceErrors(state, mo, errors);
+      hasErr = hasErr || objHasErr;
     }
   }
 
-  return isPersisted;
-}
-
-
-ExecutionState *Executor::executeGetUnpersisted(ExecutionState &state,
-                                                const std::unordered_set<const MemoryObject*> &mos) {
-
-  ref<Expr> allPersisted = ConstantExpr::create(true, Expr::Bool);
-  std::list<ref<Expr>> allCons;
-  for (const MemoryObject *mo : mos) {
-    const ObjectState *os = state.addressSpace.findObject(mo);
-    assert(os);
-    const PersistentState *ps = dyn_cast<PersistentState>(os);
-    assert(ps);
-    // Get a symbolic offset into the object and constrain it to be within
-    // the object's bounds.
-    auto anyOffset = ps->getAnyOffsetExpr();
-    auto inBoundsConstraint = mo->getBoundsCheckOffset(anyOffset);
-    allCons.push_back(inBoundsConstraint);
-    state.constraints.addConstraint(inBoundsConstraint);
-    allPersisted = AndExpr::create(allPersisted, 
-                                   ps->getIsOffsetPersistedExpr(anyOffset));
-  }
-  
-  StatePair isPersisted = fork(state, allPersisted, true);
-
-  for (auto cons : allCons) {
-    if (isPersisted.first) {
-      isPersisted.first->constraints.removeConstraint(cons);
-    }
-    if (isPersisted.second) {
-      isPersisted.second->constraints.removeConstraint(cons);
-    }
-  }
-
-  return isPersisted.second;
+  return hasErr;
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state,
@@ -4357,8 +4325,13 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
 
   std::vector< std::vector<unsigned char> > values;
   std::vector<const Array*> objects;
-  for (unsigned i = 0; i != state.symbolics.size(); ++i)
+  for (unsigned i = 0; i != state.symbolics.size(); ++i) {
     objects.push_back(state.symbolics[i].second);
+    // errs() << "OBJ " << state.symbolics[i].second->getName() << "\n";
+  }
+
+  // Query(tmp.constraints, ConstantExpr::alloc(0, Expr::Bool)).dump();
+  
   bool success = solver->getInitialValues(tmp, objects, values);
   solver->setTimeout(time::Span());
   if (!success) {

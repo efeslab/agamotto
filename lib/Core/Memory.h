@@ -478,6 +478,11 @@ class PersistentState : public ObjectState {
     static ref<ConstantExpr> getDirtyExpr();
     static ref<ConstantExpr> getNullptr();
 
+    /**
+     * Resets all cache line state to the default.
+     */
+    void flushAll();
+
   private:
     ref<Expr> isCacheLinePersisted(unsigned offset, bool pending=false) const;
     ref<Expr> isCacheLinePersisted(ref<Expr> offset, bool pending=false) const;
