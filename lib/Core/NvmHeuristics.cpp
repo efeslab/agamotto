@@ -36,7 +36,7 @@ namespace klee {
   #undef clNvmEnumValN
 
   cl::alias PmCheck("pm-check-type",
-                    cl::desc("Alias for nvm-check-type"),
+                    cl::desc("Alias for nvm-heuristic-type"),
                     cl::NotHidden,
                     cl::aliasopt(NvmCheck),
                     cl::cat(NvmCat));
@@ -935,6 +935,8 @@ bool NvmInsensitiveDynamicHeuristic::modifiesNvm(Instruction *i) const {
 void NvmInsensitiveDynamicHeuristic::updateCurrentState(ExecutionState *es, 
                                                         KInstruction *pc, 
                                                         bool isNvm) {
+  TimerStatIncrementer timer(stats::nvmHeuristicTime);
+
   bool modified = false;
   if (nvmSites_.count(pc->inst)) {
     if (isNvm) {
@@ -1009,6 +1011,8 @@ NvmContextDynamicHeuristic::NvmContextDynamicHeuristic(Executor *executor,
 void NvmContextDynamicHeuristic::updateCurrentState(ExecutionState *es, 
                                                     KInstruction *pc, 
                                                     bool isNvm) {
+  TimerStatIncrementer timer(stats::nvmHeuristicTime);
+
   auto newDesc = contextDesc->tryUpdateContext(pc->inst, isNvm);
   if (newDesc != contextDesc) {
     contextDesc = newDesc;
@@ -1019,12 +1023,21 @@ void NvmContextDynamicHeuristic::updateCurrentState(ExecutionState *es,
 void NvmContextDynamicHeuristic::stepState(ExecutionState *es, 
                                            KInstruction *pc, 
                                            KInstruction *nextPC) {
+  TimerStatIncrementer timer(stats::nvmHeuristicTime);
+
   if (auto *ci = dyn_cast<CallInst>(pc->inst)) {
     if (pc->inst->getFunction() != nextPC->inst->getFunction()) {
       contextDesc = contextDesc->tryResolveFnPtr(ci, nextPC->inst->getFunction());
     }
     auto childCtx = contextDesc->tryGetNextContext(pc, nextPC);
-    if (childCtx->function != contextDesc->function) {
+
+    /**
+     * Only push on stack if:
+     * 1. We called a different function
+     * 2. The next instruction is the current function's entry point (recursion).
+     */
+    if (childCtx->function != contextDesc->function || 
+        nextPC->inst == contextDesc->function->getEntryBlock().getFirstNonPHI()) {
       contextStack.push_back(contextDesc);
       contextDesc = childCtx;
     }
@@ -1039,6 +1052,15 @@ void NvmContextDynamicHeuristic::stepState(ExecutionState *es,
     contextDesc = parentCtx;
   }
 
+  if (contextDesc->function != nextPC->inst->getFunction()) {
+    errs() << *pc->inst << "\n";
+    errs() << *nextPC->inst << "\n";
+    if (contextDesc->function) {
+      errs() << "CD: " << contextDesc->function->getName() << "\n";
+    } else errs() << "CD NULL\n";
+
+    errs() << nextPC->inst->getFunction()->getName() << "\n";
+  }
   
   assert(contextDesc->function == nextPC->inst->getFunction() && "bad context!");
   curr = nextPC;
@@ -1060,6 +1082,63 @@ const char *NvmHeuristicBuilder::typeDesc[] = {
   "Context-Dynamic: this updates Andersen's analysis while being context"
     " (call-site) sensitive",
 };
+
+std::shared_ptr<NvmHeuristicInfo> 
+NvmHeuristicBuilder::create(Type t, Executor *executor, KFunction *main) {
+  TimerStatIncrementer timer(stats::nvmHeuristicTime);
+
+  NvmHeuristicInfo *ptr = nullptr;
+  switch(t) {
+    case None:
+      assert(false && "unsupported!");
+      break;
+    case Static:
+      ptr = new NvmStaticHeuristic(executor, main);
+      break;
+    case InsensitiveDynamic:
+      ptr = new NvmInsensitiveDynamicHeuristic(executor, main);
+      break;
+    case ContextDynamic:
+      ptr = new NvmContextDynamicHeuristic(executor, main);
+      break;
+    default:
+      assert(false && "unsupported!");
+      break;
+  }
+
+  assert(ptr);
+
+  ptr->computePriority();
+  ptr->dump();
+  
+  return std::shared_ptr<NvmHeuristicInfo>(ptr);
+}
+
+std::shared_ptr<NvmHeuristicInfo> 
+NvmHeuristicBuilder::copy(const std::shared_ptr<NvmHeuristicInfo> &info) {
+  TimerStatIncrementer timer(stats::nvmHeuristicTime);
+
+  NvmHeuristicInfo *ptr = info.get();
+  if (!ptr) {
+    return info;
+  }
+
+  if (auto sptr = dynamic_cast<const NvmStaticHeuristic*>(info.get())) {
+    // Since it's never updated, we don't have to copy it. Just share.
+    return info;
+  }
+
+  if (auto iptr = dynamic_cast<const NvmInsensitiveDynamicHeuristic*>(info.get())) {
+    ptr = new NvmInsensitiveDynamicHeuristic(*iptr);
+  }
+
+  if (auto cptr = dynamic_cast<const NvmContextDynamicHeuristic*>(info.get())) {
+    ptr = new NvmContextDynamicHeuristic(*cptr);
+  }
+
+  assert(ptr && "null!");
+  return std::shared_ptr<NvmHeuristicInfo>(ptr);
+}
 
 /* #endregion */
 

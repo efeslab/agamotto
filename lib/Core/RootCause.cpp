@@ -21,6 +21,15 @@ uint64_t RootCauseLocation::Hash::operator()(const RootCauseLocation &r) const {
          std::hash<const void*>{}(r.inst);
 }
 
+bool 
+RootCauseLocation::LocationEq::operator()(const RootCauseLocation *lhs,
+                                          const RootCauseLocation *rhs) const {
+  return lhs->allocSite == rhs->allocSite &&
+         lhs->inst == rhs->inst &&
+         lhs->stack == rhs->stack &&
+         lhs->reason == rhs->reason;
+}
+
 RootCauseLocation::RootCauseLocation(const ExecutionState &state, 
                                      const llvm::Value *allocationSite, 
                                      const KInstruction *pc,
@@ -28,6 +37,11 @@ RootCauseLocation::RootCauseLocation(const ExecutionState &state,
   : allocSite(allocationSite), 
     inst(pc),
     reason(r) {
+  
+  for (const klee::StackFrame &sf : state.stack) {
+    stack.emplace_back(sf.caller, sf.kf);
+  }
+
   std::string tmp;
   llvm::raw_string_ostream ss(tmp);
   state.dumpStack(ss);
@@ -114,6 +128,27 @@ uint64_t RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
 std::string RootCauseManager::getRootCauseString(uint64_t id) const {
   assert(idToRoot.count(id) && "unknown ID!!!");
   return idToRoot.at(id)->str();
+}
+
+std::unordered_set<std::string> 
+RootCauseManager::getUniqueRootCauseStrings(
+  const std::unordered_set<uint64_t> &ids) const 
+{
+  std::unordered_set<const RootCauseLocation*, 
+                     std::hash<const RootCauseLocation*>,
+                     RootCauseLocation::LocationEq> rootCauses;
+
+  for (auto id : ids) {
+    assert(idToRoot.count(id) && "unknown ID!!!");
+    rootCauses.insert(idToRoot.at(id));
+  }
+
+  std::unordered_set<std::string> exampleStrings;
+  for (const RootCauseLocation *r : rootCauses) {
+    exampleStrings.insert(r->str());
+  }
+
+  return exampleStrings;
 }
 
 void RootCauseManager::clear() {

@@ -88,9 +88,16 @@ namespace {
             cl::cat(TestCaseCat));
 
   cl::opt<bool>
-  WriteErrs("write-err-tests-only",
+  WriteErrTests("write-err-tests-only",
+                cl::init(false),
+                cl::desc("Only output test files for error cases (default=false)"),
+                cl::cat(TestCaseCat));
+  
+  cl::opt<bool>
+  WriteErrs("write-errors-only",
             cl::init(false),
-            cl::desc("Only output test files for error cases (default=false)"),
+            cl::desc("Only output *.err files, useful if you expect a lot of "
+                     "errors in tests with large symbolic arrays (default=false)"),
             cl::cat(TestCaseCat));
 
   cl::opt<bool>
@@ -484,7 +491,8 @@ void KleeHandler::processTestCase(const ExecutionState &state,
                                   const char *errorMessage,
                                   const char *errorSuffix) {
   bool doTestOutput = !WriteNone && 
-                      (!WriteErrs || 
+                      !WriteErrs &&
+                      (!WriteErrTests || 
                           (errorMessage && 
                           errorSuffix &&
                           strcmp(errorSuffix, "early")));
@@ -606,7 +614,14 @@ void KleeHandler::processTestCase(const ExecutionState &state,
       if (f)
         *f << "Time to generate test case: " << elapsed_time << '\n';
     }
-  } // if (!WriteNone)
+  } else if (WriteErrs) {
+    unsigned id = ++m_numTotalTests;
+    if (errorMessage) {
+      auto f = openTestFile(errorSuffix, id);
+      if (f)
+        *f << errorMessage;
+    }
+  }
 
   if (errorMessage && OptExitOnError) {
     m_interpreter->prepareForEarlyExit();

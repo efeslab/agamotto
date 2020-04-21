@@ -655,59 +655,11 @@ namespace klee {
         return Invalid;
       }
 
-      static std::shared_ptr<NvmHeuristicInfo> create(Type t, Executor *executor, KFunction *main) {
-        NvmHeuristicInfo *ptr = nullptr;
-        switch(t) {
-          case None:
-            assert(false && "unsupported!");
-            break;
-          case Static:
-            ptr = new NvmStaticHeuristic(executor, main);
-            break;
-          case InsensitiveDynamic:
-            ptr = new NvmInsensitiveDynamicHeuristic(executor, main);
-            break;
-          case ContextDynamic:
-            ptr = new NvmContextDynamicHeuristic(executor, main);
-            break;
-          default:
-            assert(false && "unsupported!");
-            break;
-        }
+      static std::shared_ptr<NvmHeuristicInfo> 
+      create(Type t, Executor *executor, KFunction *main);
 
-        assert(ptr);
-
-        ptr->computePriority();
-        ptr->dump();
-        
-        return std::shared_ptr<NvmHeuristicInfo>(ptr);
-      }
-
-      static std::shared_ptr<NvmHeuristicInfo> copy(const std::shared_ptr<NvmHeuristicInfo> &info) {
-        // llvm::errs() << "ding\n";
-        // return info;
-        // return std::shared_ptr<NvmHeuristicInfo>(nullptr);
-        NvmHeuristicInfo *ptr = info.get();
-        if (!ptr) {
-          return info;
-        }
-
-        if (auto sptr = dynamic_cast<const NvmStaticHeuristic*>(info.get())) {
-          // Since it's never updated, we don't have to copy it. Just share.
-          return info;
-        }
-
-        if (auto iptr = dynamic_cast<const NvmInsensitiveDynamicHeuristic*>(info.get())) {
-          ptr = new NvmInsensitiveDynamicHeuristic(*iptr);
-        }
-
-        if (auto cptr = dynamic_cast<const NvmContextDynamicHeuristic*>(info.get())) {
-          ptr = new NvmContextDynamicHeuristic(*cptr);
-        }
-
-        assert(ptr && "null!");
-        return std::shared_ptr<NvmHeuristicInfo>(ptr);
-      }
+      static std::shared_ptr<NvmHeuristicInfo> 
+      copy(const std::shared_ptr<NvmHeuristicInfo> &info);
   };
   /* #endregion */
 

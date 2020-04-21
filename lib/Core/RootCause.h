@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
@@ -27,6 +28,7 @@
 #include "llvm/IR/GlobalVariable.h"
 
 #include "klee/Internal/Module/KInstIterator.h"
+#include "klee/Internal/Module/KModule.h"
 
 namespace klee {
 
@@ -40,16 +42,41 @@ namespace klee {
 
   class RootCauseLocation {
     private:
+
+      struct RootCauseStackFrame {
+        KInstIterator caller;
+        KFunction *kf;
+
+        RootCauseStackFrame(const KInstIterator &c, KFunction *f)
+          : caller(c), kf(f) {}
+        
+        bool operator==(const RootCauseStackFrame &other) const {
+          return caller == other.caller && kf == other.kf;
+        }
+      };
   
       const llvm::Value *allocSite;
       const KInstruction *inst;
-      std::string stackStr;
+      std::list<RootCauseStackFrame> stack;
       RootCauseReason reason;
+
+      /**
+       * We maintain our own stack to check the absolute location,
+       * but the stack description from ExecutionState contains argument values
+       * which can be helpful for debugging.
+       */
+      std::string stackStr;
 
     public:
 
       struct Hash {
         uint64_t operator()(const RootCauseLocation &) const;
+      };
+
+      // We use this just to compute whether or not these locations are at the
+      // same place in the assembly.ll file.
+      struct LocationEq {
+        bool operator()(const RootCauseLocation*, const RootCauseLocation*) const;
       };
 
       RootCauseLocation(const ExecutionState &state, 
@@ -80,6 +107,9 @@ namespace klee {
                                       RootCauseReason);
       
       std::string getRootCauseString(uint64_t id) const;
+
+      std::unordered_set<std::string> 
+      getUniqueRootCauseStrings(const std::unordered_set<uint64_t> &ids) const;
 
       void clear();
   };

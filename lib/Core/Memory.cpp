@@ -928,9 +928,7 @@ PersistentState::getRootCause(TimingSolver *solver,
     }
   }
 
-  for (uint64_t id : possibleCauses) {
-    causes.insert(rootCauses.getRootCauseString(id));
-  }
+  causes = rootCauses.getUniqueRootCauseStrings(possibleCauses);
 
   return causes;
 }
