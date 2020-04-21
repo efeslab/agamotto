@@ -1039,6 +1039,10 @@ void SpecialFunctionHandler::handleAllocPmem(ExecutionState &state,
     MemoryObject *mo = executor.memory->allocateFixed(
               (uint64_t)base_addr + offset, unitSz, state.prevPC->inst);
     assert(mo);
+    std::string moName;
+    llvm::raw_string_ostream ss(moName);
+    ss << name << "_" << (offset / unitSz);
+    mo->setName(ss.str());
 
     executor.executeMakeSymbolic(state, mo, name);
     executor.executeMarkPersistent(state, mo);
@@ -1171,7 +1175,8 @@ void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,
     klee_error("Not sure how to handle symbolic size argument yet!");
   }
 
-  std::list<ObjectPair> pmemObjs;
+  bool emitErrs = false;
+  std::unordered_set<std::string> errors;
   for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
     ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
     ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
@@ -1180,26 +1185,22 @@ void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,
     bool success;
     assert(state.addressSpace.resolveOne(state, executor.solver, ptrExpr, res, success));
     assert(success && "could not resolve one! (isPersisted)");
-    pmemObjs.push_back(res);
+
+    const MemoryObject *mo = res.first;
+    PersistentState *ps = dyn_cast<PersistentState>(state.addressSpace.getWriteable(mo, res.second));
+    assert(ps && "trying to check if non-pmem is persisted!");
+
+    bool hasErrs = executor.getPersistenceErrors(state, mo, errors);
+    emitErrs = emitErrs || hasErrs;
+    ps->flushAll();
   }
+
   
-  std::unordered_set<std::string> errors;
-  std::unordered_set<const MemoryObject *> mos;
-  bool isPersisted = true;
-  for (ObjectPair &op : pmemObjs) {
-    const MemoryObject *mo = op.first; 
-    mos.insert(mo);
-    const ObjectState *os = op.second;
-    assert(isa<PersistentState>(os) && "trying to check if non-pmem is persisted!");
-
-    bool objPersisted = executor.isObjectPersisted(state, mo, errors);
-    isPersisted = isPersisted && objPersisted;
-  }
-
-  if (!isPersisted) {
-    ExecutionState *errState = executor.executeGetUnpersisted(state, mos);
-    assert(errState && "we did something bad chief");
-    executor.terminateStateOnPmemError(*errState, errors);
+  if (emitErrs) {
+    assert(errors.size() && "no errors to emit!");
+    executor.emitPmemError(state, errors);
+  } else {
+    assert(errors.empty() && "forgot to emit!");
   }
 }
 

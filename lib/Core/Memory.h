@@ -12,6 +12,7 @@
 
 #include "Context.h"
 #include "TimingSolver.h"
+#include "RootCause.h"
 
 #include "klee/Expr/Expr.h"
 
@@ -386,9 +387,7 @@ class PersistentState : public ObjectState {
     Expr::Width rootCauseWidth;
     // We store all of the unique root cause locations. We can't use the pointer
     // due to copies, but we can make unique IDs
-    uint64_t nextLocId = 1; // Start at 1
-    std::string lastCommit;
-    std::unordered_map<std::string, uint64_t> allRootLocations;
+    RootCauseManager rootCauses;
 
     /// DO NOT USE. Use clone() instead.
     PersistentState(const PersistentState &ps);
@@ -399,6 +398,9 @@ class PersistentState : public ObjectState {
     /// Create a new persistent object state from the given non-persistent
     /// object state and symbolic bool array of cache lines. Also requires
     /// a symbolic void* array (int64) for root cause.
+    ///
+    /// We now take the state to add the array names to state.arrayNames and 
+    /// fail if any arrays we create internally already exist.
     PersistentState(ExecutionState &state, const ObjectState *os);
 
     ObjectState *clone() const override;
@@ -461,22 +463,20 @@ class PersistentState : public ObjectState {
     std::unordered_set<std::string> getReasonsNotPersisted(TimingSolver *solver, 
                                                            ExecutionState &state) const;
 
-    // TODO remove
-    bool mustBePersisted(TimingSolver *solver, ExecutionState &state) const;
-
     ref<ConstantExpr> createRootCauseIdExpr(const ExecutionState &state, 
-                                            ref<Expr> cacheLineOffset,
-                                            const char *type);
-    std::string getLocationInfo(const ExecutionState &state, 
-                                ref<Expr> offset,
-                                const char *type) const;
-    std::string getAllocInfo(ref<Expr> offset, const char *type) const;
+                                            RootCauseReason reason);
+
     // check from PENDING cache line updates if it's clean or not
     ref<Expr> isOffsetAlreadyPersisted(ref<Expr> offset) const;
 
     static ref<ConstantExpr> getPersistedExpr();
     static ref<ConstantExpr> getDirtyExpr();
     static ref<ConstantExpr> getNullptr();
+
+    /**
+     * Resets all cache line state to the default.
+     */
+    void flushAll();
 
   private:
     ref<Expr> isCacheLinePersisted(unsigned offset, bool pending=false) const;

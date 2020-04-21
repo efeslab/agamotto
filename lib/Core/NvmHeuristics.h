@@ -231,7 +231,7 @@ namespace klee {
        */
       llvm::Function *function;
       NvmValueDesc::Shared valueState;
-      bool returnHasWeight; 
+      bool __attribute__((unused)) returnHasWeight; 
 
       /**
        * Many function contexts will be the same.
@@ -616,9 +616,6 @@ namespace klee {
         llvm::errs() << "\tCurrent instruction: " << *curr->inst << "\n"; 
         fprintf(stderr, "\t%% insts with weight: %f%%\n", pWeights);
         fprintf(stderr, "\t%% insts with priority: %f%%\n", pPriorities);
-        for (auto &p : contextDesc->priorities) {
-          llvm::errs() << *p.first << "=> " << p.second << "\n";
-        }
       }
   };
   /* #endregion */
