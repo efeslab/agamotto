@@ -231,7 +231,7 @@ namespace klee {
        */
       llvm::Function *function;
       NvmValueDesc::Shared valueState;
-      bool returnHasWeight; 
+      bool __attribute__((unused)) returnHasWeight; 
 
       /**
        * Many function contexts will be the same.

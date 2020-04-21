@@ -51,20 +51,7 @@ Searcher::Searcher(Executor &_executor)
 Searcher::~Searcher() {}
 
 ExecutionState &Searcher::selectStateAndUpdateInfo() {
-  ExecutionState &ref = selectState();
-  if (ref.nvmInfo) {
-    // const NvmFunctionCallDesc &desc = ref.stack.back().nvmDesc;
-    const BasicBlock *bb = ref.pc->inst->getParent();
-    // const NvmFunctionCallInfo *callInfo = nvmInfo->findInfo(desc);
-    size_t importance = ref.nvmInfo->getCurrentPriority();
-
-    if (importance) {
-      // errs() << *bb << "\n";
-      executor.statsTracker->markNvmBasicBlockVisited(bb);
-    }
-  }
-
-  return ref;
+  return selectState();
 }
 
 ///

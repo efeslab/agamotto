@@ -29,6 +29,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "RootCause.h"
+
 #include <cassert>
 #include <sstream>
 
@@ -713,10 +715,7 @@ PersistentState::PersistentState(const PersistentState &ps)
     pendingRootCauseFlushes(ps.pendingRootCauseFlushes),
 
     rootCauseWidth(ps.rootCauseWidth),
-    nextLocId(ps.nextLocId),
-    lastCommit(ps.lastCommit),
-    
-    allRootLocations(ps.allRootLocations) {}
+    rootCauses(ps.rootCauses) {}
 
 ObjectState *PersistentState::clone() const {
   return new PersistentState(*this);
@@ -758,7 +757,7 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
   pendingCacheLineUpdates.extend(cacheLine, falseExpr);
 
   // Now update root cause.
-  ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, cacheLine, "write");
+  ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, PM_Unpersisted);
   rootCauseWrites.extend(cacheLine, rootCauseExpr);
   pendingRootCauseWrites.extend(cacheLine, rootCauseExpr);
 }
@@ -778,7 +777,7 @@ void PersistentState::persistCacheLineAtOffset(const ExecutionState &state,
   // llvm::errs() << "persist: " << *offset << "\n";
   // llvm::errs() << "\t" << getLocationInfo(state, cacheLine, "test") << "\n";
 
-  ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, cacheLine, "flush");
+  ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, PM_UnnecessaryFlush);
   rootCauseFlushes.extend(cacheLine, rootCauseExpr);
   pendingRootCauseFlushes.extend(cacheLine, rootCauseExpr);
   // Pending clear
@@ -795,7 +794,6 @@ void PersistentState::commitPendingPersists(const ExecutionState &state) {
   rootCauseWrites = pendingRootCauseWrites;
   // clear
   pendingRootCauseFlushes = UpdateList(pendingRootCauseFlushes.root, nullptr);
-  lastCommit = getLocationInfo(state, idxUnbounded, "fence"); 
 }
 
 ref<Expr> PersistentState::getIsOffsetPersistedExpr(ref<Expr> offset,
@@ -820,11 +818,12 @@ PersistentState::getLastFlush(TimingSolver *solver,
                               ExecutionState &state,
                               ref<Expr> offset) const {
   auto errs = getRootCause(solver, state, rootCauseFlushes, getCacheLine(offset));
-  if (!errs.size()) {
-    // Can be uninitialized.
-    errs.insert(getAllocInfo(offset, "flush (no flushes)"));
+  if (errs.empty()) {
+    RootCauseLocation uninit(state, getObject()->allocSite, 
+                             nullptr, PM_FlushOnUnmodified);
+    errs.insert(uninit.str());
   }
-  
+
   return errs;
 }
 
@@ -845,6 +844,7 @@ PersistentState::getRootCauses(TimingSolver *solver,
 
   auto idx = getAnyOffsetExpr();
   auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
+  // auto idx = getObject()->getBoundsCheckOffset(getAnyOffsetExpr());
 
   state.constraints.addConstraint(inBoundsConstraint);
   causes = getRootCause(solver, state, ul, getCacheLine(idx));
@@ -883,18 +883,15 @@ PersistentState::getRootCause(TimingSolver *solver,
                               ref<Expr> cacheLine) const {
   ref<Expr> result = ReadExpr::create(ul, ZExtExpr::create(cacheLine, Expr::Int32));
   
-  std::unordered_set<std::string> possible;
+  std::unordered_set<uint64_t> possibleCauses;
+  std::unordered_set<std::string> causes;
 
-  // llvm::errs() << "getRootCause: " << *cacheLine << "\n";
-
-  #if 1
   std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, result);
   ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
   ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second); 
   assert(!lo.isNull() && !hi.isNull());
   if (lo->getZExtValue() == 0 && hi->getZExtValue() == 0) {
-    // llvm::errs() << "all 0\n";
-    return possible;
+    return causes;
   }
 
   for (uint64_t cl = 0; cl < numCacheLines(); ++cl) {
@@ -904,20 +901,20 @@ PersistentState::getRootCause(TimingSolver *solver,
     ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
     ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);  
     assert(!lo.isNull() && !hi.isNull() && "FIXME: unhandled solver failure");
-    // llvm::errs() << "Range for CL #" << cl << ": [" << lo->getZExtValue() 
-    //     << ", " << hi->getZExtValue() << "]\n";
+
+    // This is a little jank, but 0 represents no root cause.
+    // If both are 0, there are no root causes.
+    // If the lower bound is 0, that means there's a version of life where this
+    // has no root cause. Skip it.
     uint64_t loVal = lo->getZExtValue();
     uint64_t hiVal = hi->getZExtValue();
     if (loVal == 0 && hiVal == 0) continue;
-
     if (loVal == 0) loVal++;
     assert(loVal <= hiVal);
 
     if (loVal == hiVal) {
       uint64_t id = loVal;
-      for (const auto &p : allRootLocations) {
-        if (p.second == id) possible.insert(p.first); // copy
-      } 
+      possibleCauses.insert(id);
     } else {
       for (uint64_t id = loVal; id <= hiVal; ++id) {
         ref<Expr> eqId = EqExpr::create(ConstantExpr::create(id, rootCauseWidth),
@@ -926,27 +923,23 @@ PersistentState::getRootCause(TimingSolver *solver,
         bool success = solver->mayBeTrue(state, eqId, mayBeCause);
         assert(success);
         if (!mayBeCause) continue;
-        for (const auto &p : allRootLocations) {
-          if (p.second == id) possible.insert(p.first); // copy
-        } 
+        possibleCauses.insert(id);
       }
     }
   }
-  #endif
 
-  return possible;
+  for (uint64_t id : possibleCauses) {
+    causes.insert(rootCauses.getRootCauseString(id));
+  }
+
+  return causes;
 }
 
 ref<Expr> PersistentState::getCacheLine(ref<Expr> offset) const {
-  // llvm::errs() << "-----------------------\n";
-  // offset->dump();
   auto cacheLineSizeExpr = ConstantExpr::create(cacheLineSize(), offset->getWidth());
-  // cacheLineSizeExpr->dump();
   auto cacheLineOffset = UDivExpr::create(offset, cacheLineSizeExpr);
-  // cacheLineOffset->dump();
   auto truncToIdxSz = ZExtExpr::create(cacheLineOffset, Expr::Int32);
-  // truncToIdxSz->dump();
-  // llvm::errs() << "-----------------------\n";
+
   return truncToIdxSz;
 }
 
@@ -980,59 +973,14 @@ ref<Expr> PersistentState::ptrAsExpr(void *ptr) {
 
 ref<ConstantExpr> 
 PersistentState::createRootCauseIdExpr(const ExecutionState &state, 
-                                       ref<Expr> cacheLineOffset,
-                                       const char *type) {
+                                       RootCauseReason reason) {
 
-  std::string info = getLocationInfo(state, cacheLineOffset, type);
-  if (!allRootLocations[info]) {
-    allRootLocations[info] = nextLocId;
-    nextLocId++;
-    assert(nextLocId <= UINT64_MAX && "run out of causes!");
-  }
+  uint64_t id = rootCauses.getRootCauseLocationID(state, 
+                                                  getObject()->allocSite, 
+                                                  state.prevPC,
+                                                  reason);
 
-  return ConstantExpr::create(allRootLocations[info], rootCauseWidth);                               
-}
-
-std::string PersistentState::getLocationInfo(const ExecutionState &state, 
-                                             ref<Expr> offset, 
-                                             const char *type) const {
-  const InstructionInfo *iip = state.prevPC->info;
-
-  std::string infoStr;
-  llvm::raw_string_ostream msg(infoStr);
-  // msg << "Persistent Memory Info:\n";
-  // msg << "\tName: " << getObject()->name << "\n";
-  // msg << "\tAddress: " << llvm::format_hex(getObject()->address, 18) << "\n";
-  // msg << "\t\tOffset:" << *offset << "\n";
-  // msg << "\tSize: " << getObject()->size << "\n";
-  msg << "\tType of modification: " << type << "\n";
-  if (iip->file != "") {
-    msg << "File: " << iip->file << "\n";
-    msg << "Line: " << iip->line << "\n";
-    msg << "assembly.ll line: " << iip->assemblyLine << "\n";
-  }
-  msg << "Stack: \n";
-  state.dumpStack(msg);
-
-  return msg.str();
-}
-
-std::string PersistentState::getAllocInfo(ref<Expr> offset, 
-                                          const char *type) const {
-  std::string infoStr;
-  llvm::raw_string_ostream msg(infoStr);
-  // msg << "Persistent Memory Info:\n";
-  // msg << "\tName: " << getObject()->name << "\n";
-  // msg << "\tAddress: " << llvm::format_hex(getObject()->address, 18) << "\n";
-  // msg << "\t\tOffset: " << *offset << "\n";
-  // msg << "\tSize: " << getObject()->size << "\n";
-  msg << "\tType of modification: " << type << "\n";
-  msg << "\tAlloc at: ";
-  std::string tmp;
-  getObject()->getAllocInfo(tmp);
-  msg << tmp << "\n";
-
-  return msg.str();
+  return ConstantExpr::create(id, rootCauseWidth);                               
 }
 
 std::string PersistentState::getUniqueArrayName(ExecutionState &state, 
@@ -1049,6 +997,7 @@ void PersistentState::flushAll() {
   pendingRootCauseWrites = UpdateList(pendingRootCauseWrites.root, nullptr);
   cacheLineUpdates = UpdateList(cacheLineUpdates.root, nullptr);
   pendingRootCauseWrites = UpdateList(pendingRootCauseWrites.root, nullptr);
+  rootCauses.clear();
 }
 
 /* #endregion */

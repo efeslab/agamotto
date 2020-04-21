@@ -4327,10 +4327,7 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
   std::vector<const Array*> objects;
   for (unsigned i = 0; i != state.symbolics.size(); ++i) {
     objects.push_back(state.symbolics[i].second);
-    // errs() << "OBJ " << state.symbolics[i].second->getName() << "\n";
   }
-
-  // Query(tmp.constraints, ConstantExpr::alloc(0, Expr::Bool)).dump();
   
   bool success = solver->getInitialValues(tmp, objects, values);
   solver->setTimeout(time::Span());

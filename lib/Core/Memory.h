@@ -12,6 +12,7 @@
 
 #include "Context.h"
 #include "TimingSolver.h"
+#include "RootCause.h"
 
 #include "klee/Expr/Expr.h"
 
@@ -386,9 +387,7 @@ class PersistentState : public ObjectState {
     Expr::Width rootCauseWidth;
     // We store all of the unique root cause locations. We can't use the pointer
     // due to copies, but we can make unique IDs
-    uint64_t nextLocId = 1; // Start at 1
-    std::string lastCommit;
-    std::unordered_map<std::string, uint64_t> allRootLocations;
+    RootCauseManager rootCauses;
 
     /// DO NOT USE. Use clone() instead.
     PersistentState(const PersistentState &ps);
@@ -465,12 +464,8 @@ class PersistentState : public ObjectState {
                                                            ExecutionState &state) const;
 
     ref<ConstantExpr> createRootCauseIdExpr(const ExecutionState &state, 
-                                            ref<Expr> cacheLineOffset,
-                                            const char *type);
-    std::string getLocationInfo(const ExecutionState &state, 
-                                ref<Expr> offset,
-                                const char *type) const;
-    std::string getAllocInfo(ref<Expr> offset, const char *type) const;
+                                            RootCauseReason reason);
+
     // check from PENDING cache line updates if it's clean or not
     ref<Expr> isOffsetAlreadyPersisted(ref<Expr> offset) const;
 
