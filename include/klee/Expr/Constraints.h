@@ -25,7 +25,7 @@ class ConstraintManager {
 public:
   struct Hash {
     uint64_t operator()(const ref<Expr> &e) const {
-      return std::hash<void*>{}(e.get());
+      return e->hash();
     }
   };
   using constraints_ty = std::unordered_set<ref<Expr>, Hash>;
