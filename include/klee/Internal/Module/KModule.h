@@ -15,8 +15,6 @@
 
 #include "llvm/ADT/ArrayRef.h"
 
-#include "../../../../lib/Core/NvmFunctionInfo.h"
-
 #include <map>
 #include <memory>
 #include <set>
@@ -107,9 +105,6 @@ namespace klee {
     // Functions which are part of KLEE runtime
     std::set<const llvm::Function*> internalFunctions;
 
-    // (iangneal): Describes the NVM info of the functions.
-    NvmFunctionInfo nvmInfo;
-
   private:
     // Mark function with functionName as part of the KLEE runtime
     void addInternalFunction(const char* functionName);
@@ -156,9 +151,6 @@ namespace klee {
     /// Run passes that check if module is valid LLVM IR and if invariants
     /// expected by KLEE's Executor hold.
     void checkModule();
-
-    /// (iangneal): Either get the NVM function info or nullptr.
-    NvmFunctionInfo *getNvmFunctionInfo();
   };
 } // End klee namespace
 

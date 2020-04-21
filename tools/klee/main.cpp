@@ -88,6 +88,12 @@ namespace {
             cl::cat(TestCaseCat));
 
   cl::opt<bool>
+  WriteErrs("write-err-tests-only",
+            cl::init(false),
+            cl::desc("Only output test files for error cases (default=false)"),
+            cl::cat(TestCaseCat));
+
+  cl::opt<bool>
   WriteCVCs("write-cvcs",
             cl::desc("Write .cvc files for each test case (default=false)"),
             cl::cat(TestCaseCat));
@@ -215,40 +221,6 @@ namespace {
                  cl::init(true),
                  cl::cat(ChecksCat));
 
-  // -- NVM options begin
-  enum class NvmCheckType { None, CoverageOnly, Debug };
-
-  cl::opt<NvmCheckType>
-  NvmCheck("nvm-check-type",
-       cl::desc("Choose how to check persistent memory (PM) (full by default)."),
-       cl::values(
-                  clEnumValN(NvmCheckType::None,
-                             "none",
-                             "Don't do any persistent memory checks (run KLEE normally)"),
-                  clEnumValN(NvmCheckType::CoverageOnly,
-                             "coverage-only",
-                             "Don't attempt to catch any bugs, but track coverage statistics about basic blocks that are relevant to PM"),
-                  clEnumValN(NvmCheckType::Debug, "full",
-                             "Check for PM bugs and track coverage statistics. Search strategy is selected in a separate option.")
-                  KLEE_LLVM_CL_VAL_END),
-       cl::init(NvmCheckType::None),
-       cl::cat(ChecksCat));
-
-  cl::alias PmCheck("pm-check-type",
-                    cl::desc("Alias for nvm-check-type"),
-                    cl::NotHidden,
-                    cl::aliasopt(NvmCheck),
-                    cl::cat(ChecksCat));
-
-  bool clOptEnableNvmInfo() {
-    return NvmCheck != NvmCheckType::None;
-  }
-
-  bool clOptCheckNvm() {
-    return NvmCheck == NvmCheckType::Debug;
-  }
-  // -- NVM options end
-
   cl::opt<bool>
   OptExitOnError("exit-on-error",
                  cl::desc("Exit KLEE if an error in the tested application has been found (default=false)"),
@@ -340,10 +312,7 @@ private:
   unsigned m_numTotalTests;     // Number of tests received from the interpreter
   unsigned m_numGeneratedTests; // Number of tests successfully generated
   unsigned m_pathsExplored; // number of paths explored so far
-  unsigned m_pathsCutEndTrace; // number of paths ended early and had interesting blocks.
-  unsigned m_pathsCutUninteresting; // number of paths terminated because they added nothing.
   bool m_outputNvm;
-  double m_nvmCoverage = -1.0;
 
   // used for writing .ktest files
   int m_argc;
@@ -357,17 +326,11 @@ public:
   /// Returns the number of test cases successfully generated so far
   unsigned getNumTestCases() { return m_numGeneratedTests; }
   unsigned getNumPathsExplored() { return m_pathsExplored; }
-  unsigned getNumPathsCutEndTrace() { return m_pathsCutEndTrace; }
-  unsigned getNumPathsCutUninteresting() { return m_pathsCutUninteresting; }
-  double getNvmCoverage() { return m_nvmCoverage; }
 
   void setNvm() { m_outputNvm = true; }
   bool outputNvm() { return m_outputNvm; }
-  void setNvmCoverage(double ratio) { m_nvmCoverage = ratio; }
 
   void incPathsExplored() { m_pathsExplored++; }
-  void incPathsCutEndTrace() { m_pathsCutEndTrace++; }
-  void incPathsCutUninteresting() { m_pathsCutUninteresting++; }
 
   void setInterpreter(Interpreter *i);
 
@@ -520,7 +483,12 @@ KleeHandler::openTestFile(const std::string &suffix, unsigned id) {
 void KleeHandler::processTestCase(const ExecutionState &state,
                                   const char *errorMessage,
                                   const char *errorSuffix) {
-  if (!WriteNone) {
+  bool doTestOutput = !WriteNone && 
+                      (!WriteErrs || 
+                          (errorMessage && 
+                          errorSuffix &&
+                          strcmp(errorSuffix, "early")));
+  if (doTestOutput) {
     std::vector< std::pair<std::string, std::vector<unsigned char> > > out;
     bool success = m_interpreter->getSymbolicSolution(state, out);
 
@@ -1298,9 +1266,7 @@ int main(int argc, char **argv, char **envp) {
                                   /*LibcMainFunction=*/LibcMainFunction,
                                   /*Optimize=*/OptimizeModule,
                                   /*CheckDivZero=*/CheckDivZero,
-                                  /*CheckOvershift=*/CheckOvershift,
-                                  /*EnableNvmInfo=*/clOptEnableNvmInfo(),
-                                  /*CheckNvm=*/clOptCheckNvm());
+                                  /*CheckOvershift=*/CheckOvershift);
 
   if (WithPOSIXRuntime) {
     SmallString<128> Path(Opts.LibraryDir);
@@ -1608,12 +1574,6 @@ int main(int argc, char **argv, char **envp) {
           << *theStatisticManager->getStatisticByName("NvmHeuristicStatesKilledIrrelevant") << "\n";
     stats << "\tKLEE-NVM: done: paths terminated (after last relevant block, gen tests) = "
           << *theStatisticManager->getStatisticByName("NvmHeuristicStatesKilledEndTrace") << "\n";
-  }
-  if (handler->getNvmCoverage() >= 0.0) {
-    char tmp[101];
-    snprintf(tmp, 100, "\tKLEE-NVM: important basic block coverage = %3d%%\n",
-        (int)(handler->getNvmCoverage() * 100.0));
-    stats << tmp;
   }
   stats << "KLEE: done: generated tests = "
         << handler->getNumTestCases() << "\n";

@@ -101,6 +101,7 @@ namespace klee {
                                 KInstruction *target, \
                                 std::vector< ref<Expr> > &arguments)
     HANDLER(handleAbort);
+    HANDLER(handleAllocPmem);
     HANDLER(handleAssert);
     HANDLER(handleAssertFail);
     HANDLER(handleAssume);

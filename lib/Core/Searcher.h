@@ -21,6 +21,8 @@
 #include <set>
 #include <vector>
 #include <functional>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <tuple>
 
@@ -218,8 +220,6 @@ namespace klee {
    * Essentially, we want the most NVM successors.
    */
   class NvmPathSearcher : public Searcher {
-    size_t currGen = 0;
-
     /**
      * The three fields are:
      * 1. The execution state. Naturally.
@@ -234,14 +234,18 @@ namespace klee {
     typedef std::tuple<ExecutionState*, size_t, size_t> priority_tuple;
 
     /**
+     * This is updated whenever we select a state.
+     */
+    size_t currentGen = 0;
+
+    /**
+     * Determine if LHS < RHS
      * If the generation of rhs is higher, it has lower priority. If it has
      * the same generation, the priority is lower by standard rules.
+     * To break ties, newer states have lower priority.
      */
     struct priority_less : public std::less<priority_tuple> {
-      bool operator()(const priority_tuple &rhs, const priority_tuple &lhs) {
-        return std::get<1>(rhs) > std::get<1>(lhs) ||
-               (std::get<1>(rhs) == std::get<1>(lhs) && std::get<2>(rhs) < std::get<2>(lhs));
-      }
+      bool operator()(const priority_tuple &lhs, const priority_tuple &rhs);
     };
 
     // C++ doesn't let us override only part of the template defaults, or if
@@ -268,10 +272,10 @@ namespace klee {
     /**
      * Given the current state, see if a newly added state should go in a second
      * generation.
+     * 
      */
     size_t calculateGeneration(ExecutionState *current, ExecutionState *added);
 
-    void outputCoverage();
   protected:
     ExecutionState &selectState();
 

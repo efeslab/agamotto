@@ -1391,7 +1391,7 @@ void Executor::executeCall(ExecutionState &state,
     }
     // va_arg is handled by caller and intrinsic lowering, see comment for
     // ExecutionState::varargs
-    case Intrinsic::vastart:  {
+    case Intrinsic::vastart: {
       StackFrame &sf = state.stack.back();
 
       // varargs can be zero if no varargs were provided
@@ -1450,6 +1450,8 @@ void Executor::executeCall(ExecutionState &state,
       break;
     }
     case Intrinsic::x86_clflushopt:
+      klee_warning_once(
+        0, "For our purposes, clflushopt ~ clwb, so implementing as fallthrough");
     case Intrinsic::x86_clwb: {
       llvm::Value *v = ki->inst->getOperand(0);
       v = v->stripPointerCasts();
@@ -1720,6 +1722,22 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           }
 
           bindLocal(kcaller, state, result);
+
+          // (iangneal): update NVM allocation sites
+          if (state.nvmInfo && 
+              result->getWidth() == Context::get().getPointerWidth() &&
+              utils::isNvmAllocationSite(kmodule->module.get(), kcaller->inst)) {
+            
+            if (ri->getFunction() == kmodule->module->getFunction("mmap") ||
+                ri->getFunction() == kmodule->module->getFunction("mmap64")) {
+              ObjectPair op;
+          
+              bool success;
+              assert(state.addressSpace.resolveOne(state, solver, result, op, success));
+              assert(success);
+              executeUpdateNvmInfo(state, kcaller, op.second);
+            }
+          }
         }
       } else {
         // We check that the return value has no users instead of
@@ -1972,13 +1990,16 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     Function *f = getTargetFunction(fp, state);
     InlineAsm *ia = nullptr;
 
+    // (iangneal): It helps NVM heuristics to resolve function pointers.
+    if (state.nvmInfo) {
+      state.nvmInfo->resolveFunctionCall(ki, f);
+    }
+
     if ((ia = dyn_cast<InlineAsm>(fp))) {
       // (iangneal): there's some inline assembly we want to run!
       // CPUID is treated as a call that returns an array which is then
       // extracted from.
       if (ia->getAsmString().find("cpuid") != std::string::npos) {
-        errs() << *ia << " " << numArgs << "\n";
-        errs() << *(i->getParent()->getParent());
 
         // Set up the output of the call.
         Type *t = i->getType();
@@ -2828,47 +2849,23 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 }
 
 void Executor::updateStates(ExecutionState *current) {
+  /**
+   * (iangneal): Update the heuristic first, so that the priorities are up
+   * to date for the NvmPathSearcher.
+   */ 
+  if (current && current->nvmInfo) {
+    std::vector<ExecutionState*> toUpdate;
+    toUpdate.push_back(current);
+    toUpdate.insert(toUpdate.end(), addedStates.begin(), addedStates.end());
+
+    for (ExecutionState *s : toUpdate) {
+      assert(s && s->nvmInfo);
+      s->nvmInfo->stepState(s, s->prevPC, s->pc);
+    }
+  }
+
   if (searcher) {
     searcher->update(current, addedStates, removedStates);
-  }
-  
-  // (iangneal): Update the heuristic as well.
-  std::vector<ExecutionState*> toUpdate;
-  toUpdate.push_back(current);
-  toUpdate.insert(toUpdate.end(), addedStates.begin(), addedStates.end());
-
-  for (ExecutionState *s : toUpdate) {
-    if (s && s->nvmInfo) {
-      
-      // TODO: this all needs to be timed
-      if (current->prevPC->dest < s->stack.back().kf->numRegisters) {
-        ref<Expr> val = getDestCell(*s, s->prevPC).value;
-        // update for prevPC, then set the instruction to the current pc for the
-        // next round.
-        // errs() << "prevPC = " << *current->prevPC->inst << "\n";
-        // errs() << "nvmPC  = " << *current->nvmInfo->currentInst() << "\n";
-        // errs() << "pc     = " << *current->pc->inst << "\n";
-
-        ObjectPair op;
-        bool success;
-        solver->setTimeout(coreSolverTimeout);
-        if (!val.isNull() && 
-            val->getWidth() == Context::get().getPointerWidth() &&
-            s->addressSpace.resolveOne(*s, solver, val, op, success) &&
-            success &&
-            isa<PersistentState>(op.second))
-        {
-          // This value is a pointer into nvm.
-          s->nvmInfo->updateCurrentState(s, s->prevPC, true);
-        } else {
-          s->nvmInfo->updateCurrentState(s, s->prevPC, false);
-        }
-        solver->setTimeout(time::Span());
-      }
-
-      // Now go to the next
-      s->nvmInfo->stepState(s, s->pc);
-    }
   }
 
   states.insert(addedStates.begin(), addedStates.end());
@@ -3214,24 +3211,25 @@ void Executor::terminateStateEarly(ExecutionState &state,
   terminateState(state);
 }
 
+void Executor::terminateStateEarlyPmem(ExecutionState &state) {
+  // (iangneal): Sometimes, a program can forget to call close or unmap.
+  // We need to ensure that the persistence of a program is checked at least
+  // once.
+  std::unordered_set<std::string> errors;
+  if (getAllPersistenceErrors(state, errors)) {
+    terminateStateOnPmemError(state, errors);
+  } else {
+    terminateState(state);
+  }
+}
+
 void Executor::terminateStateOnExit(ExecutionState &state) {
   if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state))) {
     interpreterHandler->processTestCase(state, 0, 0);
   }
   
-  // (iangneal): Sometimes, a program can forget to call close or unmap.
-  // We need to ensure that the persistence of a program is checked at least
-  // once.
-  ExecutionState *toTerm = &state;
-  if (state.persistentObjects.size()) {
-    for (const MemoryObject *mo : state.persistentObjects) {
-      toTerm = executeCheckPersistence(*toTerm, mo);
-      if (!toTerm) return;
-    }
-  }
-
-  terminateState(*toTerm);
+  terminateStateEarlyPmem(state);
 }
 
 const InstructionInfo & Executor::getLastNonKleeInternalInstruction(const ExecutionState &state,
@@ -3343,6 +3341,8 @@ void Executor::emitPmemError(ExecutionState &state,
                              const std::unordered_set<std::string> &errors) {
   Instruction * lastInst;
   const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
+
+  assert(errors.size() && "no errors to terminate with!");
 
   std::string info_str;
   llvm::raw_string_ostream info(info_str);
@@ -3777,7 +3777,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
               // Nontemporal writes don't dirty the cache, but they must
               // still cause an error until a fence happens.
-              ps->persistCacheLineAtOffset(offset);
+              ps->persistCacheLineAtOffset(state, offset);
             }
           }
         }
@@ -3835,6 +3835,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     if (inBounds) {
       const ObjectState *os = op.second;
+      executeUpdateNvmInfo(state, state.prevPC, os);
       // Actually do the read or write
       doOperation(state, mo, os, offset);
       return;
@@ -3907,7 +3908,7 @@ void Executor::executeMarkPersistent(ExecutionState &state,
   assert(os && "Cannot mark unbound MemoryObject persistent");
 
   // Construct a persistent ObjectState and bind it to the memory object.
-  state.addressSpace.bindObject(mo, new PersistentState(os));
+  state.addressSpace.bindObject(mo, new PersistentState(state, os));
 
   /* std::string name; */
   /* mo->getAllocInfo(name); */
@@ -3927,6 +3928,14 @@ bool Executor::isPersistentMemory(ExecutionState &state, const MemoryObject *mo)
     return true;
   }
   return false;
+}
+
+void Executor::executeUpdateNvmInfo(ExecutionState &state, 
+                                    KInstruction *loc, 
+                                    const ObjectState *cos) {
+  if (state.nvmInfo && loc && cos) {
+    state.nvmInfo->updateCurrentState(&state, loc, isa<PersistentState>(cos));
+  }
 }
 
 void Executor::executePersistentMemoryFlush(ExecutionState &state,
@@ -3970,18 +3979,18 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
         // llvm::errs() << "Unnecessary Flush\n";
 
         // avoid masking later bugs; emit error, but continue
-        emitPmemError(*errState, { ps->getLocationInfo(*errState) });
+        emitPmemError(*errState, ps->getLastFlush(solver, *errState, offset));
       }
 
       // Process normally if not yet persisted.
-      if (isAlreadyPersisted.second) {
+      if (goodState) {
         os = goodState->addressSpace.findObject(mo);
         assert(os);
         wos = goodState->addressSpace.getWriteable(mo, os);
         assert(wos);
         ps = dyn_cast<PersistentState>(wos);
         assert(ps);
-        ps->persistCacheLineAtOffset(offset);
+        ps->persistCacheLineAtOffset(state, offset);
         // llvm::errs() << "Good Flush\n";
       }
     }
@@ -3997,12 +4006,15 @@ void Executor::executePersistentMemoryFence(ExecutionState &state) {
     assert(os);
     ObjectState *wos = state.addressSpace.getWriteable(mo, os);
     PersistentState *ps = dyn_cast<PersistentState>(wos);
-    ps->commitPendingPersists();
+    ps->commitPendingPersists(state);
   }
 }
 
-ExecutionState *Executor::executeCheckPersistence(ExecutionState &state,
-                                                  const MemoryObject *mo) {
+
+bool Executor::getPersistenceErrors(ExecutionState &state,
+                                    const MemoryObject *mo,
+                                    std::unordered_set<std::string> &errors) {
+
   const ObjectState *os = state.addressSpace.findObject(mo);
   assert(os);
   const PersistentState *ps = dyn_cast<PersistentState>(os);
@@ -4013,30 +4025,37 @@ ExecutionState *Executor::executeCheckPersistence(ExecutionState &state,
   auto anyOffset = ps->getAnyOffsetExpr();
   auto inBoundsConstraint = mo->getBoundsCheckOffset(anyOffset);
   state.constraints.addConstraint(inBoundsConstraint);
+  // auto inBoundsOffset = mo->getBoundsCheckOffset(anyOffset);
+  // auto anyOffset = mo->getBoundsCheckOffset(ps->getAnyOffsetExpr());
 
-  StatePair isPersisted = fork(state, ps->getIsOffsetPersistedExpr(anyOffset), true);
+  bool isPersisted;
+  // bool success = solver->mustBeTrue(state, ps->getIsOffsetPersistedExpr(inBoundsOffset),
+  //                                   isPersisted);
+  bool success = solver->mustBeTrue(state, ps->getIsOffsetPersistedExpr(anyOffset),
+                                    isPersisted);
+  assert(success && "FIXME: Unhandled solver failure");
 
-  if (isPersisted.first) {
-    isPersisted.first->constraints.removeConstraint(inBoundsConstraint);
-  }
-  if (isPersisted.second) {
-    isPersisted.second->constraints.removeConstraint(inBoundsConstraint);
-  }
+  state.constraints.removeConstraint(inBoundsConstraint);
 
-  // If there's a state where it's not definitely persisted, terminate it.
-  ExecutionState *notPersisted = isPersisted.second;
-  if (notPersisted) {
-    const ObjectState *nos = notPersisted->addressSpace.findObject(mo);
-    assert(nos);
-    const PersistentState *nps = dyn_cast<PersistentState>(nos);
-    assert(nps);
-
-    terminateStateOnPmemError(*notPersisted, 
-                              nps->getRootCauses(solver, *notPersisted));
+  if (!isPersisted) {
+    auto rootCauses = ps->getReasonsNotPersisted(solver, state);
+    errors.insert(rootCauses.begin(), rootCauses.end());
   }
 
-  ExecutionState *goodState = isPersisted.first;
-  return goodState;
+  return !isPersisted;
+}
+
+bool Executor::getAllPersistenceErrors(ExecutionState &state,
+                                       std::unordered_set<std::string> &errors) {
+  bool hasErr = false;
+  if (state.persistentObjects.size()) {
+    for (const MemoryObject *mo : state.persistentObjects) {
+      bool objHasErr = getPersistenceErrors(state, mo, errors);
+      hasErr = hasErr || objHasErr;
+    }
+  }
+
+  return hasErr;
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state,
@@ -4306,8 +4325,10 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
 
   std::vector< std::vector<unsigned char> > values;
   std::vector<const Array*> objects;
-  for (unsigned i = 0; i != state.symbolics.size(); ++i)
+  for (unsigned i = 0; i != state.symbolics.size(); ++i) {
     objects.push_back(state.symbolics[i].second);
+  }
+  
   bool success = solver->getInitialValues(tmp, objects, values);
   solver->setTimeout(time::Span());
   if (!success) {

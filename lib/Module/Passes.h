@@ -11,7 +11,6 @@
 #define KLEE_PASSES_H
 
 #include "klee/Config/Version.h"
-#include "../Core/NvmFunctionInfo.h"
 
 #include "llvm/ADT/Triple.h"
 #include "llvm/CodeGen/IntrinsicLowering.h"
@@ -154,26 +153,26 @@ private:
 /** 
  * (iangneal): This makes doing the NVM analysis a bit easier.
  */
-class IsolateCallInstsPass : public llvm::FunctionPass {
-public:
-  static char ID; // Pass identification, replacement for typeid
-  IsolateCallInstsPass() : FunctionPass(ID) {}
+// class IsolateCallInstsPass : public llvm::FunctionPass {
+// public:
+//   static char ID; // Pass identification, replacement for typeid
+//   IsolateCallInstsPass() : FunctionPass(ID) {}
 
-  bool runOnFunction(llvm::Function &F) override;
+//   bool runOnFunction(llvm::Function &F) override;
 
-private:
-  /**
-   * Takes a basic block and checks if it has any call instructions. On the 
-   * first encountered call, it splits the basic block into three possible 
-   * chunks: the IR before the call, the call alone, and the IR after the call.
-   * 
-   * 
-   * Input: a basic block in the function.
-   * Output: the post-call basic block if one was created. If no modifications
-   * occurred, returns nullptr.
-   */
-  llvm::BasicBlock *splitOnCall(llvm::BasicBlock *BB);
-};
+// private:
+//   /**
+//    * Takes a basic block and checks if it has any call instructions. On the 
+//    * first encountered call, it splits the basic block into three possible 
+//    * chunks: the IR before the call, the call alone, and the IR after the call.
+//    * 
+//    * 
+//    * Input: a basic block in the function.
+//    * Output: the post-call basic block if one was created. If no modifications
+//    * occurred, returns nullptr.
+//    */
+//   llvm::BasicBlock *splitOnCall(llvm::BasicBlock *BB);
+// };
 
 /// InstructionOperandTypeCheckPass - Type checks the types of instruction
 /// operands to check that they conform to invariants expected by the Executor.
@@ -233,17 +232,17 @@ public:
 /**
  * (iangneal): The heuristic that makes our NVM bug finding scalable.
  */
-class NvmAnalysisPass : public llvm::ModulePass {
-private:
-  NvmFunctionInfo *nfip_;
+// class NvmAnalysisPass : public llvm::ModulePass {
+// private:
+//   NvmFunctionInfo *nfip_;
 
-public:
-  static char ID;
-  NvmAnalysisPass(NvmFunctionInfo *nfip);
-  bool runOnModule(llvm::Module &M) override;
+// public:
+//   static char ID;
+//   NvmAnalysisPass(NvmFunctionInfo *nfip);
+//   bool runOnModule(llvm::Module &M) override;
 
-  llvm::StringRef getPassName() const override { return "NvmAnalysisPass"; }
-};
+//   llvm::StringRef getPassName() const override { return "NvmAnalysisPass"; }
+// };
 
 } // namespace klee
 

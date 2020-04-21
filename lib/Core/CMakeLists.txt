@@ -28,9 +28,9 @@ klee_add_component(kleeCore
   Memory.cpp
   MemoryManager.cpp
   NvmAnalysisUtils.cpp
-  NvmFunctionInfo.cpp
-  NvmHeuristicInfo.cpp
+  NvmHeuristics.cpp
   PTree.cpp
+  RootCause.cpp
   Searcher.cpp
   SeedInfo.cpp
   SpecialFunctionHandler.cpp

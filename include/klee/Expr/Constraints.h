@@ -11,6 +11,7 @@
 #define KLEE_CONSTRAINTS_H
 
 #include "klee/Expr/Expr.h"
+#include <unordered_set>
 
 // FIXME: Currently we use ConstraintManager for two things: to pass
 // sets of constraints around, and to optimize constraints. We should
@@ -22,7 +23,12 @@ class ExprVisitor;
 
 class ConstraintManager {
 public:
-  using constraints_ty = std::vector<ref<Expr>>;
+  struct Hash {
+    uint64_t operator()(const ref<Expr> &e) const {
+      return e->hash();
+    }
+  };
+  using constraints_ty = std::unordered_set<ref<Expr>, Hash>;
   using iterator = constraints_ty::iterator;
   using const_iterator = constraints_ty::const_iterator;
 
@@ -34,7 +40,7 @@ public:
 
   // create from constraints with no optimization
   explicit ConstraintManager(const std::vector<ref<Expr>> &_constraints)
-      : constraints(_constraints) {}
+      : constraints(_constraints.begin(), _constraints.end()) {}
 
   // given a constraint which is known to be valid, attempt to
   // simplify the existing constraint set
@@ -46,7 +52,6 @@ public:
   void removeConstraint(ref<Expr> e);
 
   bool empty() const noexcept { return constraints.empty(); }
-  ref<Expr> back() const { return constraints.back(); }
   const_iterator begin() const { return constraints.cbegin(); }
   const_iterator end() const { return constraints.cend(); }
   std::size_t size() const noexcept { return constraints.size(); }
@@ -60,7 +65,7 @@ public:
   }
 
 private:
-  std::vector<ref<Expr>> constraints;
+  constraints_ty constraints;
 
   // returns true iff the constraints were modified
   bool rewriteConstraints(ExprVisitor &visitor);

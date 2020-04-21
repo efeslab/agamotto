@@ -80,16 +80,16 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor) {
   bool changed = false;
 
   constraints.swap(old);
-  for (ConstraintManager::constraints_ty::iterator 
+  for (ConstraintManager::constraints_ty::const_iterator 
          it = old.begin(), ie = old.end(); it != ie; ++it) {
-    ref<Expr> &ce = *it;
+    ref<Expr> ce = *it;
     ref<Expr> e = visitor.visit(ce);
 
     if (e!=ce) {
       addConstraintInternal(e); // enable further reductions
       changed = true;
     } else {
-      constraints.push_back(ce);
+      constraints.insert(ce);
     }
   }
 
@@ -155,26 +155,22 @@ void ConstraintManager::addConstraintInternal(ref<Expr> e) {
 	rewriteConstraints(visitor);
       }
     }
-    constraints.push_back(e);
+    constraints.insert(e);
     break;
   }
     
   default:
-    constraints.push_back(e);
+    constraints.insert(e);
     break;
   }
 }
 
 void ConstraintManager::addConstraint(ref<Expr> e) {
   e = simplifyExpr(e);
+  assert(!constraints.count(e) && "likely doing something poorly!");
   addConstraintInternal(e);
 }
 
 void ConstraintManager::removeConstraint(ref<Expr> e) {
-  for (unsigned i = 0; i < constraints.size(); ++i) {
-    if (constraints[i] == e) {
-      constraints.erase(constraints.begin() + i);
-      return;
-    }
-  }
+  constraints.erase(e);
 }

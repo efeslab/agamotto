@@ -12,6 +12,7 @@
 
 #include "Context.h"
 #include "TimingSolver.h"
+#include "RootCause.h"
 
 #include "klee/Expr/Expr.h"
 
@@ -377,21 +378,30 @@ class PersistentState : public ObjectState {
      * At any given point, if all cache lines are persisted, we can reset the 
      * set.
      */
-    UpdateList rootCauseLocations;
-    UpdateList pendingRootCauseLocations;
+    UpdateList rootCauseWrites;
+    UpdateList pendingRootCauseWrites;
+    UpdateList rootCauseFlushes;
+    // We could use pending flushes as an indicator for lacking fences.
+    // Would need to clear them.
+    UpdateList pendingRootCauseFlushes;
+    Expr::Width rootCauseWidth;
     // We store all of the unique root cause locations. We can't use the pointer
     // due to copies, but we can make unique IDs
-    uint64_t nextLocId = 1; // Start at 1
-    std::unordered_map<std::string, uint64_t> allRootLocations;
+    RootCauseManager rootCauses;
 
     /// DO NOT USE. Use clone() instead.
     PersistentState(const PersistentState &ps);
 
   public:
 
-    static const uint64_t MaxSize = 4 * (4096);
-    /// Create a new persistent object state from the given non-persistent object state.
-    PersistentState(const ObjectState *os);
+    static uint64_t MaxSize;
+    /// Create a new persistent object state from the given non-persistent
+    /// object state and symbolic bool array of cache lines. Also requires
+    /// a symbolic void* array (int64) for root cause.
+    ///
+    /// We now take the state to add the array names to state.arrayNames and 
+    /// fail if any arrays we create internally already exist.
+    PersistentState(ExecutionState &state, const ObjectState *os);
 
     ObjectState *clone() const override;
 
@@ -415,10 +425,10 @@ class PersistentState : public ObjectState {
     void dirtyCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset);
 
     // Make a *pending* persist of the cache line containing offset.
-    void persistCacheLineAtOffset(unsigned offset);
-    void persistCacheLineAtOffset(ref<Expr> offset);
+    void persistCacheLineAtOffset(const ExecutionState &state, unsigned offset);
+    void persistCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset);
 
-    void commitPendingPersists();
+    void commitPendingPersists(const ExecutionState &state);
     
     /**
      * Get an expression which will evaluate to 1 if all writes to the given
@@ -439,13 +449,23 @@ class PersistentState : public ObjectState {
     // If we are known to be persistent, do this to optimize.
     void clearRootCauses();
 
-    std::unordered_set<std::string> getRootCauses(TimingSolver *solver, 
-                                                  ExecutionState &state) const;
+    /**
+     * Get the last flush to the location at a given offset. Helps get
+     * the root cause for unnecessary flushes.
+     */
+    std::unordered_set<std::string> getLastFlush(TimingSolver *solver, 
+                                                 ExecutionState &state,
+                                                 ref<Expr> offset) const;
 
-    // TODO remove
-    bool mustBePersisted(TimingSolver *solver, ExecutionState &state) const;
+    /**
+     * Get all the unflushed writes remaining.
+     */
+    std::unordered_set<std::string> getReasonsNotPersisted(TimingSolver *solver, 
+                                                           ExecutionState &state) const;
 
-    std::string getLocationInfo(const ExecutionState &state);
+    ref<ConstantExpr> createRootCauseIdExpr(const ExecutionState &state, 
+                                            RootCauseReason reason);
+
     // check from PENDING cache line updates if it's clean or not
     ref<Expr> isOffsetAlreadyPersisted(ref<Expr> offset) const;
 
@@ -453,15 +473,26 @@ class PersistentState : public ObjectState {
     static ref<ConstantExpr> getDirtyExpr();
     static ref<ConstantExpr> getNullptr();
 
+    /**
+     * Resets all cache line state to the default.
+     */
+    void flushAll();
+
   private:
     ref<Expr> isCacheLinePersisted(unsigned offset, bool pending=false) const;
     ref<Expr> isCacheLinePersisted(ref<Expr> offset, bool pending=false) const;
 
+    std::unordered_set<std::string> getRootCauses(TimingSolver *solver, 
+                                                  ExecutionState &state,
+                                                  const UpdateList &ul) const;
+
     std::unordered_set<std::string> getRootCause(TimingSolver *solver, 
-                                                 ExecutionState &state, 
+                                                 ExecutionState &state,
+                                                 const UpdateList &ul, 
                                                  unsigned offset) const;
     std::unordered_set<std::string> getRootCause(TimingSolver *solver, 
                                                  ExecutionState &state, 
+                                                 const UpdateList &ul,
                                                  ref<Expr> offset) const;
 
     static ref<Expr> ptrAsExpr(void *kinst);
@@ -469,6 +500,8 @@ class PersistentState : public ObjectState {
     ref<Expr> getCacheLine(ref<Expr> offset) const;
     unsigned numCacheLines() const;
     unsigned cacheLineSize() const;
+
+    std::string getUniqueArrayName(ExecutionState &state, const char *suffix) const;
 };
   
 } // End klee namespace
