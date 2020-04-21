@@ -654,7 +654,7 @@ PersistentState::PersistentState(ExecutionState &state, const ObjectState *os)
   uint64_t size = object->parent->getSizeInCacheLines(object->size);
 
   // For initializing values
-  std::vector<ref<ConstantExpr>> Init(size);
+  std::vector<ref<ConstantExpr> > Init(size);
 
   // First, the symbolic cache line tracking array (initialize to persisted).
   Init.assign(size, getPersistedExpr());
@@ -937,31 +937,17 @@ PersistentState::getRootCause(TimingSolver *solver,
   return possible;
 }
 
-bool PersistentState::mustBePersisted(TimingSolver *solver, ExecutionState &state) const {
-  bool ret = true;
-  
-  auto idx = getAnyOffsetExpr();
-  auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
-
-  state.constraints.addConstraint(inBoundsConstraint);
-  bool mustBe;
-  bool success = solver->mustBeTrue(state,
-                                    getIsOffsetPersistedExpr(idx),
-                                    mustBe);
-  state.constraints.removeConstraint(inBoundsConstraint);
-
-  assert(success && "Could not solve!");
-  ret = ret && mustBe;
-  if (!ret) return false;
-  
-  return true;
-}
-
 ref<Expr> PersistentState::getCacheLine(ref<Expr> offset) const {
-  return ZExtExpr::create(UDivExpr::create(offset,
-                                           ConstantExpr::create(cacheLineSize(),
-                                                                offset->getWidth())),
-                          Expr::Int32);
+  // llvm::errs() << "-----------------------\n";
+  // offset->dump();
+  auto cacheLineSizeExpr = ConstantExpr::create(cacheLineSize(), offset->getWidth());
+  // cacheLineSizeExpr->dump();
+  auto cacheLineOffset = UDivExpr::create(offset, cacheLineSizeExpr);
+  // cacheLineOffset->dump();
+  auto truncToIdxSz = ZExtExpr::create(cacheLineOffset, Expr::Int32);
+  // truncToIdxSz->dump();
+  // llvm::errs() << "-----------------------\n";
+  return truncToIdxSz;
 }
 
 unsigned PersistentState::numCacheLines() const {

@@ -399,6 +399,9 @@ class PersistentState : public ObjectState {
     /// Create a new persistent object state from the given non-persistent
     /// object state and symbolic bool array of cache lines. Also requires
     /// a symbolic void* array (int64) for root cause.
+    ///
+    /// We now take the state to add the array names to state.arrayNames and 
+    /// fail if any arrays we create internally already exist.
     PersistentState(ExecutionState &state, const ObjectState *os);
 
     ObjectState *clone() const override;
@@ -460,9 +463,6 @@ class PersistentState : public ObjectState {
      */
     std::unordered_set<std::string> getReasonsNotPersisted(TimingSolver *solver, 
                                                            ExecutionState &state) const;
-
-    // TODO remove
-    bool mustBePersisted(TimingSolver *solver, ExecutionState &state) const;
 
     ref<ConstantExpr> createRootCauseIdExpr(const ExecutionState &state, 
                                             ref<Expr> cacheLineOffset,
