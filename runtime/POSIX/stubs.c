@@ -539,9 +539,9 @@ int setrlimit(__rlimit_resource_t resource, const struct rlimit *rlim) {
 int setrlimit(int resource, const struct rlimit *rlp) __attribute__((weak));
 int setrlimit(int resource, const struct rlimit *rlp) {
 #endif
-  klee_warning("ignoring (EPERM)");
-  errno = EPERM;
-  return -1;
+  klee_warning("ignoring (SUCCESS)");
+  // errno = EPERM;
+  return 0;
 }
 
 #ifndef __FreeBSD__
