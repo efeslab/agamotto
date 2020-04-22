@@ -89,11 +89,25 @@ namespace klee {
   class NvmValueDesc : public std::enable_shared_from_this<NvmValueDesc> {
     public:
       typedef std::shared_ptr<NvmValueDesc> Shared;
+      typedef std::unordered_map<const llvm::Value*, 
+                                 std::vector<const llvm::Value*> > AndersenCache;
+      typedef std::shared_ptr<AndersenCache> SharedAndersenCache;
     private:
+      /**
+       * The shared state.
+       */
       SharedAndersen andersen_;
-      // Here we track mmap locations to make weight calculation easier. Whether
-      // or not 
-      std::unordered_set<const llvm::Value*> mmap_calls_;
+
+      /**
+       * Querying the same value and constructing the set over and over is 
+       * expensive. This cache is helpful.
+       */
+      mutable SharedAndersenCache anders_cache_;
+
+      /**
+       * Here we track nvm allocation locations.
+       */
+      std::unordered_set<const llvm::Value*> nvm_allocs_;
 
       /**
        * We conservatively assume that any modification site that points to one
@@ -103,6 +117,9 @@ namespace klee {
        * variables when we go to the next context.
        */
       std::unordered_set<llvm::Value*> not_local_nvm_, not_global_nvm_;
+
+      bool getPointsToSet(const llvm::Value *v, 
+                          std::vector<const llvm::Value *> &ptsSet) const;
 
       bool mayPointTo(const llvm::Value *a, const llvm::Value *b) const;
 
@@ -120,16 +137,20 @@ namespace klee {
 
       NvmValueDesc() {}
       NvmValueDesc(SharedAndersen apa, 
+                   SharedAndersenCache cache,
                    std::unordered_set<const llvm::Value*> mmap,
                    std::unordered_set<llvm::Value*> globals) 
-                   : andersen_(apa), mmap_calls_(mmap), not_global_nvm_(globals) {}
+                   : andersen_(apa),
+                     anders_cache_(cache),
+                     nvm_allocs_(mmap), 
+                     not_global_nvm_(globals) {}
 
     public:
 
       uint64_t hash(void) const {
         return std::hash<uint64_t>{}((not_local_nvm_.size() << 16) | 
                                      (not_global_nvm_.size() << 8) |
-                                      mmap_calls_.size());
+                                      nvm_allocs_.size());
       }
 
       /**
@@ -159,8 +180,8 @@ namespace klee {
        */
       NvmValueDesc::Shared resolveFunctionPointer(llvm::Function *f);
 
-      bool isMmapCall(llvm::CallInst *ci) const {
-        return !!mmap_calls_.count(ci);
+      bool isNvmAllocCall(const llvm::CallInst *ci) const {
+        return !!nvm_allocs_.count(ci);
       }
 
       /**
@@ -206,6 +227,11 @@ namespace klee {
        */
       bool isNvm(const llvm::Value *ptr) const;
 
+      /**
+       * If this instructions stores or flushes NVM, return true, else false.
+       */
+      bool mayModifyNvm(const llvm::Instruction *i) const;
+
       std::string str(void) const;
 
       // Populate with all the calls to mmap.
@@ -217,7 +243,6 @@ namespace klee {
   /* #endregion */
 
   /* #region NvmContextDesc */
-
 
   class NvmContextDesc : public std::enable_shared_from_this<NvmContextDesc> {
     public: 
@@ -439,19 +464,36 @@ namespace klee {
       llvm::Module *module_;
       ValueSet nvmSites_;
 
+      NvmValueDesc::Shared valueState_;
+
       NvmStaticHeuristic(Executor *executor, KFunction *mainFn);
 
       bool isNvmAllocSite(llvm::Instruction *i) const {
-        return nvmSites_.count(i);
+        // return nvmSites_.count(i);
+        return valueState_->isNvmAllocCall(dyn_cast<llvm::CallInst>(i));
       }
 
+      /**
+       * Returns true if the given instruction is important.
+       * 
+       * Return instructions are important because they force us to leave 
+       * functions and eventually terminate the program. It also makes it 
+       * easier to calculate the heuristic.
+       * 
+       * It's okay to do it this way, because the NvmPathSearcher prioritizes
+       * changes in priority, rather than just the priority number. So if you
+       * have a big long function with no modifications to NVM, the path searcher
+       * will just explore one path toward the return statement.
+       */
       virtual bool mayHaveWeight(llvm::Instruction *i) const {
-        return isa<llvm::StoreInst>(i) || utils::isFlush(i) || utils::isFence(i) || isNvmAllocSite(i);
+        return isa<llvm::StoreInst>(i) || 
+               isa<llvm::ReturnInst>(i) ||
+               utils::isFlush(i) || 
+               utils::isFence(i) || 
+               isNvmAllocSite(i);
       }
 
       virtual const ValueSet &getCurrentNvmSites() const { return nvmSites_; }
-
-      virtual bool modifiesNvm(llvm::Instruction *i) const;
 
       /**
        * Calculate what the weight of this instruction would be.
@@ -530,7 +572,7 @@ namespace klee {
        * - It can point to an active NVM allocation.
        * - There is no known volatile that has the same points-to set.
        */
-      virtual bool modifiesNvm(llvm::Instruction *i) const override;
+      // virtual bool modifiesNvm(llvm::Instruction *i) const override;
 
       virtual bool needsRecomputation() const override;
 

@@ -886,13 +886,13 @@ PersistentState::getRootCause(TimingSolver *solver,
   std::unordered_set<uint64_t> possibleCauses;
   std::unordered_set<std::string> causes;
 
-  std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, result);
-  ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
-  ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second); 
-  assert(!lo.isNull() && !hi.isNull());
-  if (lo->getZExtValue() == 0 && hi->getZExtValue() == 0) {
-    return causes;
-  }
+  // std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, result);
+  // ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
+  // ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second); 
+  // assert(!lo.isNull() && !hi.isNull());
+  // if (lo->getZExtValue() == 0 && hi->getZExtValue() == 0) {
+  //   return causes;
+  // }
 
   for (uint64_t cl = 0; cl < numCacheLines(); ++cl) {
     ref<Expr> clVal = ReadExpr::create(ul, ConstantExpr::create(cl, Expr::Int32));
