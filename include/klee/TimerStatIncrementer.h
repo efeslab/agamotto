@@ -12,6 +12,7 @@
 
 #include "klee/Statistics.h"
 #include "klee/Internal/Support/Timer.h"
+#include <cassert>
 
 namespace klee {
 

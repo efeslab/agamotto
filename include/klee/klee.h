@@ -184,6 +184,10 @@ extern "C" {
    */
   void *klee_pmem_mark_persistent(void *addr, size_t size, const char *name);
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Shared Memory Management (NOT IMPLEMENTED)
+  //////////////////////////////////////////////////////////////////////////////
+
   /* klee_pmem_alloc_pmem - Allocate symbolic persistent memory.
    *
    * \arg size - The number of bytes in the memory range.
@@ -198,6 +202,10 @@ extern "C" {
    * to be persisted to main memory at the time of calling.
    */
   void klee_pmem_check_persisted(void *addr, size_t size);
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Thread Scheduling Management
+  //////////////////////////////////////////////////////////////////////////////
 
   /* Assert that any recent modifications to the memory within range
    * [addrA, addrA+sizeA) are guaranteed to be persisted before any

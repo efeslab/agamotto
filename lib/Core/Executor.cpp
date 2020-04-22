@@ -23,6 +23,8 @@
 #include "StatsTracker.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
+#include "ExecutorDebugHelper.h"
+#include "ExecutorCmdLine.h"
 
 #include "klee/Common.h"
 #include "klee/Config/Version.h"
@@ -61,6 +63,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
@@ -134,7 +137,6 @@ cl::opt<bool> EmitAllErrors(
     cl::desc("Generate tests cases for all errors "
              "(default=false, i.e. one per (error,instruction) pair)"),
     cl::cat(TestGenCat));
-
 
 /* Constraint solving options */
 
@@ -844,6 +846,10 @@ void Executor::branch(ExecutionState &state,
     stats::forks += N-1;
 
     // XXX do proper balance or keep random?
+    // NOTE: I guess they only have a binary tree to keep tracking branched ExecutionState
+    // To avoid a deep tree, you can't simply let all successors branched (forked) from the same root state.
+    // Here the current approach is to randomly select the original state or forked new states (note that forked new states are identical to the original one).
+    // Proper balance might mean creating a balanced binary tree when it has to branch many states from one state.
     result.push_back(&state);
     for (unsigned i=1; i<N; ++i) {
       ExecutionState *es = result[theRNG.getInt32() % i];

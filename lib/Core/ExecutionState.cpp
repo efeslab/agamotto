@@ -111,22 +111,23 @@ ExecutionState::~ExecutionState() {
   for (auto cur_mergehandler: openMergeStack){
     cur_mergehandler->removeOpenState(this);
   }
-
-  while (!stack.empty()) popFrame();
 }
 
 ExecutionState::ExecutionState(const ExecutionState& state):
-    pc(state.pc),
-    prevPC(state.prevPC),
-    stack(state.stack),
-    incomingBBIndex(state.incomingBBIndex),
-
     nvmInfo(NvmHeuristicBuilder::copy(state.nvmInfo)),
 
+    threads(state.threads),
+    waitingLists(state.waitingLists),
+    wlistCounter(state.wlistCounter),
+    stateTime(state.stateTime),
     addressSpace(state.addressSpace),
     constraints(state.constraints),
 
     queryCost(state.queryCost),
+    fork_queryCost(state.fork_queryCost),
+    prev_fork_queryCost(state.prev_fork_queryCost),
+    prev_fork_queryCost_single(state.prev_fork_queryCost_single),
+    isInUserMain(state.isInUserMain),
     depth(state.depth),
 
     pathOS(state.pathOS),
@@ -148,6 +149,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
 
   for (auto cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);
+  crtThreadIt = threads.find(state.crtThreadIt->first);
 }
 
 ExecutionState *ExecutionState::branch() {
@@ -197,11 +199,12 @@ llvm::raw_ostream &klee::operator<<(llvm::raw_ostream &os, const MemoryMap &mm) 
   return os;
 }
 
+// FIXME: incomplete multithreading support
 bool ExecutionState::merge(const ExecutionState &b) {
   if (DebugLogStateMerge)
     llvm::errs() << "-- attempting merge of A:" << this << " with B:" << &b
                  << "--\n";
-  if (pc != b.pc)
+  if (pc() != b.pc())
     return false;
 
   // XXX is it even possible for these to differ? does it matter? probably
@@ -210,21 +213,21 @@ bool ExecutionState::merge(const ExecutionState &b) {
     return false;
 
   {
-    std::vector<StackFrame>::const_iterator itA = stack.begin();
-    std::vector<StackFrame>::const_iterator itB = b.stack.begin();
-    while (itA!=stack.end() && itB!=b.stack.end()) {
+    std::vector<StackFrame>::const_iterator itA = stack().begin();
+    std::vector<StackFrame>::const_iterator itB = b.stack().begin();
+    while (itA!=stack().end() && itB!=b.stack().end()) {
       // XXX vaargs?
       if (itA->caller!=itB->caller || itA->kf!=itB->kf)
         return false;
       ++itA;
       ++itB;
     }
-    if (itA!=stack.end() || itB!=b.stack.end())
+    if (itA!=stack().end() || itB!=b.stack().end())
       return false;
   }
 
   std::set< ref<Expr> > aConstraints(constraints.begin(), constraints.end());
-  std::set< ref<Expr> > bConstraints(b.constraints.begin(),
+  std::set< ref<Expr> > bConstraints(b.constraints.begin(), 
                                      b.constraints.end());
   std::set< ref<Expr> > commonConstraints, aSuffix, bSuffix;
   std::set_intersection(aConstraints.begin(), aConstraints.end(),
@@ -259,7 +262,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
 
   // We cannot merge if addresses would resolve differently in the
   // states. This means:
-  //
+  // 
   // 1. Any objects created since the branch in either object must
   // have been free'd.
   //
@@ -271,7 +274,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
     llvm::errs() << "A: " << addressSpace.objects << "\n";
     llvm::errs() << "B: " << b.addressSpace.objects << "\n";
   }
-
+    
   std::set<const MemoryObject*> mutated;
   MemoryMap::iterator ai = addressSpace.objects.begin();
   MemoryMap::iterator bi = b.addressSpace.objects.begin();
@@ -299,15 +302,15 @@ bool ExecutionState::merge(const ExecutionState &b) {
       llvm::errs() << "\t\tmappings differ\n";
     return false;
   }
-
+  
   // merge stack
 
   ref<Expr> inA = ConstantExpr::alloc(1, Expr::Bool);
   ref<Expr> inB = ConstantExpr::alloc(1, Expr::Bool);
-  for (std::set< ref<Expr> >::iterator it = aSuffix.begin(),
+  for (std::set< ref<Expr> >::iterator it = aSuffix.begin(), 
          ie = aSuffix.end(); it != ie; ++it)
     inA = AndExpr::create(inA, *it);
-  for (std::set< ref<Expr> >::iterator it = bSuffix.begin(),
+  for (std::set< ref<Expr> >::iterator it = bSuffix.begin(), 
          ie = bSuffix.end(); it != ie; ++it)
     inB = AndExpr::create(inB, *it);
 
@@ -315,9 +318,9 @@ bool ExecutionState::merge(const ExecutionState &b) {
   // it seems like it can make a difference, even though logically
   // they must contradict each other and so inA => !inB
 
-  std::vector<StackFrame>::iterator itA = stack.begin();
-  std::vector<StackFrame>::const_iterator itB = b.stack.begin();
-  for (; itA!=stack.end(); ++itA, ++itB) {
+  std::vector<StackFrame>::iterator itA = stack().begin();
+  std::vector<StackFrame>::const_iterator itB = b.stack().begin();
+  for (; itA!=stack().end(); ++itA, ++itB) {
     StackFrame &af = *itA;
     const StackFrame &bf = *itB;
     for (unsigned i=0; i<af.kf->numRegisters; i++) {
@@ -332,12 +335,12 @@ bool ExecutionState::merge(const ExecutionState &b) {
     }
   }
 
-  for (std::set<const MemoryObject*>::iterator it = mutated.begin(),
+  for (std::set<const MemoryObject*>::iterator it = mutated.begin(), 
          ie = mutated.end(); it != ie; ++it) {
     const MemoryObject *mo = *it;
     const ObjectState *os = addressSpace.findObject(mo);
     const ObjectState *otherOS = b.addressSpace.findObject(mo);
-    assert(os && !os->readOnly &&
+    assert(os && !os->readOnly && 
            "objects mutated but not writable in merging state");
     assert(otherOS);
 
@@ -350,44 +353,185 @@ bool ExecutionState::merge(const ExecutionState &b) {
   }
 
   constraints = ConstraintManager();
-  for (std::set< ref<Expr> >::iterator it = commonConstraints.begin(),
+  for (std::set< ref<Expr> >::iterator it = commonConstraints.begin(), 
          ie = commonConstraints.end(); it != ie; ++it)
     constraints.addConstraint(*it);
   constraints.addConstraint(OrExpr::create(inA, inB));
 
   return true;
 }
-
-void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
-  unsigned idx = 0;
-  const KInstruction *target = prevPC;
-  for (ExecutionState::stack_ty::const_reverse_iterator
-         it = stack.rbegin(), ie = stack.rend();
-       it != ie; ++it) {
-    const StackFrame &sf = *it;
-    Function *f = sf.kf->function;
-    const InstructionInfo &ii = *target->info;
-    out << "\t#" << idx++;
-    std::stringstream AssStream;
-    AssStream << std::setw(8) << std::setfill('0') << ii.assemblyLine;
-    out << AssStream.str();
-    out << " in " << f->getName().str() << " (";
-    // Yawn, we could go up and print varargs if we wanted to.
-    unsigned index = 0;
-    for (Function::arg_iterator ai = f->arg_begin(), ae = f->arg_end();
-         ai != ae; ++ai) {
-      if (ai!=f->arg_begin()) out << ", ";
-
-      out << ai->getName().str();
-      // XXX should go through function
-      ref<Expr> value = sf.locals[sf.kf->getArgRegister(index++)].value;
-      if (value.get() && isa<ConstantExpr>(value))
-        out << "=" << value;
-    }
-    out << ")";
-    if (ii.file != "")
-      out << " at " << ii.file << ":" << ii.line;
-    out << "\n";
-    target = sf.caller;
+void ExecutionState::pushFrame(Thread &t, KInstIterator caller, KFunction *kf) {
+  t.stack.push_back(StackFrame(caller,kf));
+  ++kf->frequency;
+  if (!isInUserMain && (kf->function->getName() == PathRecordingEntryPoint)) {
+    isInUserMain = true;
   }
+  // NOTE: when enabling POSIX runtime, the entire application will be wrapped
+  // into a POSIX function call (i.e. the entry point func belongs to POSIX)
+  // So we should only reason about prop "InPOSIX" inside UserMain
+  if (isInUserMain && IgnorePOSIXPath && isKFunctionInPOSIX(kf)) {
+    if (t.POSIXDepth == 0) {
+      t.isInPOSIX = true;
+    }
+    ++t.POSIXDepth;
+  }
+  if (isInUserMain && isKFunctionInLIBC(kf)) {
+    if (t.LIBCDepth == 0) {
+      t.isInLIBC = true;
+    }
+    ++t.LIBCDepth;
+  }
+}
+
+void ExecutionState::popFrame(Thread &t) {
+  StackFrame &sf = t.stack.back();
+  for (std::vector<const MemoryObject*>::iterator it = sf.allocas.begin(), 
+         ie = sf.allocas.end(); it != ie; ++it)
+    addressSpace.unbindObject(*it);
+  if (isInUserMain &&
+      (sf.kf->function->getName() == PathRecordingEntryPoint)) {
+    isInUserMain = false;
+  }
+  if (isInUserMain && IgnorePOSIXPath && isKFunctionInPOSIX(sf.kf)) {
+    --t.POSIXDepth;
+    if (t.POSIXDepth == 0) {
+      t.isInPOSIX = false;
+    }
+  }
+  if (isInUserMain && isKFunctionInLIBC(sf.kf)) {
+    --t.LIBCDepth;
+    if (t.LIBCDepth == 0) {
+      t.isInLIBC = false;
+    }
+  }
+  t.stack.pop_back();
+}
+
+/* Multithreading related function  */
+Thread &ExecutionState::createThread(thread_id_t tid, KFunction *kf) {
+  // we currently assume there is only one process and its id is 0
+  Thread newThread = Thread(tid, 0, kf);
+  // I need to determine the "InPOSIX" and "InLIBC" status of the new thread by
+  // looking at the start function during thread creation.
+  // Following two cases should be taken into consideration
+  // 1. Thread could be created inside the POSIX runtime. e.g. handlers in
+  // sockets simulator may call "pthread_create".
+  // 2. all thread creation happens from POSIX function call "pthread_create"
+  if (isKFunctionInPOSIX(kf)) {
+    newThread.isInPOSIX = true;
+    newThread.POSIXDepth = 1;
+  }
+  if (isKFunctionInLIBC(kf)) {
+    newThread.isInLIBC = true;
+    newThread.LIBCDepth = 1;
+  }
+  std::pair<threads_ty::iterator, bool> res =
+      threads.insert(std::make_pair(newThread.tuid, newThread));
+  assert(res.second);
+  return res.first->second;
+}
+
+void ExecutionState::terminateThread(threads_ty::iterator thrIt) {
+  klee_message("Terminating thread %lu", thrIt->first.first);
+  // we assume the scheduler found a new thread first
+  assert(thrIt != crtThreadIt);
+  assert(!thrIt->second.enabled);
+  assert(thrIt->second.waitingList == 0);
+  threads.erase(thrIt);
+}
+
+void ExecutionState::sleepThread(wlist_id_t wlist) {
+  assert(crtThread().enabled);
+  assert(wlist > 0);
+  crtThread().enabled = false;
+  crtThread().waitingList = wlist;
+  std::set<thread_uid_t> &wl = waitingLists[wlist];
+  wl.insert(crtThread().tuid);
+}
+
+void ExecutionState::notifyOne(wlist_id_t wlist, thread_uid_t tuid) {
+  assert(wlist > 0);
+  std::set<thread_uid_t> &wl = waitingLists[wlist];
+  if (wl.erase(tuid) != 1) {
+    assert(0 && "thread was not waiting");
+  }
+  threads_ty::iterator find_it = threads.find(tuid);
+  assert(find_it != threads.end());
+  Thread &thread = find_it->second;
+  assert(!thread.enabled);
+  thread.enabled = true;
+  thread.waitingList = 0;
+  if (wl.size() == 0)
+    waitingLists.erase(wlist);
+}
+
+void ExecutionState::notifyAll(wlist_id_t wlist) {
+  assert(wlist > 0);
+  std::set<thread_uid_t> &wl = waitingLists[wlist];
+  if (wl.size() > 0) {
+    for (const thread_uid_t &tuid: wl) {
+      threads_ty::iterator find_it = threads.find(tuid);
+      assert(find_it != threads.end());
+      Thread &thread = find_it->second;
+      thread.enabled = true;
+      thread.waitingList = 0;
+    }
+    wl.clear();
+  }
+  waitingLists.erase(wlist);
+}
+
+/* Debugging helper */
+void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
+  out << "Current Thread: " << crtThread().tuid.first << '\n';
+  for (const threads_ty::value_type &tit : threads) {
+    tit.second.dumpStack(out);
+  }
+}
+
+void ExecutionState::dumpStackPathOS() {
+  struct StringInstStats stack;
+  llvm::raw_string_ostream sos(stack.str);
+  dumpStack(sos);
+  sos.flush();
+  stack.instcnt = stats::instructions;
+  stackPathOS << stack;
+}
+
+void ExecutionState::dumpStatsPathOS() {
+  struct ExecutionStats exstats;
+  time::Span current_cost = fork_queryCost - prev_fork_queryCost;
+  time::Span current_cost_increment = current_cost - prev_fork_queryCost_single;
+  prev_fork_queryCost = fork_queryCost;
+  const InstructionInfo *iinfo = crtThread().prevPC->info;
+  if (current_cost.toMicroseconds() > 0) {
+    prev_fork_queryCost_single = current_cost;
+    exstats.instructions_cnt = stats::instructions;
+    llvm::raw_string_ostream sos(exstats.llvm_inst_str);
+    crtThread().prevPC->inst->print(sos);
+    exstats.file_loc = iinfo->file + ":" + std::to_string(iinfo->line);
+    exstats.queryCost_us = current_cost.toMicroseconds();
+    exstats.queryCost_increment_us = current_cost_increment.toMicroseconds();
+    
+    statsPathOS << exstats;
+  }
+}
+void ExecutionState::dumpConsPathOS(const std::string &cons) {
+  struct StringInstStats constats;
+  constats.instcnt = stats::instructions;
+  constats.str = cons;
+
+  consPathOS << constats;
+}
+
+void ExecutionState::dumpConstraints(llvm::raw_ostream &out) const {
+  for (ConstraintManager::const_iterator i = constraints.begin();
+      i != constraints.end(); i++) {
+    out << '*';
+    (*i)->print(out);
+    out << '\n';
+  }
+}
+void ExecutionState::dumpConstraints() const {
+  dumpConstraints(llvm::errs());
 }

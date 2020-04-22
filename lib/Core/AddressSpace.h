@@ -11,6 +11,7 @@
 #define KLEE_ADDRESSSPACE_H
 
 #include "ObjectHolder.h"
+#include "Memory.h"
 
 #include "klee/Expr/Expr.h"
 #include "klee/Internal/ADT/ImmutableMap.h"
@@ -29,7 +30,9 @@ namespace klee {
 
   /// Function object ordering MemoryObject's by address.
   struct MemoryObjectLT {
-    bool operator()(const MemoryObject *a, const MemoryObject *b) const;
+    bool operator()(const MemoryObject *a, const MemoryObject *b) const {
+		return a->address < b->address;
+	}
   };
   
   typedef ImmutableMap<const MemoryObject*, ObjectHolder, MemoryObjectLT> MemoryMap;
