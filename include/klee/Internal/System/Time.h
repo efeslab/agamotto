@@ -84,7 +84,7 @@ namespace klee {
       explicit operator bool() const;
       explicit operator timeval() const;
 
-      std::uint64_t toMicroseconds() const;
+      std::int64_t toMicroseconds() const;
       double toSeconds() const;
       std::tuple<std::uint32_t, std::uint8_t, std::uint8_t> toHMS() const; // hours, minutes, seconds
     };
@@ -114,6 +114,7 @@ namespace klee {
     Span microseconds(std::uint64_t);
     Span nanoseconds(std::uint64_t);
 
+    constexpr const char *fmt_str = "%Y-%m-%d %H:%M:%S";
   } // time
 } // klee
 

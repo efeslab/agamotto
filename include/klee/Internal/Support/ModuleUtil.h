@@ -60,11 +60,14 @@ bool functionEscapes(const llvm::Function *f);
 /// @param libraryName library to read
 /// @param modules contains extracted modules
 /// @param errorMsg contains the error description in case the file could not be
+/// @param module_handler a callback to run before pushing new modules to the
+///   vector
 /// loaded
 /// @return true if successful otherwise false
 bool loadFile(const std::string &libraryName, llvm::LLVMContext &context,
               std::vector<std::unique_ptr<llvm::Module>> &modules,
-              std::string &errorMsg);
+              std::string &errorMsg, void(*moduleCB)(llvm::Module*)=nullptr);
+bool stripDebugInfo(llvm::Module &module);
 }
 
 #endif /* KLEE_MODULEUTIL_H */

@@ -47,11 +47,14 @@ namespace klee {
     unsigned numInstructions;
     KInstruction **instructions;
 
-    std::map<llvm::BasicBlock*, unsigned> basicBlockEntry;
+    std::map<const llvm::BasicBlock*, unsigned> basicBlockEntry;
 
     /// Whether instructions in this function should count as
     /// "coverable" for statistics and search heuristics.
     bool trackCoverage;
+    /// How many times this Function has been called.
+    /// Maintained at ExecutionState::pushFrame
+    unsigned int frequency = 0;
 
   public:
     explicit KFunction(llvm::Function*, KModule *);
@@ -108,6 +111,8 @@ namespace klee {
   private:
     // Mark function with functionName as part of the KLEE runtime
     void addInternalFunction(const char* functionName);
+
+    std::map<llvm::Instruction*, KInstruction*> instructionMapCache;
 
   public:
     KModule() = default;

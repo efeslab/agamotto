@@ -12,6 +12,8 @@
 
 #include "Statistic.h"
 
+#include "llvm/Support/raw_ostream.h"
+
 #include <vector>
 #include <string>
 #include <string.h>

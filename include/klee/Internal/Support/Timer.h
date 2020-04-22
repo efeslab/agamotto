@@ -25,7 +25,7 @@ namespace klee {
   class WallTimer {
     const time::Point start;
   public:
-    WallTimer();
+	WallTimer();
 
     /// Return the delta since the timer was created
     time::Span delta() const;

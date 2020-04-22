@@ -11,6 +11,7 @@
 #define KLEE_PARSER_H
 
 #include "klee/Expr/Expr.h"
+#include "klee/Expr/Constraints.h"
 
 #include <vector>
 #include <string>
@@ -169,7 +170,7 @@ namespace expr {
 
     /// Constraints - The list of constraints to assume for this
     /// expression.
-    const std::vector<ExprHandle> Constraints;
+    const Constraints_ty Constraints;
     
     /// Query - The expression being queried.
     ExprHandle Query;
@@ -228,8 +229,11 @@ namespace expr {
     /// \arg MB - The input data.
     /// \arg Builder - The expression builder to use for constructing
     /// expressions.
+    /// \arg BitcodePath (optional) a bitcode file to reconstruct kinst mapping
+    ///   for kleaver
     static Parser *Create(const std::string Name, const llvm::MemoryBuffer *MB,
-                          ExprBuilder *Builder, bool ClearArrayAfterQuery);
+                          ExprBuilder *Builder, bool ClearArrayAfterQuery,
+                          const std::string BitcodePath);
   };
 }
 }

@@ -11,12 +11,12 @@
 #define KLEE_EXPRPPRINTER_H
 
 #include "klee/Expr/Expr.h"
+#include "klee/Expr/Constraints.h"
 
 namespace llvm {
   class raw_ostream;
 }
 namespace klee {
-  class ConstraintManager;
 
   class ExprPPrinter {
   protected:
@@ -61,10 +61,10 @@ namespace klee {
     static void printSingleExpr(llvm::raw_ostream &os, const ref<Expr> &e);
 
     static void printConstraints(llvm::raw_ostream &os,
-                                 const ConstraintManager &constraints);
+                                 const Constraints_ty &constraints);
 
     static void printQuery(llvm::raw_ostream &os,
-                           const ConstraintManager &constraints,
+                           const Constraints_ty &constraints,
                            const ref<Expr> &q,
                            const ref<Expr> *evalExprsBegin = 0,
                            const ref<Expr> *evalExprsEnd = 0,

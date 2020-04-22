@@ -14,7 +14,7 @@
 #include <set>
 #include <string>
 #include <vector>
-
+#include "klee/Internal/Support/Serialize.h"
 struct KTest;
 
 namespace llvm {
@@ -133,7 +133,8 @@ public:
   // supply a list of branch decisions specifying which direction to
   // take on forks. this can be used to drive the interpretation down
   // a user specified path. use null to reset.
-  virtual void setReplayPath(const std::vector<bool> *path) = 0;
+  virtual void setReplayPath(const std::vector<PathEntry> *path) = 0;
+  virtual void setReplayDataRecEntries(const std::vector<DataRecEntry> *datarec) = 0;
 
   // supply a set of symbolic bindings that will be used as "seeds"
   // for the search. use null to reset.
