@@ -71,8 +71,9 @@ if((NOT EXISTS ${PMDK_INCLUDE_DIR}) OR (NOT EXISTS ${PMDK_LIB_DIR}))
     message(FATAL_ERROR "PMDK build and installation failed!")
 endif()
 
-# We also need libevent for memcached
+
 ################################################################################
+# We also need libevent for memcached
 
 set(LIBEVENT_ROOT_DIR ${CMAKE_CURRENT_BINARY_DIR}/libevent)
 set(LIBEVENT_INSTALL_DIR ${LIBEVENT_ROOT_DIR}/install)
@@ -83,14 +84,14 @@ if(NOT EXISTS "${LIBEVENT_ROOT_DIR}")
     message("no libevent at ${LIBEVENT_ROOT_DIR}")
     execute_process(COMMAND git clone https://github.com/libevent/libevent.git ${LIBEVENT_ROOT_DIR})
     execute_process(COMMAND git -C ${LIBEVENT_ROOT_DIR} checkout master)
+
+    execute_process(COMMAND ${LIBEVENT_ROOT_DIR}/autogen.sh
+                WORKING_DIRECTORY ${LIBEVENT_ROOT_DIR})
+
+    execute_process(COMMAND env CC=wllvm CXX=wllvm++ CFLAGS=${KLEE_FLAGS} 
+                            ${LIBEVENT_ROOT_DIR}/configure --disable-openssl
+                    WORKING_DIRECTORY ${LIBEVENT_ROOT_DIR})
 endif()
-
-execute_process(COMMAND ${LIBEVENT_ROOT_DIR}/autogen.sh
-                WORKING_DIRECTORY ${LIBEVENT_ROOT_DIR})
-
-execute_process(COMMAND env CC=wllvm CXX=wllvm++ CFLAGS=${KLEE_FLAGS} 
-                        ${LIBEVENT_ROOT_DIR}/configure --disable-openssl
-                WORKING_DIRECTORY ${LIBEVENT_ROOT_DIR})
 
 execute_process(COMMAND make -j${N} WORKING_DIRECTORY ${LIBEVENT_ROOT_DIR})
 execute_process(COMMAND make install prefix=${LIBEVENT_INSTALL_DIR}
@@ -103,6 +104,41 @@ foreach(shared IN LISTS libevent_libs)
         file(COPY "${shared}.bc" DESTINATION "${KLEE_RUNTIME_DIRECTORY}")
     endif()
 endforeach(shared)
+
+################################################################################
+
+################################################################################
+# Lenovo's Memcached
+
+set(MEMCACHED_ROOT_DIR ${CMAKE_CURRENT_BINARY_DIR}/memcached-pmem)
+
+if(NOT EXISTS "${MEMCACHED_ROOT_DIR}")
+    message("no memcached at ${memcached_ROOT_DIR}")
+    execute_process(COMMAND git clone https://github.com/lenovo/memcached-pmem ${MEMCACHED_ROOT_DIR})
+    execute_process(COMMAND git -C ${MEMCACHED_ROOT_DIR} checkout master)
+endif()
+
+set(MEMCACHED_LIBS_FLAGS "-levent -lpmem")
+set(MEMCACHED_LDFLAGS_FLAGS "-L${LIBEVENT_LIB_DIR} -L${PMDK_LIB_DIR}")
+set(MEMCACHED_CFLAGS_FLAGS "-I${LIBEVENT_INCLUDE_DIR} -I${PMDK_INCLUDE_DIR} ${KLEE_FLAGS}")
+set(MEMCACHED_LD_PATH "${LIBEVENT_LIB_DIR}:${PMDK_LIB_DIR}")
+
+execute_process(COMMAND env 
+                        LD_LIBRARY_PATH=${MEMCACHED_LD_PATH}
+                        LIBS=${MEMCACHED_LIBS_FLAGS}
+                        LDFLAGS=${MEMCACHED_LDFLAGS_FLAGS}
+                        CFLAGS=${MEMCACHED_CFLAGS_FLAGS}
+                        CC=wllvm 
+                        CXX=wllvm++ 
+                        ${MEMCACHED_ROOT_DIR}/configure --enable-pslab
+                WORKING_DIRECTORY ${MEMCACHED_ROOT_DIR})
+
+execute_process(COMMAND make -j${N} -C ${MEMCACHED_ROOT_DIR})
+# message("${CMAKE_BINARY_DIR}/bin/memcached.bc")
+execute_process(COMMAND extract-bc "memcached" -o "${CMAKE_BINARY_DIR}/bin/memcached.bc"
+                WORKING_DIRECTORY ${MEMCACHED_ROOT_DIR})      
+# add_custom_command(COMMAND extract-bc $<TARGET_FILE:${MEMCACHED_ROOT_DIR}/memcached> 
+#                            -o $<TARGET_FILE_DIR:klee>/memcached.bc)         
 
 ################################################################################
 
