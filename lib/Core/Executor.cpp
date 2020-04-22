@@ -1501,19 +1501,11 @@ void Executor::executeCall(ExecutionState &state,
     // from just an instruction (unlike LLVM).
     KFunction *kf = kmodule->functionMap[f];
 
-    // (iangneal): We need to propagate NVM info
-    // klee_warning("Module options for NVM (push): %d", modOpts.EnableNvmInfo);
-    // if (modOpts.EnableNvmInfo) {
-    //   state.pushFrame(state.prevPC, kf, searcher->getNvmInfo());
-    // } else {
-    //   state.pushFrame(state.prevPC, kf);
-    // }
-    state.pushFrame(state.prevPC, kf);
-
-    state.pc = kf->instructions;
+    state.pushFrame(state.prevPC(), kf);
+    state.pc() = kf->instructions;
 
     if (statsTracker)
-      statsTracker->framePushed(state, &state.stack[state.stack.size()-2]);
+      statsTracker->framePushed(state, &state.stack()[state.stack().size()-2]);
 
      // TODO: support "byval" parameter attribute
      // TODO: support zeroext, signext, sret attributes
@@ -1538,7 +1530,7 @@ void Executor::executeCall(ExecutionState &state,
         return;
       }
 
-      StackFrame &sf = state.stack.back();
+      StackFrame &sf = state.stack().back();
       unsigned size = 0;
       bool requires16ByteAlignment = false;
       for (unsigned i = funcArgs; i < callingArgs; i++) {
@@ -1636,12 +1628,12 @@ void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
   // instructions know which argument to eval, set the pc, and continue.
 
   // XXX this lookup has to go ?
-  KFunction *kf = state.stack.back().kf;
+  KFunction *kf = state.stack().back().kf;
   unsigned entry = kf->basicBlockEntry[dst];
-  state.pc = &kf->instructions[entry];
-  if (state.pc->inst->getOpcode() == Instruction::PHI) {
-    PHINode *first = static_cast<PHINode*>(state.pc->inst);
-    state.incomingBBIndex = first->getBasicBlockIndex(src);
+  state.pc() = &kf->instructions[entry];
+  if (state.pc()->inst->getOpcode() == Instruction::PHI) {
+    PHINode *first = static_cast<PHINode*>(state.pc()->inst);
+    state.incomingBBIndex() = first->getBasicBlockIndex(src);
   }
 }
 
@@ -1681,7 +1673,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     // Control flow
   case Instruction::Ret: {
     ReturnInst *ri = cast<ReturnInst>(i);
-    KInstIterator kcaller = state.stack.back().caller;
+    KInstIterator kcaller = state.stack().back().caller;
     Instruction *caller = kcaller ? kcaller->inst : 0;
     bool isVoidReturn = (ri->getNumOperands() == 0);
     ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
@@ -1690,9 +1682,18 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       result = eval(ki, 0, state).value;
     }
 
-    if (state.stack.size() <= 1) {
+    if (state.stack().size() <= 1) {
       assert(!caller && "caller set on initial stack frame");
-      terminateStateOnExit(state);
+      if (state.threads.size() == 1) {
+        // main exit
+        terminateStateOnExit(state);
+      } else {
+        // Invoke pthread_exit()
+        Function *f = kmodule->module->getFunction("pthread_exit");
+        std::vector<ref<Expr>> arguments;
+        arguments.push_back(result);
+        executeCall(state, ki, f, arguments);
+      }
     } else {
       state.popFrame();
 
@@ -1702,8 +1703,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
         transferToBasicBlock(ii->getNormalDest(), caller->getParent(), state);
       } else {
-        state.pc = kcaller;
-        ++state.pc;
+        state.pc() = kcaller;
+        ++state.pc();
       }
 
       if (!isVoidReturn) {
@@ -1776,7 +1777,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       // requires that we still be in the context of the branch
       // instruction (it reuses its statistic id). Should be cleaned
       // up with convenient instruction specific data.
-      if (statsTracker && state.stack.back().kf->trackCoverage)
+      if (statsTracker && state.stack().back().kf->trackCoverage)
         statsTracker->markBranchVisited(branches.first, branches.second);
 
       if (branches.first)
