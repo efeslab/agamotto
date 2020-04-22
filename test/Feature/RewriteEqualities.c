@@ -21,7 +21,7 @@ int run(unsigned char * x, unsigned char * y) {
   if(y[x[2]] < 11){
     if(x[2] == 8){
       // CHECK:      (query [(Eq 8 (Read w8 2 x))]
-      // CHECK-NEXT: false)
+      // CHECK-NEXT: false
       return 2;
     } else{
       return 3;
