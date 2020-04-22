@@ -204,6 +204,12 @@ namespace {
 		cl::value_desc("library file"),
                 cl::cat(LinkCat));
 
+  cl::list<std::string>
+  LinkKnownLibraries("link-known-lib",
+		cl::desc("Link the given known library before execution. Can be used multiple times."),
+		cl::value_desc("library file"),
+                cl::cat(LinkCat));
+
   cl::opt<bool>
   WithPOSIXRuntime("posix-runtime",
                    cl::desc("Link with POSIX runtime. Options that can be passed as arguments to the programs are: --sym-arg <max-len>  --sym-args <min-argvs> <max-argvs> <max-len> + file model options (default=false)."),
@@ -1340,6 +1346,15 @@ int main(int argc, char **argv, char **envp) {
                         errorMsg))
       klee_error("error loading free standing support '%s': %s",
                  library.c_str(), errorMsg.c_str());
+  }
+
+  for (const auto &libraryName : LinkKnownLibraries) {
+    SmallString<128> Path(Opts.LibraryDir);
+    llvm::sys::path::append(Path, libraryName + ".so.bc");
+    if (!klee::loadFile(Path.c_str(), mainModule->getContext(), loadedModules,
+                        errorMsg))
+      klee_error("error loading free standing support '%s': %s",
+                 Path.c_str(), errorMsg.c_str());
   }
 
   // FIXME: Change me to std types.
