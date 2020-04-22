@@ -116,22 +116,22 @@ if(NOT EXISTS "${MEMCACHED_ROOT_DIR}")
     message("no memcached at ${memcached_ROOT_DIR}")
     execute_process(COMMAND git clone https://github.com/lenovo/memcached-pmem ${MEMCACHED_ROOT_DIR})
     execute_process(COMMAND git -C ${MEMCACHED_ROOT_DIR} checkout master)
+
+    set(MEMCACHED_LIBS_FLAGS "-levent -lpmem")
+    set(MEMCACHED_LDFLAGS_FLAGS "-L${LIBEVENT_LIB_DIR} -L${PMDK_LIB_DIR}")
+    set(MEMCACHED_CFLAGS_FLAGS "-I${LIBEVENT_INCLUDE_DIR} -I${PMDK_INCLUDE_DIR} ${KLEE_FLAGS}")
+    set(MEMCACHED_LD_PATH "${LIBEVENT_LIB_DIR}:${PMDK_LIB_DIR}")
+    
+    execute_process(COMMAND env 
+                            LD_LIBRARY_PATH=${MEMCACHED_LD_PATH}
+                            LIBS=${MEMCACHED_LIBS_FLAGS}
+                            LDFLAGS=${MEMCACHED_LDFLAGS_FLAGS}
+                            CFLAGS=${MEMCACHED_CFLAGS_FLAGS}
+                            CC=wllvm 
+                            CXX=wllvm++ 
+                            ${MEMCACHED_ROOT_DIR}/configure --enable-pslab
+                    WORKING_DIRECTORY ${MEMCACHED_ROOT_DIR})
 endif()
-
-set(MEMCACHED_LIBS_FLAGS "-levent -lpmem")
-set(MEMCACHED_LDFLAGS_FLAGS "-L${LIBEVENT_LIB_DIR} -L${PMDK_LIB_DIR}")
-set(MEMCACHED_CFLAGS_FLAGS "-I${LIBEVENT_INCLUDE_DIR} -I${PMDK_INCLUDE_DIR} ${KLEE_FLAGS}")
-set(MEMCACHED_LD_PATH "${LIBEVENT_LIB_DIR}:${PMDK_LIB_DIR}")
-
-execute_process(COMMAND env 
-                        LD_LIBRARY_PATH=${MEMCACHED_LD_PATH}
-                        LIBS=${MEMCACHED_LIBS_FLAGS}
-                        LDFLAGS=${MEMCACHED_LDFLAGS_FLAGS}
-                        CFLAGS=${MEMCACHED_CFLAGS_FLAGS}
-                        CC=wllvm 
-                        CXX=wllvm++ 
-                        ${MEMCACHED_ROOT_DIR}/configure --enable-pslab
-                WORKING_DIRECTORY ${MEMCACHED_ROOT_DIR})
 
 execute_process(COMMAND make -j${N} -C ${MEMCACHED_ROOT_DIR})
 # message("${CMAKE_BINARY_DIR}/bin/memcached.bc")
