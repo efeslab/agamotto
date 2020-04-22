@@ -924,7 +924,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
        MaxStaticCPForkPct!=1. || MaxStaticCPSolvePct != 1.) &&
       statsTracker->elapsed() > time::seconds(60)) {
     StatisticManager &sm = *theStatisticManager;
-    CallPathNode *cpn = current.stack.back().callPathNode;
+    CallPathNode *cpn = current.stack().back().callPathNode;
     if ((MaxStaticForkPct<1. &&
          sm.getIndexedValue(stats::forks, sm.getIndex()) >
          stats::forks*MaxStaticForkPct) ||
@@ -1185,7 +1185,7 @@ const Cell& Executor::eval(KInstruction *ki, unsigned index,
     return kmodule->constantTable[index];
   } else {
     unsigned index = vnumber;
-    StackFrame &sf = state.stack.back();
+    StackFrame &sf = state.stack().back();
     return sf.locals[index];
   }
 }
@@ -1240,8 +1240,8 @@ Executor::toConstant(ExecutionState &state,
   std::string str;
   llvm::raw_string_ostream os(str);
   os << "silently concretizing (reason: " << reason << ") expression " << e
-     << " to value " << value << " (" << (*(state.pc)).info->file << ":"
-     << (*(state.pc)).info->line << ")";
+     << " to value " << value << " (" << (*(state.pc())).info->file << ":"
+     << (*(state.pc())).info->line << ")";
 
   if (AllExternalWarnings)
     klee_warning("%s", os.str().c_str());
@@ -1313,14 +1313,14 @@ void Executor::printDebugInstructions(ExecutionState &state) {
 
   if (!DebugPrintInstructions.isSet(STDERR_COMPACT) &&
       !DebugPrintInstructions.isSet(FILE_COMPACT)) {
-    (*stream) << "     " << state.pc->getSourceLocation() << ":";
+    (*stream) << "     " << state.pc()->getSourceLocation() << ":";
   }
 
-  (*stream) << state.pc->info->assemblyLine;
+  (*stream) << state.pc()->info->assemblyLine;
 
   if (DebugPrintInstructions.isSet(STDERR_ALL) ||
       DebugPrintInstructions.isSet(FILE_ALL))
-    (*stream) << ":" << *(state.pc->inst);
+    (*stream) << ":" << *(state.pc()->inst);
   (*stream) << "\n";
 
   if (DebugPrintInstructions.isSet(FILE_ALL) ||
@@ -1339,8 +1339,8 @@ void Executor::stepInstruction(ExecutionState &state) {
 
   ++stats::instructions;
   ++state.steppedInstructions;
-  state.prevPC = state.pc;
-  ++state.pc;
+  state.prevPC() = state.pc();
+  ++state.pc();
 
   if (stats::instructions == MaxInstructions)
     haltExecution = true;
@@ -1372,10 +1372,13 @@ void Executor::executeCall(ExecutionState &state,
                            KInstruction *ki,
                            Function *f,
                            std::vector< ref<Expr> > &arguments) {
-  Instruction *i = ki->inst;
-  if (i && isa<DbgInfoIntrinsic>(i))
-    return;
-  if (f && f->isDeclaration()) {
+  if (ki) {
+    Instruction *I = ki->inst;
+    if (I && isa<DbgInfoIntrinsic>(I))
+      return;
+  }
+  if (ki && f && f->isDeclaration()) {
+    Instruction *I = ki->inst;
     switch(f->getIntrinsicID()) {
     case Intrinsic::not_intrinsic:
       // state may be destroyed by this call, cannot touch
@@ -1397,8 +1400,8 @@ void Executor::executeCall(ExecutionState &state,
     }
     // va_arg is handled by caller and intrinsic lowering, see comment for
     // ExecutionState::varargs
-    case Intrinsic::vastart: {
-      StackFrame &sf = state.stack.back();
+    case Intrinsic::vastart:  {
+      StackFrame &sf = state.stack().back();
 
       // varargs can be zero if no varargs were provided
       if (!sf.varargs)
@@ -1409,7 +1412,7 @@ void Executor::executeCall(ExecutionState &state,
       Expr::Width WordSize = Context::get().getPointerWidth();
       if (WordSize == Expr::Int32) {
         executeMemoryOperation(state, true, arguments[0],
-                               sf.varargs->getBaseExpr(), 0);
+                               sf.varargs->getBaseExpr(), ki);
       } else {
         assert(WordSize == Expr::Int64 && "Unknown word size!");
 
@@ -1417,19 +1420,19 @@ void Executor::executeCall(ExecutionState &state,
         // instead of implementing it, we can do a simple hack: just
         // make a function believe that all varargs are on stack.
         executeMemoryOperation(state, true, arguments[0],
-                               ConstantExpr::create(48, 32), 0); // gp_offset
+                               ConstantExpr::create(48, 32), ki); // gp_offset
         executeMemoryOperation(state, true,
                                AddExpr::create(arguments[0],
                                                ConstantExpr::create(4, 64)),
-                               ConstantExpr::create(304, 32), 0); // fp_offset
+                               ConstantExpr::create(304, 32), ki); // fp_offset
         executeMemoryOperation(state, true,
                                AddExpr::create(arguments[0],
                                                ConstantExpr::create(8, 64)),
-                               sf.varargs->getBaseExpr(), 0); // overflow_arg_area
+                               sf.varargs->getBaseExpr(), ki); // overflow_arg_area
         executeMemoryOperation(state, true,
                                AddExpr::create(arguments[0],
                                                ConstantExpr::create(16, 64)),
-                               ConstantExpr::create(0, 64), 0); // reg_save_area
+                               ConstantExpr::create(0, 64), ki); // reg_save_area
       }
       break;
     }
@@ -1481,12 +1484,12 @@ void Executor::executeCall(ExecutionState &state,
       klee_error("unknown intrinsic: %s", f->getName().data());
     }
 
-    if (InvokeInst *ii = dyn_cast<InvokeInst>(i))
-      transferToBasicBlock(ii->getNormalDest(), i->getParent(), state);
+    if (InvokeInst *ii = dyn_cast<InvokeInst>(I))
+      transferToBasicBlock(ii->getNormalDest(), I->getParent(), state);
   } else {
     // Check if maximum stack size was reached.
     // We currently only count the number of stack frames
-    if (RuntimeMaxStackFrames && state.stack.size() > RuntimeMaxStackFrames) {
+    if (RuntimeMaxStackFrames && state.stack().size() > RuntimeMaxStackFrames) {
       terminateStateEarly(state, "Maximum stack size reached.");
       klee_warning("Maximum stack size reached.");
       return;
