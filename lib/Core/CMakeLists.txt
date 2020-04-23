@@ -37,8 +37,6 @@ klee_add_component(kleeCore
   StatsTracker.cpp
   TimingSolver.cpp
   UserSearcher.cpp
-  dlmalloc.cpp
-  ExecutorDebugHelper.cpp
   Threading.cpp
 )
 

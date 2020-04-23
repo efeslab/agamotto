@@ -24,9 +24,10 @@
 #include <map>
 #include <cstring>
 
-using namespace llvm;
 using namespace klee;
 using namespace klee::expr;
+using llvm::APInt;
+using llvm::MemoryBuffer;
 
 namespace {
   /// ParseResult - Represent a possibly invalid parse result.

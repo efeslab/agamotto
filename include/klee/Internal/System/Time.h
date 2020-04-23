@@ -84,7 +84,7 @@ namespace klee {
       explicit operator bool() const;
       explicit operator timeval() const;
 
-      std::int64_t toMicroseconds() const;
+      std::uint64_t toMicroseconds() const;
       double toSeconds() const;
       std::tuple<std::uint32_t, std::uint8_t, std::uint8_t> toHMS() const; // hours, minutes, seconds
     };
