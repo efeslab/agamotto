@@ -451,6 +451,14 @@ private:
                              const char *suffix = NULL,
                              const llvm::Twine &longMessage = "");
 
+  void emitPmemError(ExecutionState &state, const std::unordered_set<std::string> &errors);
+  /**
+   * call error handler and terminate state for persistent memory errors.
+   * For each state terminated, outputs the unique errors that this state caused, 
+   * or ignores the location if there are no unique errors.
+   */
+  void terminateStateOnPmemError(ExecutionState &state, const std::unordered_set<std::string> &errors);
+
   // call error handler and terminate state, for execution errors
   // (things that should not be possible, like illegal instruction or
   // unlowered instrinsic, or are unsupported, like inline assembly)

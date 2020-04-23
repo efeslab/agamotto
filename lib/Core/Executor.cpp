@@ -24,7 +24,6 @@
 #include "TimingSolver.h"
 #include "UserSearcher.h"
 #include "ExecutorDebugHelper.h"
-#include "ExecutorCmdLine.h"
 
 #include "klee/Common.h"
 #include "klee/Config/Version.h"
@@ -953,7 +952,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   bool success = solver->evaluate(current, condition, res);
   solver->setTimeout(time::Span());
   if (!success) {
-    current.pc = current.prevPC;
+    current.pc() = current.prevPC();
     terminateStateEarly(current, "Query timed out (fork).");
     return StatePair(0, 0);
   }
@@ -1562,7 +1561,7 @@ void Executor::executeCall(ExecutionState &state,
       }
 
       MemoryObject *mo = sf.varargs =
-          memory->allocate(size, true, false, state.prevPC->inst,
+          memory->allocate(size, true, false, state.prevPC()->inst,
                            (requires16ByteAlignment ? 16 : 8));
       if (!mo && size) {
         terminateStateOnExecError(state, "out of memory (varargs)");
@@ -2151,7 +2150,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     break;
   }
   case Instruction::PHI: {
-    ref<Expr> result = eval(ki, state.incomingBBIndex, state).value;
+    ref<Expr> result = eval(ki, state.incomingBBIndex(), state).value;
     bindLocal(ki, state, result);
     break;
   }
@@ -2871,7 +2870,7 @@ void Executor::updateStates(ExecutionState *current) {
 
     for (ExecutionState *s : toUpdate) {
       assert(s && s->nvmInfo);
-      s->nvmInfo->stepState(s, s->prevPC, s->pc);
+      s->nvmInfo->stepState(s, s->prevPC(), s->pc());
     }
   }
   
@@ -3114,7 +3113,7 @@ void Executor::run(ExecutionState &initialState) {
   while (!states.empty() && !haltExecution) {
     if (!searcher->empty()) {
       ExecutionState &state = searcher->selectStateAndUpdateInfo();
-      KInstruction *ki = state.pc;
+      KInstruction *ki = state.pc();
       stepInstruction(state);
 
       executeInstruction(state, ki);
@@ -3131,7 +3130,7 @@ void Executor::run(ExecutionState &initialState) {
   }
 
   delete searcher;
-  searcher = 0;
+  searcher = nullptr;
 
   doDumpStates();
 }
@@ -3188,7 +3187,7 @@ std::string Executor::getAddressInfo(ExecutionState &state,
 
 
 void Executor::terminateState(ExecutionState &state) {
-  if (replayKTest && state.replayPosition!=replayKTest->numObjects) {
+  if (replayKTest && replayPosition!=replayKTest->numObjects) {
     klee_warning_once(replayKTest,
                       "replay did not consume all objects in test input.");
   }
@@ -3326,7 +3325,7 @@ void Executor::terminateStateOnError(ExecutionState &state,
       msg << "assembly.ll line: " << ii.assemblyLine << "\n";
     }
 
-    printInfo(llvm::errs());
+    state.dumpStack(llvm::errs());
 
     std::string info_str = info.str();
     if (info_str != "")
@@ -3840,14 +3839,14 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     bool success = solver->mustBeTrue(state, check, inBounds);
     solver->setTimeout(time::Span());
     if (!success) {
-      state.pc = state.prevPC;
+      state.pc() = state.prevPC();
       terminateStateEarly(state, "Query timed out (bounds check).");
       return;
     }
 
     if (inBounds) {
       const ObjectState *os = op.second;
-      executeUpdateNvmInfo(state, state.prevPC, os);
+      executeUpdateNvmInfo(state, state.prevPC(), os);
       // Actually do the read or write
       doOperation(state, mo, os, offset);
       return;
@@ -4196,8 +4195,7 @@ void Executor::runFunctionAsMain(Function *f,
   }
 
   ExecutionState *state = new ExecutionState(this, 
-                                             kmodule->functionMap[f], 
-                                             modOpts);
+                                             kmodule->functionMap[f]);
 
   if (pathWriter)
     state->pathOS = pathWriter->open();
@@ -4224,7 +4222,7 @@ void Executor::runFunctionAsMain(Function *f,
 
         MemoryObject *arg =
             memory->allocate(len + 1, /*isLocal=*/false, /*isGlobal=*/true,
-                             /*allocSite=*/state->pc->inst, /*alignment=*/8);
+                             /*allocSite=*/state->pc()->inst, /*alignment=*/8);
         if (!arg)
           klee_error("Could not allocate memory for function arguments");
         ObjectState *os = bindObjectInState(*state, arg, false);

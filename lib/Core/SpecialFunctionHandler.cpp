@@ -29,6 +29,7 @@
 #include "llvm/IR/Module.h"
 
 #include <errno.h>
+#include <sys/mman.h>
 #include <sstream>
 
 using namespace llvm;
@@ -817,7 +818,7 @@ void SpecialFunctionHandler::handleDefineFixedObjectFromExisting(
   
   uint64_t address = cast<ConstantExpr>(arguments[0])->getZExtValue();
   uint64_t size = cast<ConstantExpr>(arguments[1])->getZExtValue();
-  MemoryObject *mo = executor.memory->allocateFixed(address, size, state.prevPC->inst);
+  MemoryObject *mo = executor.memory->allocateFixed(address, size, state.prevPC()->inst);
   executor.bindObjectInState(state, mo, false);
   mo->isUserSpecified = true; // XXX hack;
 
@@ -1060,7 +1061,7 @@ void SpecialFunctionHandler::handleAllocPmem(ExecutionState &state,
   MemoryObject *baseObj = nullptr;
   for (uint64_t offset = 0; offset < realSize; offset += unitSz) {
     MemoryObject *mo = executor.memory->allocateFixed(
-              (uint64_t)base_addr + offset, unitSz, state.prevPC->inst);
+              (uint64_t)base_addr + offset, unitSz, state.prevPC()->inst);
     assert(mo);
     std::string moName;
     llvm::raw_string_ostream ss(moName);

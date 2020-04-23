@@ -132,9 +132,7 @@ private:
   ExecutionState() : ptreeNode(0) {}
 
 public:
-  ExecutionState(Executor *executor, 
-                 KFunction *kf, 
-                 const Interpreter::ModuleOptions &modOpts);
+  ExecutionState(Executor *executor, KFunction *kf);
 
   // XXX total hack, just used to make a state so solver can
   // use on structure
@@ -182,9 +180,6 @@ public:
   void dumpConstraints() const;
   void dumpStack(llvm::raw_ostream &out) const;
   void dumpStack() const { dumpStack(llvm::errs()); }
-  void dumpStackPathOS();
-  void dumpStatsPathOS();
-  void dumpConsPathOS(const std::string &cons);
 
   /* Shortcut methods */
   Thread &crtThread() { return crtThreadIt->second; }
@@ -199,12 +194,7 @@ public:
   bool isInLIBC() const { return crtThread().isInLIBC; }
   unsigned &incomingBBIndex() { return crtThread().incomingBBIndex; }
   unsigned incomingBBIndex() const { return crtThread().incomingBBIndex; }
-  inline bool shouldRecord() const {
-    return isInUserMain && !isInPOSIX();
-  }
-  inline bool isInTargetProgram() const {
-    return isInUserMain && !isInPOSIX() && !isInLIBC();
-  }
+
 };
 }
 

@@ -48,14 +48,6 @@ namespace klee {
   extern cl::opt<NvmHeuristicBuilder::Type> NvmCheck;
 }
 
-/** Internal Routine **/
-static inline bool isKFunctionInPOSIX(KFunction *kf) {
-  return kf->function->hasFnAttribute("InPOSIX");
-}
-static inline bool isKFunctionInLIBC(KFunction *kf) {
-  return kf->function->hasFnAttribute("IsINLIBC");
-}
-
 /***/
 
 void ExecutionState::setupMain(KFunction *kf) {
@@ -70,27 +62,22 @@ void ExecutionState::setupTime() {
   stateTime = 1284138206L * 1000000L; // Yeah, ugly, but what else? :)
 }
 
-ExecutionState::ExecutionState(KFunction *kf) :
+ExecutionState::ExecutionState(Executor *executor, KFunction *kf) :
     wlistCounter(1),
-    isInUserMain(false),
     depth(0),
     instsSinceCovNew(0),
     coveredNew(false),
     forkDisabled(false),
-    replayPosition(0),
-    replayDataRecEntriesPosition(0),
-    nbranches_rec(0),
     ptreeNode(0),
-    steppedInstructions(0){
-  if (PathRecordingEntryPoint.empty()) {
-    isInUserMain = true;
-  }
+    steppedInstructions(0) {
   setupMain(kf);
   setupTime();
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
-    : wlistCounter(1), constraints(assumptions), replayPosition(0), replayDataRecEntriesPosition(0), nbranches_rec(0), ptreeNode(0) {}
+  : wlistCounter(1), 
+    constraints(assumptions),
+    ptreeNode(0) {}
 
 ExecutionState::~ExecutionState() {
   for (threads_ty::value_type &tit: threads) {
@@ -120,11 +107,6 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     addressSpace(state.addressSpace),
     constraints(state.constraints),
 
-    queryCost(state.queryCost),
-    fork_queryCost(state.fork_queryCost),
-    prev_fork_queryCost(state.prev_fork_queryCost),
-    prev_fork_queryCost_single(state.prev_fork_queryCost_single),
-    isInUserMain(state.isInUserMain),
     depth(state.depth),
 
     pathOS(state.pathOS),
@@ -154,23 +136,6 @@ ExecutionState *ExecutionState::branch() {
   ExecutionState *falseState = new ExecutionState(*this);
   falseState->coveredNew = false;
   falseState->coveredLines.clear();
-
-  // initialize PathOS based on existence of existing PathOS field
-  if (pathOS.isValid()) {
-    // Need to update the pathOS.id field of falseState, otherwise the same id
-    // is used for both falseState and trueState.
-    falseState->pathOS = pathOS.branch();
-    falseState->pathDataRecOS = pathDataRecOS.branch();
-  }
-  if (stackPathOS.isValid()) {
-    falseState->stackPathOS = stackPathOS.branch();
-  }
-  if (consPathOS.isValid()) {
-    falseState->consPathOS = consPathOS.branch();
-  }
-  if (statsPathOS.isValid()) {
-    falseState->statsPathOS = statsPathOS.branch();
-  }
 
   return falseState;
 }
@@ -359,47 +324,16 @@ bool ExecutionState::merge(const ExecutionState &b) {
 void ExecutionState::pushFrame(Thread &t, KInstIterator caller, KFunction *kf) {
   t.stack.push_back(StackFrame(caller,kf));
   ++kf->frequency;
-  if (!isInUserMain && (kf->function->getName() == PathRecordingEntryPoint)) {
-    isInUserMain = true;
-  }
-  // NOTE: when enabling POSIX runtime, the entire application will be wrapped
-  // into a POSIX function call (i.e. the entry point func belongs to POSIX)
-  // So we should only reason about prop "InPOSIX" inside UserMain
-  if (isInUserMain && IgnorePOSIXPath && isKFunctionInPOSIX(kf)) {
-    if (t.POSIXDepth == 0) {
-      t.isInPOSIX = true;
-    }
-    ++t.POSIXDepth;
-  }
-  if (isInUserMain && isKFunctionInLIBC(kf)) {
-    if (t.LIBCDepth == 0) {
-      t.isInLIBC = true;
-    }
-    ++t.LIBCDepth;
-  }
 }
 
 void ExecutionState::popFrame(Thread &t) {
   StackFrame &sf = t.stack.back();
   for (std::vector<const MemoryObject*>::iterator it = sf.allocas.begin(), 
-         ie = sf.allocas.end(); it != ie; ++it)
+         ie = sf.allocas.end(); it != ie; ++it) {
+    // TODO: persistent state
     addressSpace.unbindObject(*it);
-  if (isInUserMain &&
-      (sf.kf->function->getName() == PathRecordingEntryPoint)) {
-    isInUserMain = false;
   }
-  if (isInUserMain && IgnorePOSIXPath && isKFunctionInPOSIX(sf.kf)) {
-    --t.POSIXDepth;
-    if (t.POSIXDepth == 0) {
-      t.isInPOSIX = false;
-    }
-  }
-  if (isInUserMain && isKFunctionInLIBC(sf.kf)) {
-    --t.LIBCDepth;
-    if (t.LIBCDepth == 0) {
-      t.isInLIBC = false;
-    }
-  }
+  
   t.stack.pop_back();
 }
 
@@ -407,20 +341,7 @@ void ExecutionState::popFrame(Thread &t) {
 Thread &ExecutionState::createThread(thread_id_t tid, KFunction *kf) {
   // we currently assume there is only one process and its id is 0
   Thread newThread = Thread(tid, 0, kf);
-  // I need to determine the "InPOSIX" and "InLIBC" status of the new thread by
-  // looking at the start function during thread creation.
-  // Following two cases should be taken into consideration
-  // 1. Thread could be created inside the POSIX runtime. e.g. handlers in
-  // sockets simulator may call "pthread_create".
-  // 2. all thread creation happens from POSIX function call "pthread_create"
-  if (isKFunctionInPOSIX(kf)) {
-    newThread.isInPOSIX = true;
-    newThread.POSIXDepth = 1;
-  }
-  if (isKFunctionInLIBC(kf)) {
-    newThread.isInLIBC = true;
-    newThread.LIBCDepth = 1;
-  }
+  
   std::pair<threads_ty::iterator, bool> res =
       threads.insert(std::make_pair(newThread.tuid, newThread));
   assert(res.second);
@@ -483,41 +404,6 @@ void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
   for (const threads_ty::value_type &tit : threads) {
     tit.second.dumpStack(out);
   }
-}
-
-void ExecutionState::dumpStackPathOS() {
-  struct StringInstStats stack;
-  llvm::raw_string_ostream sos(stack.str);
-  dumpStack(sos);
-  sos.flush();
-  stack.instcnt = stats::instructions;
-  stackPathOS << stack;
-}
-
-void ExecutionState::dumpStatsPathOS() {
-  struct ExecutionStats exstats;
-  time::Span current_cost = fork_queryCost - prev_fork_queryCost;
-  time::Span current_cost_increment = current_cost - prev_fork_queryCost_single;
-  prev_fork_queryCost = fork_queryCost;
-  const InstructionInfo *iinfo = crtThread().prevPC->info;
-  if (current_cost.toMicroseconds() > 0) {
-    prev_fork_queryCost_single = current_cost;
-    exstats.instructions_cnt = stats::instructions;
-    llvm::raw_string_ostream sos(exstats.llvm_inst_str);
-    crtThread().prevPC->inst->print(sos);
-    exstats.file_loc = iinfo->file + ":" + std::to_string(iinfo->line);
-    exstats.queryCost_us = current_cost.toMicroseconds();
-    exstats.queryCost_increment_us = current_cost_increment.toMicroseconds();
-    
-    statsPathOS << exstats;
-  }
-}
-void ExecutionState::dumpConsPathOS(const std::string &cons) {
-  struct StringInstStats constats;
-  constats.instcnt = stats::instructions;
-  constats.str = cons;
-
-  consPathOS << constats;
 }
 
 void ExecutionState::dumpConstraints(llvm::raw_ostream &out) const {

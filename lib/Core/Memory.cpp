@@ -975,7 +975,7 @@ PersistentState::createRootCauseIdExpr(const ExecutionState &state,
 
   uint64_t id = rootCauses.getRootCauseLocationID(state, 
                                                   getObject()->allocSite, 
-                                                  state.prevPC,
+                                                  state.prevPC(),
                                                   reason);
 
   return ConstantExpr::create(id, rootCauseWidth);                               

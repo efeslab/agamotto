@@ -38,7 +38,7 @@ RootCauseLocation::RootCauseLocation(const ExecutionState &state,
     inst(pc),
     reason(r) {
   
-  for (const klee::StackFrame &sf : state.stack) {
+  for (const klee::StackFrame &sf : state.stack()) {
     stack.emplace_back(sf.caller, sf.kf);
   }
 
