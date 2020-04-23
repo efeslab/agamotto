@@ -48,57 +48,56 @@ namespace klee {
   extern cl::opt<NvmHeuristicBuilder::Type> NvmCheck;
 }
 
-/***/
-
-StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
-  : caller(_caller), kf(_kf), callPathNode(0),
-    minDistToUncoveredOnReturn(0), varargs(0) {
-  locals = new Cell[kf->numRegisters];
+/** Internal Routine **/
+static inline bool isKFunctionInPOSIX(KFunction *kf) {
+  return kf->function->hasFnAttribute("InPOSIX");
 }
-
-StackFrame::StackFrame(const StackFrame &s)
-  : caller(s.caller),
-    kf(s.kf),
-    callPathNode(s.callPathNode),
-    allocas(s.allocas),
-    minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn),
-    varargs(s.varargs) {
-  locals = new Cell[s.kf->numRegisters];
-  for (unsigned i=0; i<s.kf->numRegisters; i++)
-    locals[i] = s.locals[i];
-}
-
-StackFrame::~StackFrame() {
-  delete[] locals;
+static inline bool isKFunctionInLIBC(KFunction *kf) {
+  return kf->function->hasFnAttribute("IsINLIBC");
 }
 
 /***/
 
-ExecutionState::ExecutionState(Executor *executor, 
-                               KFunction *kf, 
-                               const Interpreter::ModuleOptions &modOpts) :
-    pc(kf->instructions),
-    prevPC(pc),
+void ExecutionState::setupMain(KFunction *kf) {
+  // single process, make its id always be 0
+  // the first thread, set its id to be 0
+  Thread mainThread = Thread(0, 0, kf);
+  threads.insert(std::make_pair(mainThread.tuid, mainThread));
+  crtThreadIt = threads.begin();
+}
 
-    nvmInfo(nullptr),
+void ExecutionState::setupTime() {
+  stateTime = 1284138206L * 1000000L; // Yeah, ugly, but what else? :)
+}
 
+ExecutionState::ExecutionState(KFunction *kf) :
+    wlistCounter(1),
+    isInUserMain(false),
     depth(0),
-
     instsSinceCovNew(0),
     coveredNew(false),
     forkDisabled(false),
+    replayPosition(0),
+    replayDataRecEntriesPosition(0),
+    nbranches_rec(0),
     ptreeNode(0),
-    steppedInstructions(0) {
-  pushFrame(0, kf);
-  if (NvmCheck != NvmHeuristicBuilder::Type::None) {
-    nvmInfo = NvmHeuristicBuilder::create(NvmCheck, executor, kf);
+    steppedInstructions(0){
+  if (PathRecordingEntryPoint.empty()) {
+    isInUserMain = true;
   }
+  setupMain(kf);
+  setupTime();
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
-    : constraints(assumptions), ptreeNode(0) {}
+    : wlistCounter(1), constraints(assumptions), replayPosition(0), replayDataRecEntriesPosition(0), nbranches_rec(0), ptreeNode(0) {}
 
 ExecutionState::~ExecutionState() {
+  for (threads_ty::value_type &tit: threads) {
+    Thread &t = tit.second;
+    while (!t.stack.empty()) popFrame(t);
+  }
+
   for (unsigned int i=0; i<symbolics.size(); i++)
   {
     const MemoryObject *mo = symbolics[i].first;
@@ -114,8 +113,6 @@ ExecutionState::~ExecutionState() {
 }
 
 ExecutionState::ExecutionState(const ExecutionState& state):
-    nvmInfo(NvmHeuristicBuilder::copy(state.nvmInfo)),
-
     threads(state.threads),
     waitingLists(state.waitingLists),
     wlistCounter(state.wlistCounter),
@@ -139,7 +136,6 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     coveredLines(state.coveredLines),
     ptreeNode(state.ptreeNode),
     symbolics(state.symbolics),
-    persistentObjects(state.persistentObjects),
     arrayNames(state.arrayNames),
     openMergeStack(state.openMergeStack),
     steppedInstructions(state.steppedInstructions)
@@ -159,24 +155,24 @@ ExecutionState *ExecutionState::branch() {
   falseState->coveredNew = false;
   falseState->coveredLines.clear();
 
-  return falseState;
-}
-
-void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {
-  // klee_warning("Regular push frame!");
-  stack.emplace_back(caller, kf);
-}
-
-void ExecutionState::popFrame() {
-  StackFrame &sf = stack.back();
-  for (std::vector<const MemoryObject*>::iterator it = sf.allocas.begin(),
-         ie = sf.allocas.end(); it != ie; ++it) {
-    if (persistentObjects.count(*it)) {
-      persistentObjects.erase(*it);
-    }
-    addressSpace.unbindObject(*it);
+  // initialize PathOS based on existence of existing PathOS field
+  if (pathOS.isValid()) {
+    // Need to update the pathOS.id field of falseState, otherwise the same id
+    // is used for both falseState and trueState.
+    falseState->pathOS = pathOS.branch();
+    falseState->pathDataRecOS = pathDataRecOS.branch();
   }
-  stack.pop_back();
+  if (stackPathOS.isValid()) {
+    falseState->stackPathOS = stackPathOS.branch();
+  }
+  if (consPathOS.isValid()) {
+    falseState->consPathOS = consPathOS.branch();
+  }
+  if (statsPathOS.isValid()) {
+    falseState->statsPathOS = statsPathOS.branch();
+  }
+
+  return falseState;
 }
 
 void ExecutionState::addSymbolic(const MemoryObject *mo, const Array *array) {
