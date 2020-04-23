@@ -32,6 +32,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 struct KTest;
@@ -370,24 +371,28 @@ private:
   // Used for testing.
   ref<Expr> replaceReadWithSymbolic(ExecutionState &state, ref<Expr> e);
 
-  const Cell& eval(KInstruction *ki, unsigned index, 
+  const Cell& eval(KInstruction *ki, unsigned index,
                    ExecutionState &state) const;
 
   Cell& getArgumentCell(ExecutionState &state,
                         KFunction *kf,
                         unsigned index) {
-    return state.stack.back().locals[kf->getArgRegister(index)];
+    return state.stack().back().locals[kf->getArgRegister(index)];
+  }
+
+  Cell& getArgumentCell(StackFrame &sf, KFunction *kf, unsigned index) {
+    return sf.locals[kf->getArgRegister(index)];
   }
 
   Cell& getDestCell(ExecutionState &state,
                     KInstruction *target) {
-    return state.stack.back().locals[target->dest];
+    return state.stack().back().locals[target->dest];
   }
 
-  void bindLocal(KInstruction *target, 
-                 ExecutionState &state, 
+  void bindLocal(KInstruction *target,
+                 ExecutionState &state,
                  ref<Expr> value);
-  void bindArgument(KFunction *kf, 
+  void bindArgument(KFunction *kf,
                     unsigned index,
                     ExecutionState &state,
                     ref<Expr> value);
@@ -415,7 +420,7 @@ private:
   /// should generally be avoided.
   ///
   /// \param purpose An identify string to printed in case of concretization.
-  ref<klee::ConstantExpr> toConstant(ExecutionState &state, ref<Expr> e, 
+  ref<klee::ConstantExpr> toConstant(ExecutionState &state, ref<Expr> e,
                                      const char *purpose);
 
   /// Bind a constant value for e to the given target. NOTE: This
@@ -434,7 +439,7 @@ private:
 
   // remove state from queue and delete
   void terminateState(ExecutionState &state);
-  // remove state from queue and delete after checking for pmem errors
+    // remove state from queue and delete after checking for pmem errors
   void terminateStateEarlyPmem(ExecutionState &state);
   // call exit handler and terminate state
   void terminateStateEarly(ExecutionState &state, const llvm::Twine &message);
@@ -445,19 +450,11 @@ private:
                              enum TerminateReason termReason,
                              const char *suffix = NULL,
                              const llvm::Twine &longMessage = "");
-  
-  void emitPmemError(ExecutionState &state, const std::unordered_set<std::string> &errors);
-  /**
-   * call error handler and terminate state for persistent memory errors.
-   * For each state terminated, outputs the unique errors that this state caused, 
-   * or ignores the location if there are no unique errors.
-   */
-  void terminateStateOnPmemError(ExecutionState &state, const std::unordered_set<std::string> &errors);
 
   // call error handler and terminate state, for execution errors
   // (things that should not be possible, like illegal instruction or
   // unlowered instrinsic, or are unsupported, like inline assembly)
-  void terminateStateOnExecError(ExecutionState &state, 
+  void terminateStateOnExecError(ExecutionState &state,
                                  const llvm::Twine &message,
                                  const llvm::Twine &info="") {
     terminateStateOnError(state, message, Exec, NULL, info);
@@ -485,7 +482,33 @@ private:
   void dumpStates();
   void dumpPTree();
 
+  /* Multi-threading related function */
+  // Pthread Create needs to specify a new StackFrame instead of just using the
+  // current thread's stack
+  void bindArgumentToPthreadCreate(KFunction *kf, unsigned index,
+                                   StackFrame &sf, ref<Expr> value);
+  // Schedule what threads to execute next in the given ExecutionState. There
+  // are 3 sceharios to consider:
+  // 1. One thread is terminated (enabled=false, yield=false)
+  // 2. One thread is not terminated but proactively yield (enabled=true,
+  // yield=true)
+  // 3. One thread is not terminated nor yielding, but preempted.
+  // @return if schedule successfully
+  // NOTE: For unknown reason, the cloud9 code base allow you just
+  // schedule one possible next thread in case 1 and 2. But you have to
+  // fork to iterate all possible schedules in case 3.
+  // NOTE: I have not implemented forking upon schedule, I assume you can
+  // only choose one possible next thread for case 1,2. And do nothing for case
+  // 3.
+  // NOTE: I have not implemented schedule recording, which may be required
+  // during replay later.
+  bool schedule(ExecutionState &state, bool yield);
+  void executeThreadCreate(ExecutionState &state, thread_id_t tid,
+                           ref<Expr> start_function, ref<Expr> arg);
+  void executeThreadExit(ExecutionState &state);
+
 public:
+
   Executor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
       InterpreterHandler *ie);
   virtual ~Executor();
@@ -503,7 +526,6 @@ public:
   void setReplayKTest(const struct KTest *out) override {
     assert(!replayPath && "cannot replay both buffer and path");
     replayKTest = out;
-    replayPosition = 0;
   }
 
   void setReplayPath(const std::vector<bool> *path) override {
@@ -557,8 +579,6 @@ public:
 
   MergingSearcher *getMergingSearcher() const { return mergingSearcher; };
   void setMergingSearcher(MergingSearcher *ms) { mergingSearcher = ms; };
-
-  const ModuleOptions &getModuleOptions() const { return modOpts; };
 };
   
 } // End klee namespace

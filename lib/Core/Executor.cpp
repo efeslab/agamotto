@@ -1808,6 +1808,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     expressions.reserve(numDestinations);
 
     ref<Expr> errorCase = ConstantExpr::alloc(1, Expr::Bool);
+    // FIXME: the 5 here seems like an arbitrary value
     SmallPtrSet<BasicBlock *, 5> destinations;
     // collect and check destinations from label list
     for (unsigned k = 0; k < numDestinations; ++k) {
@@ -1956,7 +1957,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           bbOrder.push_back(si->getDefaultDest());
         }
       }
-
+      
       // Fork the current state with each state having one of the possible
       // successors of this switch
       std::vector< ref<Expr> > conditions;
@@ -2054,7 +2055,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         bindLocal(ki, state, result);
         break;
       }
-      
+
       terminateStateOnExecError(state, "inline assembly is unsupported");
       break;
     }
@@ -2873,7 +2874,7 @@ void Executor::updateStates(ExecutionState *current) {
       s->nvmInfo->stepState(s, s->prevPC, s->pc);
     }
   }
-
+  
   if (searcher) {
     searcher->update(current, addedStates, removedStates);
   }
@@ -3049,7 +3050,7 @@ void Executor::run(ExecutionState &initialState) {
         it = seedMap.begin();
       lastState = it->first;
       ExecutionState &state = *lastState;
-      KInstruction *ki = state.pc;
+      KInstruction *ki = state.pc();
       stepInstruction(state);
 
       executeInstruction(state, ki);
@@ -3187,7 +3188,7 @@ std::string Executor::getAddressInfo(ExecutionState &state,
 
 
 void Executor::terminateState(ExecutionState &state) {
-  if (replayKTest && replayPosition!=replayKTest->numObjects) {
+  if (replayKTest && state.replayPosition!=replayKTest->numObjects) {
     klee_warning_once(replayKTest,
                       "replay did not consume all objects in test input.");
   }
@@ -3197,7 +3198,7 @@ void Executor::terminateState(ExecutionState &state) {
   std::vector<ExecutionState *>::iterator it =
       std::find(addedStates.begin(), addedStates.end(), &state);
   if (it==addedStates.end()) {
-    state.pc = state.prevPC;
+    state.pc() = state.prevPC();
 
     removedStates.push_back(&state);
   } else {
@@ -3246,16 +3247,16 @@ const InstructionInfo & Executor::getLastNonKleeInternalInstruction(const Execut
     Instruction ** lastInstruction) {
   // unroll the stack of the applications state and find
   // the last instruction which is not inside a KLEE internal function
-  ExecutionState::stack_ty::const_reverse_iterator it = state.stack.rbegin(),
-      itE = state.stack.rend();
+  ExecutionState::stack_ty::const_reverse_iterator it = state.stack().rbegin(),
+      itE = state.stack().rend();
 
   // don't check beyond the outermost function (i.e. main())
   itE--;
 
   const InstructionInfo * ii = 0;
   if (kmodule->internalFunctions.count(it->kf->function) == 0){
-    ii =  state.prevPC->info;
-    *lastInstruction = state.prevPC->inst;
+    ii =  state.prevPC()->info;
+    *lastInstruction = state.prevPC()->inst;
     //  Cannot return yet because even though
     //  it->function is not an internal function it might of
     //  been called from an internal function.
@@ -3279,8 +3280,8 @@ const InstructionInfo & Executor::getLastNonKleeInternalInstruction(const Execut
 
   if (!ii) {
     // something went wrong, play safe and return the current instruction info
-    *lastInstruction = state.prevPC->inst;
-    return *state.prevPC->info;
+    *lastInstruction = state.prevPC()->inst;
+    return *state.prevPC()->info;
   }
   return *ii;
 }
@@ -3324,8 +3325,8 @@ void Executor::terminateStateOnError(ExecutionState &state,
       msg << "Line: " << ii.line << "\n";
       msg << "assembly.ll line: " << ii.assemblyLine << "\n";
     }
-    msg << "Stack: \n";
-    state.dumpStack(msg);
+
+    printInfo(llvm::errs());
 
     std::string info_str = info.str();
     if (info_str != "")
@@ -3401,6 +3402,7 @@ void Executor::terminateStateOnPmemError(ExecutionState &state,
     haltExecution = true;
   }
 }
+
 
 // XXX shoot me
 static const char *okExternalsList[] = { "printf",
@@ -3498,7 +3500,7 @@ void Executor::callExternalFunction(ExecutionState &state,
       if (i != arguments.size()-1)
         os << ", ";
     }
-    os << ") at " << state.pc->getSourceLocation();
+    os << ") at " << state.pc()->getSourceLocation();
 
     if (AllExternalWarnings)
       klee_warning("%s", os.str().c_str());
@@ -3575,7 +3577,7 @@ ObjectState *Executor::bindObjectInState(ExecutionState &state,
   // matter because all we use this list for is to unbind the object
   // on function return.
   if (isLocal)
-    state.stack.back().allocas.push_back(mo);
+    state.stack().back().allocas.push_back(mo);
 
   return os;
 }
@@ -3589,7 +3591,7 @@ void Executor::executeAlloc(ExecutionState &state,
                             size_t allocationAlignment) {
   size = toUnique(state, size);
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(size)) {
-    const llvm::Value *allocSite = state.prevPC->inst;
+    const llvm::Value *allocSite = state.prevPC()->inst;
     if (allocationAlignment == 0) {
       allocationAlignment = getAllocationAlignment(allocSite);
     }
@@ -4276,7 +4278,7 @@ void Executor::getConstraintLog(const ExecutionState &state, std::string &res,
   case KQUERY: {
     std::string Str;
     llvm::raw_string_ostream info(Str);
-    ExprPPrinter::printConstraints(info, state.constraints);
+    
     res = info.str();
   } break;
 
@@ -4503,13 +4505,13 @@ void Executor::dumpStates() {
     for (ExecutionState *es : states) {
       *os << "(" << es << ",";
       *os << "[";
-      auto next = es->stack.begin();
+      auto next = es->stack().begin();
       ++next;
-      for (auto sfIt = es->stack.begin(), sf_ie = es->stack.end();
+      for (auto sfIt = es->stack().begin(), sf_ie = es->stack().end();
            sfIt != sf_ie; ++sfIt) {
         *os << "('" << sfIt->kf->function->getName().str() << "',";
-        if (next == es->stack.end()) {
-          *os << es->prevPC->info->line << "), ";
+        if (next == es->stack().end()) {
+          *os << es->prevPC()->info->line << "), ";
         } else {
           *os << next->caller->info->line << "), ";
           ++next;
@@ -4517,11 +4519,11 @@ void Executor::dumpStates() {
       }
       *os << "], ";
 
-      StackFrame &sf = es->stack.back();
-      uint64_t md2u = computeMinDistToUncovered(es->pc,
+      StackFrame &sf = es->stack().back();
+      uint64_t md2u = computeMinDistToUncovered(es->pc(),
                                                 sf.minDistToUncoveredOnReturn);
       uint64_t icnt = theStatisticManager->getIndexedValue(stats::instructions,
-                                                           es->pc->info->id);
+                                                           es->pc()->info->id);
       uint64_t cpicnt = sf.callPathNode->statistics.getValue(stats::instructions);
 
       *os << "{";

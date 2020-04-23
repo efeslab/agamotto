@@ -26,19 +26,20 @@
 #include "MemoryManager.h"
 #include "UserSearcher.h"
 
+#include "llvm/ADT/SmallBitVector.h"
 #include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/CallSite.h"
 #include "llvm/IR/CFG.h"
+#include "llvm/IR/CallSite.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Process.h"
-#include "llvm/Support/Path.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Path.h"
+#include "llvm/Support/Process.h"
 
 #include <fstream>
 #include <unistd.h>
@@ -121,22 +122,6 @@ bool StatsTracker::useStatistics() {
 bool StatsTracker::useIStats() {
   return OutputIStats;
 }
-// (iangneal): Calculate NVM-KLEE numbers
-uint64_t StatsTracker::getNvmNumBlocksCovered() const {
-  uint64_t num = 0;
-  for (const auto &p : nvmBlockCoverage) num += (p.second / p.first->size());
-  return num;
-}
-
-uint64_t StatsTracker::getNvmNumBlocksUnique() const {
-  uint64_t num = 0;
-  for (const auto &p : nvmBlockCoverage) num += (p.second != 0 ? 1 : 0);
-  return num;
-}
-
-double StatsTracker::getNvmCoverage() const {
-  return ((double)getNvmNumBlocksUnique()) / ((double)nvmBlockCoverage.size());
-}
 
 /// Check for special cases where we statically know an instruction is
 /// uncoverable. Currently the case is an unreachable instruction
@@ -209,7 +194,6 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
     }
   }
 
-  if (OutputIStats)
     theStatisticManager->useIndexedStats(km->infos->getMaxID());
 
   for (auto &kfp : km->functions) {
@@ -351,9 +335,9 @@ void StatsTracker::stepInstruction(ExecutionState &es) {
       }
     }
 
-    Instruction *inst = es.pc->inst;
-    const InstructionInfo &ii = *es.pc->info;
-    StackFrame &sf = es.stack.back();
+    Instruction *inst = es.pc()->inst;
+    const InstructionInfo &ii = *es.pc()->info;
+    StackFrame &sf = es.stack().back();
     theStatisticManager->setIndex(ii.id);
     if (UseCallPaths)
       theStatisticManager->setContext(&sf.callPathNode->statistics);
@@ -391,7 +375,7 @@ void StatsTracker::stepInstruction(ExecutionState &es) {
 /* Should be called _after_ the es->pushFrame() */
 void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame) {
   if (OutputIStats) {
-    StackFrame &sf = es.stack.back();
+    StackFrame &sf = es.stack().back();
 
     if (UseCallPaths) {
       CallPathNode *parent = parentFrame ? parentFrame->callPathNode : 0;
@@ -404,7 +388,7 @@ void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame) {
   }
 
   if (updateMinDistToUncovered) {
-    StackFrame &sf = es.stack.back();
+    StackFrame &sf = es.stack().back();
 
     uint64_t minDistAtRA = 0;
     if (parentFrame)
@@ -469,17 +453,7 @@ void StatsTracker::writeStatsHeader() {
 #ifdef KLEE_ARRAY_DEBUG
 	           << "ArrayHashTime INTEGER,"
 #endif
-             << "QueryCexCacheHits INTEGER,"
-             // (iangneal): For NVM-KLEE
-             << "NvmHeuristicTime INTEGER, "
-             << "NvmGetSharedTime INTEGER, "
-             << "NvmAndersenTime INTEGER, "
-             << "NvmNumBlocksTotal INTEGER,"
-             << "NvmNumBlocksCovered INTEGER,"
-             << "NvmNumBlocksUnique INTEGER,"
-             << "NvmCoverage REAL,"
-             << "NvmHeuristicStatesKilled INTEGER,"
-             << "NvmHeuristicStatesDeferred INTEGER"   
+             << "QueryCexCacheHits INTEGER"
              << ")";
   char *zErrMsg = nullptr;
   if(sqlite3_exec(statsFile, create.str().c_str(), nullptr, nullptr, &zErrMsg)) {
@@ -515,27 +489,8 @@ void StatsTracker::writeStatsHeader() {
 #ifdef KLEE_ARRAY_DEBUG
              << "ArrayHashTime,"
 #endif
-             << "QueryCexCacheHits ," 
-             // (iangneal): For NVM-KLEE
-             << "NvmHeuristicTime ,"
-             << "NvmGetSharedTime ,"
-             << "NvmAndersenTime ,"
-             << "NvmNumBlocksTotal ,"
-             << "NvmNumBlocksCovered ,"
-             << "NvmNumBlocksUnique ,"
-             << "NvmCoverage ,"
-             << "NvmHeuristicStatesKilled ,"
-             << "NvmHeuristicStatesDeferred "      
+             << "QueryCexCacheHits "
              << ") VALUES ( "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
              << "?, "
              << "?, "
              << "?, "
@@ -591,18 +546,8 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, 18, stats::resolveTime);
   sqlite3_bind_int64(insertStmt, 19, stats::queryCexCacheMisses);
   sqlite3_bind_int64(insertStmt, 20, stats::queryCexCacheHits);
-  // (iangneal): For NVM-KLEE
-  sqlite3_bind_int64(insertStmt, 21, stats::nvmHeuristicTime);
-  sqlite3_bind_int64(insertStmt, 22, stats::nvmGetSharedTime);
-  sqlite3_bind_int64(insertStmt, 23, stats::nvmAndersenTime);
-  sqlite3_bind_int64(insertStmt, 24, nvmBlockCoverage.size());
-  sqlite3_bind_int64(insertStmt, 25, getNvmNumBlocksCovered());
-  sqlite3_bind_int64(insertStmt, 26, getNvmNumBlocksUnique());
-  sqlite3_bind_int64(insertStmt, 27, getNvmCoverage());
-  sqlite3_bind_int64(insertStmt, 28, stats::nvmStatesKilledEndTrace + stats::nvmStatesKilledIrrelevant);
-  sqlite3_bind_int64(insertStmt, 29, stats::nvmStatesDeferred);
 #ifdef KLEE_ARRAY_DEBUG
-  sqlite3_bind_int64(insertStmt, 30, stats::arrayHashTime);
+  sqlite3_bind_int64(insertStmt, 21, stats::arrayHashTime);
 #endif
   int errCode = sqlite3_step(insertStmt);
   if(errCode != SQLITE_DONE) klee_error("Error writing stats data: %s", sqlite3_errmsg(statsFile));
@@ -625,16 +570,15 @@ void StatsTracker::updateStateStatistics(uint64_t addend) {
   for (std::set<ExecutionState*>::iterator it = executor.states.begin(),
          ie = executor.states.end(); it != ie; ++it) {
     ExecutionState &state = **it;
-    const InstructionInfo &ii = *state.pc->info;
+    const InstructionInfo &ii = *state.pc()->info;
     theStatisticManager->incrementIndexedValue(stats::states, ii.id, addend);
     if (UseCallPaths)
-      state.stack.back().callPathNode->statistics.incrementValue(stats::states, addend);
+      state.stack().back().callPathNode->statistics.incrementValue(stats::states, addend);
   }
 }
 
 void StatsTracker::writeIStats() {
   const auto m = executor.kmodule->module.get();
-  uint64_t istatsMask = 0;
   llvm::raw_fd_ostream &of = *istatsFile;
   
   // We assume that we didn't move the file pointer
@@ -650,26 +594,26 @@ void StatsTracker::writeIStats() {
 
   StatisticManager &sm = *theStatisticManager;
   unsigned nStats = sm.getNumStatistics();
+  llvm::SmallBitVector istatsMask(nStats);
 
-  // Max is 13, sadly
-  istatsMask |= 1<<sm.getStatisticID("Queries");
-  istatsMask |= 1<<sm.getStatisticID("QueriesValid");
-  istatsMask |= 1<<sm.getStatisticID("QueriesInvalid");
-  istatsMask |= 1<<sm.getStatisticID("QueryTime");
-  istatsMask |= 1<<sm.getStatisticID("ResolveTime");
-  istatsMask |= 1<<sm.getStatisticID("Instructions");
-  istatsMask |= 1<<sm.getStatisticID("InstructionTimes");
-  istatsMask |= 1<<sm.getStatisticID("InstructionRealTimes");
-  istatsMask |= 1<<sm.getStatisticID("Forks");
-  istatsMask |= 1<<sm.getStatisticID("CoveredInstructions");
-  istatsMask |= 1<<sm.getStatisticID("UncoveredInstructions");
-  istatsMask |= 1<<sm.getStatisticID("States");
-  istatsMask |= 1<<sm.getStatisticID("MinDistToUncovered");
+  istatsMask.set(sm.getStatisticID("Queries"));
+  istatsMask.set(sm.getStatisticID("QueriesValid"));
+  istatsMask.set(sm.getStatisticID("QueriesInvalid"));
+  istatsMask.set(sm.getStatisticID("QueryTime"));
+  istatsMask.set(sm.getStatisticID("ResolveTime"));
+  istatsMask.set(sm.getStatisticID("Instructions"));
+  istatsMask.set(sm.getStatisticID("InstructionTimes"));
+  istatsMask.set(sm.getStatisticID("InstructionRealTimes"));
+  istatsMask.set(sm.getStatisticID("Forks"));
+  istatsMask.set(sm.getStatisticID("CoveredInstructions"));
+  istatsMask.set(sm.getStatisticID("UncoveredInstructions"));
+  istatsMask.set(sm.getStatisticID("States"));
+  istatsMask.set(sm.getStatisticID("MinDistToUncovered"));
 
   of << "positions: instr line\n";
 
   for (unsigned i=0; i<nStats; i++) {
-    if (istatsMask & (1<<i)) {
+    if (istatsMask.test(i)) {
       Statistic &s = sm.getStatistic(i);
       of << "event: " << s.getShortName() << " : " 
          << s.getName() << "\n";
@@ -678,14 +622,14 @@ void StatsTracker::writeIStats() {
 
   of << "events: ";
   for (unsigned i=0; i<nStats; i++) {
-    if (istatsMask & (1<<i))
+    if (istatsMask.test(i))
       of << sm.getStatistic(i).getShortName() << " ";
   }
   of << "\n";
   
   // set state counts, decremented after we process so that we don't
   // have to zero all records each time.
-  if (istatsMask & (1<<stats::states.getID()))
+  if (istatsMask.test(stats::states.getID()))
     updateStateStatistics(1);
 
   std::string sourceFile = "";
@@ -694,7 +638,7 @@ void StatsTracker::writeIStats() {
   if (UseCallPaths)
     callPathManager.getSummaryStatistics(callSiteStats);
 
-  of << "ob=" << objectFilename << "\n";
+  of << "ob=" << llvm::sys::path::filename(objectFilename).str() << "\n";
 
   for (Module::iterator fnIt = m->begin(), fn_ie = m->end(); 
        fnIt != fn_ie; ++fnIt) {
@@ -724,7 +668,7 @@ void StatsTracker::writeIStats() {
           of << ii.assemblyLine << " ";
           of << ii.line << " ";
           for (unsigned i=0; i<nStats; i++)
-            if (istatsMask&(1<<i))
+            if (istatsMask.test(i))
               of << sm.getIndexedValue(sm.getStatistic(i), index) << " ";
           of << "\n";
 
@@ -749,7 +693,7 @@ void StatsTracker::writeIStats() {
                 of << ii.assemblyLine << " ";
                 of << ii.line << " ";
                 for (unsigned i=0; i<nStats; i++) {
-                  if (istatsMask&(1<<i)) {
+                  if (istatsMask.test(i)) {
                     Statistic &s = sm.getStatistic(i);
                     uint64_t value;
 
@@ -773,7 +717,7 @@ void StatsTracker::writeIStats() {
     }
   }
 
-  if (istatsMask & (1<<stats::states.getID()))
+  if (istatsMask.test(stats::states.getID()))
     updateStateStatistics((uint64_t)-1);
   
   // Clear then end of the file if necessary (no truncate op?).
@@ -1049,13 +993,13 @@ void StatsTracker::computeReachableUncovered() {
          ie = executor.states.end(); it != ie; ++it) {
     ExecutionState *es = *it;
     uint64_t currentFrameMinDist = 0;
-    for (ExecutionState::stack_ty::iterator sfIt = es->stack.begin(),
-           sf_ie = es->stack.end(); sfIt != sf_ie; ++sfIt) {
+    for (ExecutionState::stack_ty::iterator sfIt = es->stack().begin(),
+           sf_ie = es->stack().end(); sfIt != sf_ie; ++sfIt) {
       ExecutionState::stack_ty::iterator next = sfIt + 1;
       KInstIterator kii;
 
-      if (next==es->stack.end()) {
-        kii = es->pc;
+      if (next==es->stack().end()) {
+        kii = es->pc();
       } else {
         kii = next->caller;
         ++kii;
