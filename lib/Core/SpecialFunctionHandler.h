@@ -101,7 +101,6 @@ namespace klee {
                                 KInstruction *target, \
                                 std::vector< ref<Expr> > &arguments)
     HANDLER(handleAbort);
-    HANDLER(handleAllocPmem);
     HANDLER(handleAssert);
     HANDLER(handleAssertFail);
     HANDLER(handleAssume);
@@ -146,10 +145,28 @@ namespace klee {
     HANDLER(handleMulOverflow);
     HANDLER(handleSubOverflow);
     HANDLER(handleDivRemOverflow);
+    /* Persistent Memory Management */
+    HANDLER(handleAllocPmem);
     HANDLER(handleMarkPersistent);
     HANDLER(handleIsPmem);
     HANDLER(handleIsPersisted);
     HANDLER(handleIsOrderedBefore);
+    /* Thread Scheduling Management */
+    HANDLER(handleThreadCreate);
+    HANDLER(handleThreadTerminate);
+    HANDLER(handleGetContext);
+    HANDLER(handleGetWList);
+    HANDLER(handleThreadPreempt);
+    HANDLER(handleThreadSleep);
+    HANDLER(handleThreadNotify);
+    /* Process Management Placeholder */
+    HANDLER(handleProcessFork);
+    HANDLER(handleProcessTerminate);
+    /* Shared Memory Placeholder */
+    HANDLER(handleMakeShared);
+    /* Misc */
+    HANDLER(handleGetTime);
+    HANDLER(handleSetTime);
 #undef HANDLER
   };
 } // End klee namespace
