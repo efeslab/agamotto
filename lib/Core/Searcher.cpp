@@ -302,6 +302,115 @@ bool RandomPathSearcher::empty() {
   return executor.states.empty();
 }
 
+
+
+bool NvmPathSearcher::priority_less::operator()(const priority_tuple &lhs, const priority_tuple &rhs) {
+  bool youngerState = std::get<0>(lhs)->steppedInstructions < std::get<0>(rhs)->steppedInstructions;
+  bool higherGen = std::get<1>(lhs) > std::get<1>(rhs); 
+  bool lowerPriority = std::get<2>(lhs) < std::get<2>(rhs);
+  return lowerPriority || higherGen || youngerState;
+}
+
+NvmPathSearcher::NvmPathSearcher(Executor &_executor) 
+  : Searcher(_executor)
+{
+  executor.interpreterHandler->setNvm();
+}
+
+NvmPathSearcher::~NvmPathSearcher() {}
+
+ExecutionState* NvmPathSearcher::filterState(ExecutionState *execState) {
+  const auto iter = removed.find(execState);
+  if (iter != removed.end()) {
+    removed.erase(iter);
+    return nullptr;
+  }
+
+  return execState;
+}
+
+ExecutionState &NvmPathSearcher::selectState() {
+  size_t p = 0;
+  do {
+    //errs() << states.size() << "\n";
+    const priority_tuple &pt = states.top();
+    lastState = filterState(std::get<0>(pt));
+    currentGen = std::get<1>(pt);
+    p = std::get<2>(pt);
+    states.pop();
+  } while (!lastState);
+
+  // errs() << "[" << lastState << 
+  //             "] priority: " << p << ", gen: " << currentGen << 
+  //             " (selected out of " << states.size() << " states)\n";
+
+  return *lastState;
+}
+
+size_t NvmPathSearcher::calculateGeneration(ExecutionState *current, ExecutionState *added) {
+  if (!current) return currentGen;
+
+  /**
+   * We make this simple. If the added state has a different priority,
+   * then it stays on the same generation. If the added state has the same 
+   * priority, we add it to a different generation.
+   */
+  if (added->nvmInfo->getCurrentPriority() != current->nvmInfo->getCurrentPriority()) {
+    return currentGen;
+  }
+  
+  return currentGen + 1;
+}
+
+bool NvmPathSearcher::addOrKillState(ExecutionState *current, 
+                                     ExecutionState *execState) {
+  size_t gen = calculateGeneration(current, execState);
+
+  size_t priority = execState->nvmInfo->getCurrentPriority();
+  if (!priority) {
+    stats::nvmStatesKilledEndTrace++;
+    executor.terminateStateEarlyPmem(*execState);
+  } else {
+    states.emplace(execState, gen, priority);
+    return true;
+  }
+
+  return false;
+}
+
+void
+NvmPathSearcher::update(ExecutionState *current,
+                        const std::vector<ExecutionState *> &addedStates,
+                        const std::vector<ExecutionState *> &removedStates)
+{
+  bool addedCurrent = false;
+  bool currentIsRemoved = false;
+  // Re-insert the current state with a new priority.
+  if (current) {
+    auto it = std::find(removedStates.begin(), removedStates.end(), current);
+    currentIsRemoved = it != removedStates.end();
+  }
+
+  if (current && !currentIsRemoved) {
+    addedCurrent = addOrKillState(nullptr, current);
+  }
+
+  ExecutionState *curr = addedCurrent ? current : nullptr;
+  for (ExecutionState *execState : addedStates) {
+    bool newCurr = addOrKillState(curr, execState);
+    if (!curr && newCurr) curr = execState;
+  }
+
+  // We will filter when we re-select.
+  removed.insert(removedStates.begin(), removedStates.end());
+  //errs() << "Update end: " << states.size() << "\n";
+}
+
+bool NvmPathSearcher::empty() {
+  return states.empty();
+}
+
+
 ///
 
 MergingSearcher::MergingSearcher(Searcher *_baseSearcher)
