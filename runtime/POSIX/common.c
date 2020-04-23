@@ -36,10 +36,13 @@
 #include <sys/uio.h>
 #include <errno.h>
 #include <assert.h>
+#include <stdio.h>
+#include <pthread.h>
 
 #include <klee/klee.h>
 
 void *__concretize_ptr(const void *p) {
+  /* XXX 32-bit assumption */
   char *pc = (char*) klee_get_valuel((long) p);
   klee_assume(pc == p);
   return pc;
@@ -61,51 +64,30 @@ const char *__concretize_string(const char *s) {
   char *sc = __concretize_ptr(s);
   unsigned i;
 
-  for (i=0; ; ++i) {
+  for (i = 0;; ++i, ++sc) {
     char c = *sc;
+    // Avoid writing read-only memory locations
+    if (!klee_is_symbolic(c)) {
+      if (!c)
+        break;
+      continue;
+    }
     if (!(i&(i-1))) {
       if (!c) {
-        *sc++ = 0;
+        *sc = 0;
         break;
       } else if (c=='/') {
-        *sc++ = '/';
-      }
+        *sc = '/';
+      } 
     } else {
       char cc = (char) klee_get_valuel((long)c);
       klee_assume(cc == c);
-      *sc++ = cc;
+      *sc = cc;
       if (!cc) break;
     }
   }
 
   return s;
-}
-
-int __inject_fault(const char *fname, int eno, ...) {
-  if (!klee_fork(__KLEE_FORK_FAULTINJ)) {
-    return 0;
-  }
-
-  errno = eno;
-  return 1;
-}
-
-unsigned __fork_values(unsigned min, unsigned max, int reason) {
-  assert(max >= min);
-
-  unsigned i;
-  for (i = min; i < max;) {
-    if (!klee_fork(reason)) {
-      return i;
-    }
-
-    if (i == 0)
-      i++;
-    else
-      i <<= 1;
-  }
-
-  return max;
 }
 
 size_t _count_iovec(const struct iovec *iov, int iovcnt) {
@@ -114,4 +96,19 @@ size_t _count_iovec(const struct iovec *iov, int iovcnt) {
   for (i = 0; i < iovcnt; i++)
     result += iov[i].iov_len;
   return result;
+}
+char enableDebug = 0;
+void posix_debug_msg(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  if (enableDebug) {
+    // FIXME: need to take multithreading racing into consideration
+    enableDebug = 0;
+    // NOTE: fprintf and vfprintf can work together if you compile klee-uclibc
+    // with: make KLEE_CFLAGS='-DKLEE_SYM_PRINTF'
+    fprintf(stderr, "[thread %lu] ", pthread_self());
+    vfprintf(stderr, fmt, ap);
+    enableDebug = 1;
+  }
+  va_end(ap);
 }

@@ -20,6 +20,7 @@
 #include "klee/Config/Version.h"
 #define _LARGEFILE64_SOURCE
 #include "fd.h"
+#include "files.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -93,7 +94,7 @@ int openat(int fd, const char *pathname, int flags, ...) {
 }
 
 off_t lseek(int fd, off_t off, int whence) {
-  return (off_t) __fd_lseek(fd, off, whence);
+  return (off_t) __fd_lseek64(fd, off, whence);
 }
 
 int __xstat(int vers, const char *path, struct stat *buf) {

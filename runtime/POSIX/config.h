@@ -45,19 +45,21 @@
 #define MAX_EVENTS          4
 
 #define MAX_FDS             64
-#define MAX_FILES           16
+// A-Z
+#define MAX_PURE_SYM_FILES  26
+#define MAX_FILES           32
 
 #define MAX_PATH_LEN        75
+#define MAX_SOCK_ADDRSTRLEN 64
 
 #define MAX_PORTS           32
 #define MAX_UNIX_EPOINTS    32
 #define MAX_NETLINK_EPOINTS 32
+#define MAX_SOCK_EVT_HANDLE 32
 
 #define MAX_PENDING_CONN    4
 
 #define MAX_MMAPS           32
-
-#define MAX_STDINSIZE       16
 
 #define MAX_DGRAM_SIZE          4096
 #define MAX_NUMBER_DGRAMS       8
@@ -73,6 +75,8 @@
 //#define HAVE_STUBBED_STDIO      1
 //#define HAVE_SYMBOLIC_CTYPE     1
 //#define HAVE_POSIX_SIGNALS  1
-
+#define HAVE_FAKE_RLIMIT 1
+//#define HAVE_FAKE_SETSID 1
+//#define HAVE_MODEL_MMAP 1
 
 #endif /* POSIX_CONFIG_H_ */
