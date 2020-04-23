@@ -169,6 +169,10 @@ extern "C" {
   /* Get errno value of the current state */
   int klee_get_errno(void);
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Persistent Memory Management
+  //////////////////////////////////////////////////////////////////////////////
+
   /* klee_pmem_mark_persistent - Mark the given memory range as residing in
    * non-volatile/persistent memory.
    *
@@ -183,10 +187,6 @@ extern "C" {
    * sites, so we must treat this as an allocation site.
    */
   void *klee_pmem_mark_persistent(void *addr, size_t size, const char *name);
-
-  //////////////////////////////////////////////////////////////////////////////
-  // Shared Memory Management (NOT IMPLEMENTED)
-  //////////////////////////////////////////////////////////////////////////////
 
   /* klee_pmem_alloc_pmem - Allocate symbolic persistent memory.
    *
@@ -203,10 +203,6 @@ extern "C" {
    */
   void klee_pmem_check_persisted(void *addr, size_t size);
 
-  //////////////////////////////////////////////////////////////////////////////
-  // Thread Scheduling Management
-  //////////////////////////////////////////////////////////////////////////////
-
   /* Assert that any recent modifications to the memory within range
    * [addrA, addrA+sizeA) are guaranteed to be persisted before any
    * recent modifications to the memory within range [addrB, sizeB).
@@ -218,6 +214,49 @@ extern "C" {
    * Returns whether or not this pointer refers to a persistent memory object
    */
   bool klee_pmem_is_pmem(void *addr, size_t size);
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Shared Memory Management (NOT IMPLEMENTED)
+  //////////////////////////////////////////////////////////////////////////////
+
+  /*
+   * Mark a private memory object shared between processes (if they know the
+   * address)
+   */
+  void klee_make_shared(void *addr, size_t nbytes);
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Thread Scheduling Management
+  //////////////////////////////////////////////////////////////////////////////
+
+  void klee_thread_create(uint64_t tid, void *(*start_routine)(void *),
+                          void *arg);
+  void klee_thread_terminate() __attribute__ ((__noreturn__));
+
+  int klee_process_fork(int32_t pid);
+  void klee_process_terminate() __attribute__ ((__noreturn__));
+
+  // @param[out] tid, write tid to this address
+  // @param[out] pid, write pid to this address
+  void klee_get_context(uint64_t *tid, int32_t *pid);
+
+  // allocate a new waiting list (id)
+  uint64_t klee_get_wlist(void);
+
+  // TODO: NEED DOC when do you need to preempt a thread but not due to yield
+  void klee_thread_preempt(int yield);
+
+  // put current thread sleep in the given waiting list
+  void klee_thread_sleep(uint64_t wlist);
+
+  // notify one or all threads in the given waiting list
+  void klee_thread_notify(uint64_t wlist, int all);
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Misc
+  //////////////////////////////////////////////////////////////////////////////
+  uint64_t klee_get_time(void);
+  void klee_set_time(uint64_t time);
 
 #ifdef __cplusplus
 }
