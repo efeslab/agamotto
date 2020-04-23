@@ -13,15 +13,15 @@ TEST(TreeStreamTest, Basic) {
   ASSERT_TRUE(tsw.good());
   
   TreeOStream tos = tsw.open();
-  tos.write("abc", 3);
-  tos.write("defg", 4);
+  tos << 'a' << 'b' << 'c';
+  tos << 'd' << 'e' << 'f' << 'g';
   tos.flush();
 
-  std::vector<unsigned char> out;
+  std::vector<char> out;
   tsw.readStream(tos.getID(), out);
   ASSERT_EQ(7u, out.size());
   
-  for (unsigned char c = 'a'; c <= 'g'; c++)
+  for (char c = 'a'; c <= 'g'; c++)
     ASSERT_EQ(c, out[c - 'a']);
 }
 
@@ -37,12 +37,12 @@ TEST(TreeStreamTest, WriteLargerThanBufferSize) {
 #define NBYTES 5*4096UL
   char buf[NBYTES];
   memset(buf, 'A', sizeof(buf));
-  tos.write(buf, NBYTES);
+  tos << std::string(buf, NBYTES);
   tos.flush();
 
-  std::vector<unsigned char> out;
+  std::vector<std::string> out;
   tsw.readStream(tos.getID(), out);
-  ASSERT_EQ(NBYTES, out.size());
-  for (unsigned i=0; i<out.size(); i++)
-    ASSERT_EQ('A', out[i]);
+  ASSERT_EQ(1u, out.size());
+  for (unsigned i=0; i<NBYTES; i++)
+    ASSERT_EQ('A', out[0][i]);
 }
