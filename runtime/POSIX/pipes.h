@@ -30,64 +30,28 @@
  *
  */
 
-#include "multiprocess.h"
-//#include "signals.h"
+#ifndef PIPES_H_
+#define PIPES_H_
 
-//#include "models.h"
-#include "common.h"
+#include "buffers.h"
 
-#include <string.h>
-#include <klee/klee.h>
+#include "fd.h"
 
-////////////////////////////////////////////////////////////////////////////////
-// Processes
-////////////////////////////////////////////////////////////////////////////////
-/* I do not support processes for now
-proc_data_t __pdata[MAX_PROCESSES];
-sem_set_t __sems[MAX_SEMAPHORES];
+typedef struct {
+  file_base_t __bdata;
 
-static void klee_init_semaphores(void) {
-  STATIC_LIST_INIT(__sems);
-  klee_make_shared(__sems, sizeof(__sems));
-}
+  stream_buffer_t *buffer;
+} pipe_end_t;
 
-void klee_init_processes(void) {
-  STATIC_LIST_INIT(__pdata);
-  klee_make_shared(__pdata, sizeof(__pdata));
+struct stat64;
 
-  proc_data_t *pdata = &__pdata[PID_TO_INDEX(DEFAULT_PROCESS)];
-  pdata->allocated = 1;
-  pdata->terminated = 0;
-  pdata->parent = DEFAULT_PARENT;
-  pdata->umask = DEFAULT_UMASK;
-  pdata->wlist = klee_get_wlist();
-  pdata->children_wlist = klee_get_wlist();
+int _close_pipe(pipe_end_t *pipe);
+ssize_t _read_pipe(pipe_end_t *pipe, void *buf, size_t count);
+ssize_t _write_pipe(pipe_end_t *pipe, const void *buf, size_t count);
+int _stat_pipe(pipe_end_t *pipe, struct stat64 *buf);
 
-  klee_init_semaphores();
+int _is_blocking_pipe(pipe_end_t *pipe, int event);
+int _register_events_pipe(pipe_end_t *pipe, wlist_id_t wlist, int events);
+void _deregister_events_pipe(pipe_end_t *pipe, wlist_id_t wlist, int events);
 
-  klee_init_threads();
-
-#ifdef HAVE_POSIX_SIGNALS
-  klee_init_signals();
-#endif
-
-}
-*/
-
-////////////////////////////////////////////////////////////////////////////////
-// Threads
-////////////////////////////////////////////////////////////////////////////////
-
-tsync_data_t __tsync;
-
-void klee_init_threads(void) {
-  STATIC_LIST_INIT(__tsync.threads);
-
-  // Thread initialization
-  thread_data_t *def_data = &__tsync.threads[DEFAULT_THREAD];
-  def_data->allocated = 1;
-  def_data->terminated = 0;
-  def_data->ret_value = 0;
-  def_data->joinable = 1; // Why not?
-  def_data->wlist = klee_get_wlist();
-}
+#endif /* PIPES_H_ */

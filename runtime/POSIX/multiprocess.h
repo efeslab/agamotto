@@ -33,6 +33,7 @@
 #ifndef THREADS_H_
 #define THREADS_H_
 
+#include <fcntl.h>
 #include <stdint.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
@@ -40,9 +41,8 @@
 #include <klee/klee.h>
 
 #include "common.h"
-#include "signals.h"
+//#include "signals.h"
 
-typedef uint64_t wlist_id_t;
 
 #define DEFAULT_THREAD  0
 
@@ -65,7 +65,7 @@ typedef uint64_t wlist_id_t;
 ////////////////////////////////////////////////////////////////////////////////
 // System Wide Data Structures
 ////////////////////////////////////////////////////////////////////////////////
-
+/* I do not support process-wide features
 typedef struct {
   wlist_id_t wlist;
   wlist_id_t children_wlist;
@@ -103,7 +103,7 @@ typedef struct {
 } sem_set_t;
 
 extern sem_set_t __sems[MAX_SEMAPHORES];
-
+*/
 ////////////////////////////////////////////////////////////////////////////////
 // Process Specific Data Structures
 ////////////////////////////////////////////////////////////////////////////////
@@ -177,12 +177,10 @@ void klee_init_threads(void);
  * signals when being first planned.
  */
 static inline void __thread_preempt(int yield) {
-#if 0
   klee_thread_preempt(yield);
 #ifdef HAVE_POSIX_SIGNALS
   if((&__pdata[PID_TO_INDEX(getpid())])->signaled)
       __handle_signal();
-#endif
 #endif
 }
 
@@ -192,31 +190,23 @@ static inline void __thread_preempt(int yield) {
  * signals when being first planned.
  */
 static inline void __thread_sleep(uint64_t wlist) {
-#if 0
   klee_thread_sleep(wlist);
 #ifdef HAVE_POSIX_SIGNALS
   if((&__pdata[PID_TO_INDEX(getpid())])->signaled)
       __handle_signal();
 #endif
-#endif
 }
 
 static inline void __thread_notify(uint64_t wlist, int all) {
-#if 0
   klee_thread_notify(wlist, all);
-#endif
 }
 
 static inline void __thread_notify_one(uint64_t wlist) {
-#if 0
   __thread_notify(wlist, 0);
-#endif 
 }
 
 static inline void __thread_notify_all(uint64_t wlist) {
-#if 0
   __thread_notify(wlist, 1);
-#endif 
 }
 
 #endif /* THREADS_H_ */

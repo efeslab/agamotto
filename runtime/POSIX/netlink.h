@@ -30,15 +30,18 @@
  *
  */
 
-#define __FORCE_USE_MODELS
-#include "models.h"
+#ifndef NETLINK_H_
+#define NETLINK_H_
 
-void _exit(int status);
-void pthread_exit(void *value_ptr);
+#include "sockets.h"
 
-FORCE_IMPORT(_exit);
-FORCE_IMPORT(pthread_exit);
+#include <sys/uio.h>
+#include <sys/types.h>
 
-__attribute__((used)) void __force_model_linkage(void) {
-  // Just do nothing
-}
+void _netlink_handler(socket_t *sock, const struct iovec *iov, int iovcnt,
+    size_t count);
+
+void klee_init_netlink(void);
+
+
+#endif /* NETLINK_H_ */
