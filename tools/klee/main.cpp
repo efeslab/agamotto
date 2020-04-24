@@ -835,6 +835,7 @@ static const char *modelledExternals[] = {
   "klee_stack_trace",
   "llvm.dbg.declare",
   "llvm.dbg.value",
+  "llvm.prefetch",
   "llvm.x86.clflushopt",
   "llvm.x86.clwb",
   "llvm.x86.sse2.clflush",

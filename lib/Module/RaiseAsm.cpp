@@ -58,27 +58,27 @@ bool RaiseAsmPass::runOnInstruction(Module &M, Instruction *I) {
   if (TLI->ExpandInlineAsm(ci))
     return true;
 
-  // NVM-KLEE
-  // Non-volatile memory library PMDK encodes NVM intrinsics as inline assembly.
-  // Convert these back into the NVM intrinsics.
+  // Some intrinsics get coded as inline assembly in case compilers
+  // don't support them, or if programmers are lazy.
+  // Here we manually raise up known intrinsics.
+  // NOTE: if you you add to here, also modify IntrinsicCleaner and main.cpp.
   if (triple.getArch() == llvm::Triple::x86_64) {
     Function *intrinsicFunction = nullptr;
 
-    // sfence
+    // Persistent memory related asm intrinsics
     if (ia->getAsmString() == "sfence") {
       intrinsicFunction = Intrinsic::getDeclaration(&M, Intrinsic::x86_sse_sfence);
-    }
-    // mfence
-    else if (ia->getAsmString() == "mfence") {
+    } else if (ia->getAsmString() == "mfence") {
       intrinsicFunction = Intrinsic::getDeclaration(&M, Intrinsic::x86_sse2_mfence);
-    }
-    // clflushopt
-    else if (ia->getAsmString() == ".byte 0x66; clflush $0") {
+    } else if (ia->getAsmString() == ".byte 0x66; clflush $0") {
       intrinsicFunction = Intrinsic::getDeclaration(&M, Intrinsic::x86_clflushopt);
-    }
-    // clwb
-    else if (ia->getAsmString() == ".byte 0x66; xsaveopt $0") {
+    } else if (ia->getAsmString() == ".byte 0x66; xsaveopt $0") {
       intrinsicFunction = Intrinsic::getDeclaration(&M, Intrinsic::x86_clwb);
+    }
+
+    // Safe to ignore
+    else if (ia->getAsmString().find("prefetch") != std::string::npos) {
+      intrinsicFunction = Intrinsic::getDeclaration(&M, Intrinsic::prefetch);
     }
 
     if (intrinsicFunction) {
