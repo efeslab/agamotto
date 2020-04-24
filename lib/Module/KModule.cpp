@@ -327,12 +327,24 @@ void KModule::optimiseAndPrepare(
   if (opts.CheckOvershift)
     addInternalFunction("klee_overshift_check");
 
+  // Inject calls to all static library constructor functions.
   // Needs to happen after linking (since ctors/dtors can be modified)
   // and optimization (since global optimization can rewrite lists).
-  if (opts.LibcMainFunction.empty()) {
+
+  // If POSIX runtime is enabled, we want to run the ctors *after*
+  // klee_init_env (so they can use POSIX stuff if they want).
+  // So insert the call in that function instead of at the EntryPoint
+  // and instead of passing to uclibc's app_init.
+  if (module->getFunction("__klee_posix_ctor_stub_insert_point")) {
+    injectStaticConstructorsAndDestructors(module.get(),
+                                           "__klee_posix_ctor_stub_insert_point");
+  }
+  else if (opts.LibcMainFunction.empty()) {
     injectStaticConstructorsAndDestructors(module.get(), opts.EntryPoint);
   } else {
-    fillUclibcMainInitAndFiniArgs(module.get(), opts.EntryPoint, opts.LibcMainFunction);
+    fillUclibcMainInitAndFiniArgs(module.get(),
+                                  opts.EntryPoint,
+                                  opts.LibcMainFunction);
   }
   
 

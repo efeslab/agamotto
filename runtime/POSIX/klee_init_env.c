@@ -413,10 +413,20 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
  * and is renamed during POSIX setup */
 int __klee_posix_wrapped_main(int argc, char **argv, char **envp);
 
+// (bgreeves) a lovely hack to make sure library
+// constructors can access POSIX functions if they want.
+// KLEE will insert the klee.ctor_stub here instead of giving
+// it to uclibc if POSIX runtime is enabled.
+// (See KModule.cpp)
+int __klee_posix_ctor_stub_insert_point(int argcPtr, char **argvPtr, char** envp) {
+  // call to klee.ctor_stub() to be inserted here during module preparation
+  return __klee_posix_wrapped_main(argcPtr, argvPtr, envp);
+}
+
 /* This wrapper gets called instead of main if POSIX setup is used
  * And it will be renamed to `__user_main` during POSIX setup
  */
 int __klee_posix_wrapper(int argcPtr, char **argvPtr, char** envp) {
   klee_init_env(&argcPtr, &argvPtr);
-  return __klee_posix_wrapped_main(argcPtr, argvPtr, envp);
+  return __klee_posix_ctor_stub_insert_point(argcPtr, argvPtr, envp);
 }
