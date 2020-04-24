@@ -1370,8 +1370,7 @@ int main(int argc, char **argv, char **envp) {
   }
 
   for (const auto &library : LinkLibraries) {
-    if (!klee::loadFile(library, mainModule->getContext(), loadedModules,
-                        errorMsg, markLibCModuleFnAttr))
+    if (!klee::loadFile(library, mainModule->getContext(), loadedModules, errorMsg))
       klee_error("error loading bitcode library '%s': %s", library.c_str(),
                  errorMsg.c_str());
   }
@@ -1380,9 +1379,10 @@ int main(int argc, char **argv, char **envp) {
     SmallString<128> Path(Opts.LibraryDir);
     llvm::sys::path::append(Path, libraryName + ".so.bc");
     if (!klee::loadFile(Path.c_str(), mainModule->getContext(), loadedModules,
-                        errorMsg))
+                        errorMsg)) {
       klee_error("error loading free standing support '%s': %s",
                  Path.c_str(), errorMsg.c_str());
+    }
   }
 
   // FIXME: Change me to std types.

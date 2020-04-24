@@ -107,6 +107,7 @@ int settimeofday(const struct timeval *tv, const struct timezone *tz) {
 // mmap Operations
 ////////////////////////////////////////////////////////////////////////////////
 
+#if 0
 mmap_block_t __mmaps[MAX_MMAPS];
 
 void klee_init_mmap(void) {
@@ -262,6 +263,7 @@ int munmap(void *addr, size_t length) {
   return -1;
 #endif // HAVE_MODEL_MMAP
 }
+#endif 
 
 ////////////////////////////////////////////////////////////////////////////////
 // Low-level Memory Manipulation Routines

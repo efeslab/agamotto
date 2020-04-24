@@ -113,6 +113,12 @@ cl::opt<std::string> MaxTime(
              "Set to 0s to disable (default=0s)"),
     cl::init("0s"),
     cl::cat(TerminationCat));
+
+cl::opt<bool>                                                                    
+    DebugScheduling("debug-schedule", cl::init(false),                                                                                                                                                                                                                                                                                                                                   
+                    cl::desc("Print debug info related to scheduling, context "  
+                              "switch, etc. (default=false)"),                    
+                    cl::cat(DebugCat));      
 } // namespace klee
 
 namespace {
@@ -4068,6 +4074,90 @@ bool Executor::getAllPersistenceErrors(ExecutionState &state,
 
   return hasErr;
 }
+
+/* Multi-threading related function */                                           
+void Executor::bindArgumentToPthreadCreate(KFunction *kf, unsigned index,        
+                                            StackFrame &sf, ref<Expr> value) {    
+  getArgumentCell(sf, kf, index).value = value;                                  
+}                                                                                
+                                                                                  
+bool Executor::schedule(ExecutionState &state, bool yield) {                     
+  thread_uid_t beforeSchedule = state.crtThread().tuid;                          
+  int enabledCount = 0;                                                          
+  for (ExecutionState::threads_ty::value_type &tit: state.threads) {             
+    if (tit.second.enabled) {                                                    
+      ++enabledCount;                                                            
+    }                                                                            
+  }                                                                              
+  if (enabledCount == 0) {                                                       
+    terminateStateOnError(state, "******* hang (possible deadlock?)", User);     
+    return false;                                                                
+  }                                                                              
+                                                                                  
+  // non preemption and preemption (yield or not) are currently unified          
+  // find the first enabled thread after current thread                          
+  // TODO: cloud9 emulate all possible scheduling here by forking. But I think   
+  // deterministic scheduling is suffice for my use case.                        
+  ExecutionState::threads_ty::iterator it = state.crtThreadIt;                   
+  do {                                                                           
+    it = state.nextThread(it);                                                   
+  } while (!it->second.enabled);                                                 
+  state.scheduleNext(it);                                                        
+  thread_uid_t afterSchedule = state.crtThread().tuid;                           
+  // if (pathWriter) {                                                              
+  //   PathEntry pe;                                                                                                                                                                                                                                                                                                                                                                        
+  //   pe.t = PathEntry::SCHEDULE;                                                  
+  //   pe.body.tgtid = afterSchedule.first;                                         
+  //   state.pathOS << pe;                                                          
+  // }                                                                              
+  // if (replayPath) {                                                              
+  //   PathEntry pe;                                                                
+  //   getNextPathEntry(state, pe);                                                 
+  //   assert(pe.t == PathEntry::SCHEDULE && "Wrong PathEntry_t during schedule");  
+  //   if (pe.body.tgtid != afterSchedule.first) {                                  
+  //     klee_message("Ambiguous scheduling, why?");                                
+  //   }                                                                            
+  // }                                                                              
+  if (DebugScheduling) {                                                         
+    klee_message("Context Swtich: from %lu to %lu", beforeSchedule.first,        
+        afterSchedule.first);                                                    
+  }                                                                              
+  return true;                                                                   
+}    
+
+void Executor::executeThreadCreate(ExecutionState &state, thread_id_t tid,       
+                                   ref<Expr> start_function, ref<Expr> arg) {    
+  klee_message("Creating thread %lu", tid);                                      
+  if (ConstantExpr *CE_f = dyn_cast<ConstantExpr>(start_function)) {             
+    Function *f = reinterpret_cast<Function *>(CE_f->getZExtValue());            
+    auto find_it = kmodule->functionMap.find(f);                                 
+    if (find_it != kmodule->functionMap.end()) {                                 
+      KFunction *kf = find_it->second;                                           
+      Thread &t = state.createThread(tid, kf);                                                                                                                                                                                                                                                                                                                                           
+      bindArgumentToPthreadCreate(kf, 0, t.stack.back(), arg);                       
+      if (statsTracker)                                                              
+        statsTracker->framePushed(state, &t.stack.back());                           
+      return;                                                                        
+    }                                                                                
+  }                                                                                  
+  // error path                                                                      
+  terminateStateOnError(                                                             
+      state, "klee_thread_create cannot locate the start_function", User);           
+} 
+
+ void Executor::executeThreadExit(ExecutionState &state) {                        
+  if (state.threads.size() == 1) {                                               
+    terminateStateOnExit(state);                                                 
+    return;                                                                      
+  }                                                                              
+  assert(state.threads.size() > 1);                                              
+  ExecutionState::threads_ty::iterator thrIt = state.crtThreadIt;                
+  thrIt->second.enabled = false;                                                 
+                                                                                  
+  if (!schedule(state, false))                                                   
+    return;                                                                      
+  state.terminateThread(thrIt);                                                  
+}   
 
 void Executor::executeMakeSymbolic(ExecutionState &state,
                                    const MemoryObject *mo,

@@ -288,6 +288,19 @@ static disk_file_t *_create_pure_symbolic_file(disk_file_t *dfile,
   return dfile;
 }
 
+// (iangneal): pmem
+static disk_file_t *_create_pmem_file(disk_file_t *dfile,
+                                      sym_file_descriptor_t *sfd,
+                                      const struct stat64 *default_stats) {
+  switch(sfd->pmem_type) {
+    case PMEM_SYMBOLIC:
+    default:
+      klee_error("finish!");
+  }
+
+  return dfile;
+}
+
 void klee_init_symfs(fs_init_descriptor_t *fid) {
   struct stat64 def_stat;
 
@@ -307,6 +320,11 @@ void klee_init_symfs(fs_init_descriptor_t *fid) {
   int i;
   for (i=0; i < n_sym_files; ++i) {
     disk_file_t *dfile = &__sym_fs.sym_files[i];
+    if (fid->sym_files[i].pmem_type != NOT_PMEM) {
+      _create_pmem_file(dfile, &fid->sym_files[i], &def_stat);
+      continue;
+    }
+
     switch (fid->sym_files[i].file_type) {
       case PURE_SYMBOLIC:
         pure_symbolic_name[0] = 'A' + pure_symbolic_cnt;

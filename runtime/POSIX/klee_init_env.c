@@ -87,15 +87,63 @@ static void __add_arg(int *argc, char **argv, char *arg, int argcMax) {
   }
 }
 
+static char help_msg[] = 
+"klee_init_env\n\n"
+"usage: (klee_init_env) [options] [program arguments]\n"
+/* General symfs stuff */
+"  -sym-arg <N>              - Replace by a symbolic argument with length N\n"
+"  -sym-args <MIN> <MAX> <N> - Replace by at least MIN arguments and at most\n"
+"                              MAX arguments, each with maximum length N\n"
+"  -sym-files <NUM> <N>      - Make NUM symbolic files ('A', 'B', 'C', etc.),\n"
+"                              each with size N. (type: PURE_SYMBOLIC)\n"
+"  -sym-file <FILE>          - Make a symbolic file based on the name, stats, \n"
+"                              size of the given <FILE>. (type: SYMBOLIC).\n"
+"  -con-file <FILE>          - Import a concrete file to the symbolic file \n"
+"                              system. (type: CONCRETE)\n"
+/* Persistent Memory stuff */
+"  -sym-pmem <FILE> <N>      - Provide a symbolic persistent memory file and size.\n"
+"  -sym-pmem-init-from <INIT_FILE_PATH>\n"
+"                            - Initialize the persistent memory file to\n"
+"                              concrete values based on values from a real file.\n"
+"                              Also uses the name (base) and stat structure."
+"  -sym-pmem-zeroed <FILE> <N>\n"
+"                            - Initialize the persistent memory file to all zeroes \n"
+"  -sym-pmem-delay <FILE> <N>\n"
+"                            - This delays the creation of the pmem file at runtime\n"
+"                              rather than on environment init. Essentially, this allows\n"
+"                              us to create a new file which we know to mark symbolic.\n"
+"                              Implies that the file will be created with zeroed memory.\n"
+/* Other */
+"  -sym-stdin <N>            - Make stdin symbolic with size N.\n"
+"  -sym-file-stdin           - Make symbolic stdin behave like piped in from\n"
+"                              a file if set.\n"
+"  -sym-stdout               - Make stdout symbolic.\n"
+"  -save-all-writes          - Allow write operations to execute as expected\n"
+"                              even if they exceed the file size. If set to 0, all\n"
+"                              writes exceeding the initial file size are discarded.\n"
+"                              Note: file offset is always incremented.\n"
+"  -max-fail <N>             - Allow up to N injected failures\n"
+"  -unsafe                   - Allow non-RD_ONLY (unsafe) access to concrete \n"
+"                              files.\n"
+"  -no-overlapped            - Do not keep per-state concrete file offsets\n"
+"  -fd-fail                  - Shortcut for '-max-fail 1'\n"
+"  -posix-debug              - Enable debug message in POSIX runtime\n"
+"  -sock-handler <NAME>      - Use predefined socket handler\n"
+"  -symbolic-sock-handler    - Inform socket handler that it is used during a\n"
+"                              symbolic replay. (default=false)\n";
+
 static void __add_symfs_file(fs_init_descriptor_t *fid,
                              enum sym_file_type file_type,
+                             enum sym_pmem_file_type pmem_type,
                              const char *file_path) {
   if (fid->n_sym_files >= MAX_FILES) {
     __emit_error("Maximum number of allowed symbolic files exceeded when "
                  "adding SYMBOLIC/CONCRETE files");
   }
+
   sym_file_descriptor_t *sfd = &fid->sym_files[fid->n_sym_files++];
   sfd->file_type = file_type;
+  sfd->pmem_type = pmem_type;
   sfd->file_path = file_path;
 }
 
@@ -129,42 +177,7 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
 
   // Recognize --help when it is the sole argument.
   if (argc == 2 && __streq(argv[1], "--help")) {
-    __emit_error("klee_init_env\n\n\
-usage: (klee_init_env) [options] [program arguments]\n\
-  -sym-arg <N>              - Replace by a symbolic argument with length N\n\
-  -sym-args <MIN> <MAX> <N> - Replace by at least MIN arguments and at most\n\
-                              MAX arguments, each with maximum length N\n\
-  -sym-files <NUM> <N>      - Make NUM symbolic files ('A', 'B', 'C', etc.),\n\
-                              each with size N. (type: PURE_SYMBOLIC)\n\
-  -sym-file <FILE>          - Make a symbolic file based on the name, stats, \n\
-                              size of the given <FILE>. (type: SYMBOLIC).\n\
-  -con-file <FILE>          - Import a concrete file to the symbolic file \n\
-                              system. (type: CONCRETE)\n\
-  -sym-pmem <FILE> <N>      - Provide a symbolic persistent memory file and size.\n\
-  -sym-pmem-init-concrete <INIT_FILE_PATH/0>\n\
-                            - Initialize the persistent memory file to a \n\
-                              concrete value, either based on values from \n\
-                              a real file or to all zeros if provided.\n\
-  -sym-pmem-delay-create    - This delays the creation of the pmem file at runtime\n\
-                              rather than on environment init. Essentially, this allows\n\
-                              us to create a new file which we know to mark symbolic.\n\
-                              Implies that the file will be created with zeroed memory.\n\
-  -sym-stdin <N>            - Make stdin symbolic with size N.\n\
-  -sym-file-stdin           - Make symbolic stdin behave like piped in from a file if set.\n\
-  -sym-stdout               - Make stdout symbolic.\n\
-  -save-all-writes          - Allow write operations to execute as expected\n\
-                              even if they exceed the file size. If set to 0, all\n\
-                              writes exceeding the initial file size are discarded.\n\
-                              Note: file offset is always incremented.\n\
-  -max-fail <N>             - Allow up to N injected failures\n\
-  -unsafe                   - Allow non-RD_ONLY (unsafe) access to concrete \n\
-                              files.\n\
-  -no-overlapped            - Do not keep per-state concrete file offsets\n\
-  -fd-fail                  - Shortcut for '-max-fail 1'\n\
-  -posix-debug              - Enable debug message in POSIX runtime\n\
-  -sock-handler <NAME>      - Use predefined socket handler\n\
-  -symbolic-sock-handler    - Inform socket handler that it is used during a\n\
-                              symbolic replay. (default=false)\n");
+    __emit_error(help_msg);
   }
 
   while (k < argc) {
@@ -256,7 +269,7 @@ usage: (klee_init_env) [options] [program arguments]\n\
         __emit_error(msg);
 
       const char *file_path = argv[k++];
-      __add_symfs_file(&fid, SYMBOLIC, file_path);
+      __add_symfs_file(&fid, SYMBOLIC, NOT_PMEM, file_path);
     } else if (__streq(argv[k], "--con-file") ||
                __streq(argv[k], "-con-file")) {
       const char *msg = "--con-file expect one argument "
@@ -266,7 +279,50 @@ usage: (klee_init_env) [options] [program arguments]\n\
         __emit_error(msg);
 
       const char *file_path = argv[k++];
-      __add_symfs_file(&fid, CONCRETE, file_path);
+      __add_symfs_file(&fid, CONCRETE, NOT_PMEM, file_path);
+    } else if (__streq(argv[k], "--sym-pmem") || __streq(argv[k], "-sym-pmem")) {
+      const char *msg = "--sym-pmem expects one string argument "
+                "<sym-pmem-filename> and one integer argument <sym-pmem-size>";
+      if (k + 2 >= argc) __emit_error(msg);
+      k++;
+      const char *file_name = argv[k++];
+      long file_size = __str_to_int(argv[k++], msg);
+      if (file_size) {
+        __emit_error("The second argument to --sym-pmem (file size) cannot be 0\n");
+      }
+      __add_symfs_file(&fid, SYMBOLIC, PMEM_SYMBOLIC, file_name);
+    } else if (__streq(argv[k], "--sym-pmem-init-from") || 
+               __streq(argv[k], "-sym-pmem-init-from")) {
+      const char *msg = "--sym-pmem-init-from expects one string <init_from_path>";
+      if (k + 1 >= argc)
+        __emit_error(msg);
+      k++;
+      const char *file_path = argv[k++];
+      __add_symfs_file(&fid, SYMBOLIC, PMEM_FROM_CONCRETE, file_path);
+    } else if (__streq(argv[k], "--sym-pmem-zeroed") || 
+               __streq(argv[k], "-sym-pmem-zeroed")) {
+      const char *msg = "--sym-pmem-zeroed expects one string argument "
+                        "<filename> and one integer argument <size>";
+      if (k + 2 >= argc) __emit_error(msg);
+      k++;
+      const char *file_name = argv[k++];
+      long file_size = __str_to_int(argv[k++], msg);
+      if (file_size) {
+        __emit_error("--sym-pmem-zeroed file size cannot be 0\n");
+      }
+      __add_symfs_file(&fid, SYMBOLIC, PMEM_SYM_ZERO, file_name);
+    } else if (__streq(argv[k], "--sym-pmem-delay") || 
+               __streq(argv[k], "-sym-pmem-delay")) {
+      const char *msg = "--sym-pmem-delay expects one string argument "
+                        "<filename> and one integer argument <size>";
+      if (k + 2 >= argc) __emit_error(msg);
+      k++;
+      const char *file_name = argv[k++];
+      long file_size = __str_to_int(argv[k++], msg);
+      if (file_size) {
+        __emit_error("The second argument to --sym-pmem (file size) cannot be 0\n");
+      }
+      __add_symfs_file(&fid, SYMBOLIC, PMEM_DELAY_CREATE, file_name);
     } else if (__streq(argv[k], "--sym-stdin") ||
                __streq(argv[k], "-sym-stdin")) {
       const char *msg =
@@ -280,27 +336,6 @@ usage: (klee_init_env) [options] [program arguments]\n\
                __streq(argv[k], "-sym-file-stdin")) {
       fid.sym_file_stdin_flag = 1;
       k++;
-    } else if (__streq(argv[k], "--sym-pmem") || __streq(argv[k], "-sym-pmem")) {
-      const char *msg = "--sym-pmem expects one string argument <sym-pmem-filename> and one integer argument <sym-pmem-size>";
-      if (k + 2 >= argc)
-        __emit_error(msg);
-      k++;
-      strncpy(sym_pmem_filename, argv[k++], sizeof(sym_pmem_filename));
-      sym_pmem_size = __str_to_int(argv[k++], msg);
-      if (sym_pmem_size == 0) {
-        __emit_error("The second argument to --sym-pmem (file size) cannot be 0\n");
-      }
-    } else if (__streq(argv[k], "--sym-pmem-init-concrete") || __streq(argv[k], "-sym-pmem-init-concrete")) {
-      const char *msg = "--sym-pmem-init-concrete expects one string or integer argument <either file name or 0>";
-      if (k + 1 >= argc)
-        __emit_error(msg);
-      k++;
-      strncpy(sym_pmem_init_path, argv[k++], sizeof(sym_pmem_init_path));
-      // We'll parse the specifics later.
-    } else if (__streq(argv[k], "--sym-pmem-delay-create") || __streq(argv[k], "-sym-pmem-delay-create")) {
-      const char *msg = "--sym-pmem-init-concrete expects one string or integer argument <either file name or 0>";
-      k++;
-      sym_pmem_delay_create = true;
     } else if (__streq(argv[k], "--sym-stdout") ||
                __streq(argv[k], "-sym-stdout")) {
       fid.sym_stdout_flag = 1;

@@ -312,10 +312,7 @@ bool NvmPathSearcher::priority_less::operator()(const priority_tuple &lhs, const
 }
 
 NvmPathSearcher::NvmPathSearcher(Executor &_executor) 
-  : Searcher(_executor)
-{
-  executor.interpreterHandler->setNvm();
-}
+  : Searcher(_executor) {}
 
 NvmPathSearcher::~NvmPathSearcher() {}
 

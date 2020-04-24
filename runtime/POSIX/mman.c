@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,50 +38,100 @@
 #include "klee/klee.h"
 #include "klee/Config/config.h"
 #include "fd.h"
+#include "symfs.h"
+#include "files.h"
+#include "config.h"
 
-void klee_warning(const char*);
-void klee_warning_once(const char*);
-void klee_error(const char*);
+////////////////////////////////////////////////////////////////////////////////
+// helper functions
+////////////////////////////////////////////////////////////////////////////////
 
-static exe_file_t *__get_file(int fd) {
-  if (fd>=0 && fd<MAX_FDS) {
-    exe_file_t *f = &__exe_env.fds[fd];
-    if (f->flags & eOpen)
-      return f;
+typedef struct {
+  void *start;
+  void *end;
+  disk_file_t *df;
+} mmap_entry_t;
+
+static mmap_entry_t mmap_entries[MAX_FDS];
+static int next_free = 0;
+
+static void insert_entry(disk_file_t *df, void *start, void *end) {
+  if (next_free >= MAX_FDS) {
+    klee_error("too many mmaps!");
   }
 
-  return 0;
+  mmap_entries[next_free].start = start;
+  mmap_entries[next_free].end = end;
+  mmap_entries[next_free].df = df;
+  
+  ++next_free;
 }
 
-/**
- * Helpers.
- */
-static void *__concretize_ptr(const void *p) {
-  /* XXX 32-bit assumption */
-  char *pc = (char*) klee_get_valuel((long) p);
-  klee_assume(pc == p);
-  return pc;
+static int find_index(void *start, void *end) {
+  int i;
+  /**
+   * Just do a linear search. We start from the back so we get the most recent
+   * entry.
+   * 
+   * Is this particularly efficient?
+   * Not really. But I'm relying on the following facts:
+   * 1. This happens like a couple of times per program.  
+   * 2. I don't want to build a different data structure or sort the list.
+   */
+  for (i = next_free - 1; i >= 0; --i) {
+    mmap_entry_t *e = mmap_entries + i;
+    if (e->start <= start && e->end >= end) {
+      return i;
+    } else if (e->start <= start || e->end >= end) {
+      klee_error("the desired unmap range partially overlaps!");
+    }
+  }
+
+  return -1;
 }
 
-static size_t __concretize_size(size_t s) {
-  size_t sc = klee_get_valuel((long)s);
-  klee_assume(sc == s);
-  return sc;
+static disk_file_t *get_mmap_file(int index) {
+  if (index < 0 || index >= next_free) {
+    klee_error("bad mmap_entries index!");
+  }
+
+  return mmap_entries[index].df;
 }
 
-/**
- * Real stuff.
- */
 
-void *mmap_sym(exe_file_t* f, size_t length, off_t offset) {
+static void remove_entry(int index) {
+  int i;
 
-  if (!f || !__exe_fs.sym_pmem || !(f->dfile == __exe_fs.sym_pmem)) {
+  if (index + 1 < next_free) {
+    /**
+     * Move all the existing entries down one. 
+     * 
+     * Is this particularly efficient?
+     * Not really. But I'm relying on the following facts:
+     * 1. This happens like a couple of times per program.  
+     * 2. I don't want to build a different data structure or sort the list.
+     */
+    for (i = index; i + 1 < next_free; ++i) {
+      mmap_entries[i] = mmap_entries[i+1];
+    }
+  }
+
+  --next_free; 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// mmap functions
+////////////////////////////////////////////////////////////////////////////////
+
+void *mmap_sym(disk_file_t* df, size_t length, off_t offset) {
+
+  if (!df || df->pmem_type == NOT_PMEM) {
     klee_error("mmap only supports symbolic files that are persistent files");
     return MAP_FAILED;
   }
 
-  exe_disk_file_t* df = f->dfile;
-  if (!df || !df->contents || !df->size) {
+  if (!df->bbuf.contents || !df->size) {
     klee_error("pmem file not opened prior to mapping");
     return MAP_FAILED;
   }
@@ -103,11 +154,11 @@ void *mmap_sym(exe_file_t* f, size_t length, off_t offset) {
   size_t page_end = page_start + (actual_length / pgsz);
   // want to increment page_refs in interval: [page_start, page_end)
   for (; page_start < page_end; page_start++) {
-    assert(klee_pmem_is_pmem(df->contents + (pgsz * page_start), pgsz));
-    df->page_refs[page_start]++;
+    assert(klee_pmem_is_pmem(df->bbuf.contents + (pgsz * page_start), pgsz));
+    df->bbuf.page_refs[page_start]++;
   }
 
-  return (void*) (df->contents + offset);
+  return (void*) (df->bbuf.contents + offset);
 }
 
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) __attribute__((weak));
@@ -119,22 +170,33 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
   size_t actual_size = __concretize_size(length);
 
   if (!(flags & MAP_ANONYMOUS)) {
-    exe_file_t *f = __get_file(fd);
-    if (!f) {
+    fd_entry_t *fde = __get_fd(fd);
+    if (!fde) {
       errno = EBADF;
       return MAP_FAILED;
     }
 
-    if (f->dfile) {
-      return mmap_sym(f, actual_size, offset);
-    }
+    if (fde->attr & eIsFile) {
+      file_t *file_object = (file_t *)fde->io_object;
+      if (file_object->storage) {
+        void *start = mmap_sym(file_object->storage, actual_size, offset);
+        void *end = start + actual_size;
+        insert_entry(file_object->storage, start, end);
+        return start;
+      }
 
-    actual_fd = f->fd; 
+      klee_warning("Using poorly-supported real-file MMAP!");
+      actual_fd = file_object->concrete_fd; 
+    } else {
+      klee_error("Cannot mmap non-files!");
+    }
   }
 
   void* ret = (void*)syscall(__NR_mmap, start, actual_size, prot, flags, actual_fd, offset);
-  snprintf(msg, 4096, "real mmap path! (start=%p, length=%lu/%lu, prot=%d, flags=%d, fd=%d, offset=%ld) => %p (%lu)",
-           start, length, actual_size, prot, flags, fd, offset, ret, (unsigned long)ret);
+  snprintf(msg, 4096, "real mmap path! (start=%p, length=%lu/%lu, prot=%d, "
+                      "flags=%d, fd=%d, offset=%ld) => %p (%lu)",
+           start, length, actual_size, prot, flags, fd, offset, ret, 
+           (unsigned long)ret);
   klee_warning(msg);
 
   if (ret != MAP_FAILED) {
@@ -155,50 +217,64 @@ void *mmap64(void *start, size_t length, int prot, int flags, int fd, off64_t of
   return mmap(start, length, prot, flags, fd, offset);
 }
 
-int munmap_sym(char* start, size_t length, exe_disk_file_t* df) {
+int munmap_sym(char* start, size_t length, disk_file_t* df, int entry_index) {
   // check for complete enclosure
-  if (!(df->contents <= start && start+length <= df->contents + df->size)) {
+  if (!(df->bbuf.contents <= start && start+length <= df->bbuf.contents + df->size)) {
     klee_error("munmap invoked on [start, start+length) that's not fully included in pmem file");
     return -1;
   }
+
   size_t pgsz = getpagesize();
-  unsigned offset = start - df->contents;
+  unsigned offset = start - df->bbuf.contents;
   if (offset % pgsz || length % pgsz) {
     klee_warning("arguments passed to munmap are not page aligned; will round to enclosing pages");
   }
+
   unsigned page_start = offset / pgsz;
   unsigned page_end = page_start + ceil(length / (double)pgsz);
+  bool all_freed = true;
   // decrement page_refs in interval [page_start, page_end)
   // if ref count goes to zero, check that the page is persisted
   for (; page_start < page_end; page_start++) {
-    if (df->page_refs[page_start] == 0) {
+    if (df->bbuf.page_refs[page_start] == 0) {
       klee_error("munmap invoked on page with ref count already equal to 0");
       return -1;
     }
-    df->page_refs[page_start]--;
-    if (df->page_refs[page_start] == 0) {
+
+    df->bbuf.page_refs[page_start]--;
+    if (df->bbuf.page_refs[page_start] == 0) {
       // Force a persistent check on unmap to ensure we check. We can check
       // on sfences, but if a program also omits those, this will be our only
       // check.
-      if (!klee_pmem_is_pmem(df->contents + (pgsz*page_start), pgsz)) {
+      if (!klee_pmem_is_pmem(df->bbuf.contents + (pgsz*page_start), pgsz)) {
         klee_error("Symbolically unmapping non-pmem!");
       }
-      klee_pmem_check_persisted(df->contents + (pgsz*page_start), pgsz);
+
+      klee_pmem_check_persisted(df->bbuf.contents + (pgsz*page_start), pgsz);
+    } else {
+      all_freed = false;
     }
   }
+
+  // Now we see if we should remove the mapping
+  if (all_freed) {
+    remove_entry(entry_index);
+  }
+
   return 0;
 }
 
 int munmap(void *start, size_t length) __attribute__((weak));
 int munmap(void *start, size_t length) {
   size_t actual_size = __concretize_size(length);
-  
-  if (__exe_fs.sym_pmem) {
-    exe_disk_file_t* df = __exe_fs.sym_pmem;
+  void *end = start + actual_size;
+  int entry_index = find_index(start, end);
+  if (entry_index >= 0) {
+    disk_file_t *df = get_mmap_file(entry_index);
     // call munmap_pmem if the following intervals overlap:
     // [df->contents, df->contents+df->size) and [start, start+length)
-    if (df->contents < (char*)start + length && (char*)start < df->contents + df->size) {
-      return munmap_sym(start, length, df);
+    if (df->bbuf.contents < (char*)end && (char*)start < df->bbuf.contents + df->size) {
+      return munmap_sym(start, length, df, entry_index);
     }
   }
 

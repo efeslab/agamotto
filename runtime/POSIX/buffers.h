@@ -130,10 +130,13 @@ typedef struct {
   char *contents;
   size_t max_size;
   size_t size;
+  // Used for mmap. Constructed lazily.
+  uint64_t *page_refs;
 } block_buffer_t;
 
 
 void _block_init(block_buffer_t *buff, size_t max_size);
+void _block_init_pmem(block_buffer_t *buff, size_t max_size, const char *bname);
 void _block_finalize(block_buffer_t *buff);
 
 ssize_t _block_read(block_buffer_t *buff, char *dest, size_t count, size_t offset);

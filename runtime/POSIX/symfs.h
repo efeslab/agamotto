@@ -46,6 +46,19 @@ typedef struct {
   ssize_t (*write)(struct disk_file *dfile, const void *buf, size_t count, off_t offset);
 } disk_file_ops_t;
 
+enum sym_pmem_file_type {
+  NOT_PMEM,
+  // The PMEM file is purely symbolic
+  PMEM_SYMBOLIC,
+  // The PMEM file is symbolic, but initialized to 0.
+  PMEM_SYM_ZERO,  
+  // The PMEM file is symbolic with contents initialized from the file
+  PMEM_FROM_CONCRETE,
+  // The PMEM file is symbolic, and calls to O_CREAT will succeed. Fakes the 
+  // system into thinking it created a new PMEM file on a PMEM file system.
+  PMEM_DELAY_CREATE
+};
+
 // model a symbolic regular file
 // NOTE: we do not model the hierarchical structure of in the symbolic
 // filesystem. Thus the name of each regular file is just a single name, not a
@@ -58,6 +71,8 @@ typedef struct disk_file {
   disk_file_ops_t ops;
   // file contents is managed by a block_buffer
   block_buffer_t bbuf;
+  // Is this a pmem file? If so, what kind?
+  enum sym_pmem_file_type pmem_type;
 } disk_file_t;  // The "disk" storage of the file
 
 
@@ -102,8 +117,12 @@ typedef struct {
     // When creating a SYMBOLIC file, only the basename of this path will be
     // used as the file name.
     const char *file_path;
+    // file_name denotes the desired name of this file. Used primarily by PMEM
+    // related calls.
+    const char *file_name;
   };
   enum sym_file_type file_type;
+  enum sym_pmem_file_type pmem_type;
 } sym_file_descriptor_t;
 
 typedef struct {
@@ -116,7 +135,7 @@ typedef struct {
   // see the corresponding descriptions in file_system_t
   char allow_unsafe;
   char overlapped_writes;
-  // 0 if stdin is a character file, 1 if stdin is a regualr file (redirected
+  // 0 if stdin is a character file, 1 if stdin is a regular file (redirected
   // from a file)
   char sym_file_stdin_flag;
   // 1 if stdout should be symbolic, 0 otherwise

@@ -41,10 +41,6 @@ public:
 
   virtual void incPathsExplored() = 0;
 
-  // (iangneal): for NVM heuristic stats. I want to know what kind of states we
-  // got rid of.
-  virtual void setNvm() = 0;
-
   virtual void processTestCase(const ExecutionState &state,
                                const char *err,
                                const char *suffix) = 0;

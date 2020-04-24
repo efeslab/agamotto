@@ -38,6 +38,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <klee/klee.h>
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -303,6 +304,17 @@ void _block_init(block_buffer_t *buff, size_t max_size) {
   buff->contents = (char*)malloc(max_size);
   buff->max_size = max_size;
   buff->size = 0;
+}
+
+void _block_init_pmem(block_buffer_t *buff, size_t max_size, const char *bname) {
+  if (max_size % getpagesize()) {
+    klee_error("Adjusting size in _block_init_pmem to be page size aligned!");
+  }
+  memset(buff, 0, sizeof(block_buffer_t));
+  buff->contents = (char*)klee_pmem_alloc_pmem(max_size, bname);
+  buff->max_size = max_size;
+  buff->size = 0;
+  buff->page_refs = calloc(max_size / getpagesize(), sizeof(*buff->page_refs));
 }
 
 void _block_finalize(block_buffer_t *buff) {

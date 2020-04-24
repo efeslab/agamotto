@@ -91,6 +91,9 @@ extern "C" {
 			 const char *message, 
 			 const char *suffix);
   
+  #define klee_error(msg) \
+    klee_report_error(__FILE__, __LINE__, msg, "kr");
+  
   /* called by checking code to get size of memory. */
   size_t klee_get_obj_size(void *ptr);
   
