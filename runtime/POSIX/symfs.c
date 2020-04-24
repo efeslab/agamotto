@@ -237,6 +237,28 @@ static void _init_dual_buffer(disk_file_t *dfile, const char *origpath,
   }
 }
 
+static void _init_pmem_pure_symbolic_buffer(disk_file_t *dfile, 
+                                            size_t maxsize,
+                                            const char *symname) {
+  // Initializing the buffer contents...
+  block_buffer_t *buff = &dfile->bbuf;
+  _block_init_pmem(buff, maxsize, symname);
+  buff->size = maxsize;
+  // since it calls klee_pmem_alloc_pmem, should already be symbolic
+  klee_make_shared(buff->contents, maxsize);
+}
+
+static void _init_pmem_from_real(disk_file_t *dfile, const char *origpath,
+                                 size_t size, const char *symname) {
+
+  block_buffer_t *buff = &dfile->bbuf;
+  _block_init(buff, size);
+  buff->size = size;
+  // since it calls klee_pmem_alloc_pmem, should already be symbolic
+  klee_make_shared(buff->contents, size);
+  _read_file_contents(origpath, size, buff->contents);
+}
+
 // NOTE: the SYMBOLIC file has the same file name as the given file (origname)
 static disk_file_t *_create_dual_file(disk_file_t *dfile, const char *origpath,
     int make_symbolic) {
@@ -289,13 +311,80 @@ static disk_file_t *_create_pure_symbolic_file(disk_file_t *dfile,
 }
 
 // (iangneal): pmem
+
+static disk_file_t *_create_pmem_symbolic_file(disk_file_t *dfile,
+                                               size_t maxsize,
+                                               const char *symname,
+                                               const struct stat64 *defstats) {
+  _init_file_name(dfile, symname);
+  _init_pmem_pure_symbolic_buffer(dfile, maxsize, symname); 
+  // I don't want symbolic stats.
+  _init_stats(dfile, symname, defstats, 0);
+
+  // Update the stat size
+  block_buffer_t *buff = &dfile->bbuf;
+  dfile->stat->st_size = buff->size;
+
+  // Register the operations
+  memset(&dfile->ops, 0, sizeof(dfile->ops));
+  dfile->ops.read = _read_symbolic;
+  dfile->ops.write = _write_symbolic;
+  dfile->ops.truncate = _truncate_symbolic;
+
+  return dfile;
+}
+
+static disk_file_t *_create_pmem_file_from_real(disk_file_t *dfile,
+                                                const char *orig_path) {
+  struct stat64 s;
+  int res = CALL_UNDERLYING(stat, orig_path, &s);
+  assert(res == 0 && "Could not get the stat of the original file.");
+  const char *basename = strrchr(orig_path, '/');
+  const char *symname;
+  if (basename) {
+    symname = basename;
+  } else {
+    symname = orig_path;
+  }
+
+  _init_file_name(dfile, symname);
+  _init_pmem_from_real(dfile, orig_path, s.st_size, symname); 
+  // I don't want symbolic stats.
+  _init_stats(dfile, symname, &s, 0);
+
+  // Update the stat size
+  block_buffer_t *buff = &dfile->bbuf;
+  dfile->stat->st_size = buff->size;
+
+  // Register the operations
+  memset(&dfile->ops, 0, sizeof(dfile->ops));
+  dfile->ops.read = _read_symbolic;
+  dfile->ops.write = _write_symbolic;
+  dfile->ops.truncate = _truncate_symbolic;
+
+  return dfile;
+}
+
 static disk_file_t *_create_pmem_file(disk_file_t *dfile,
                                       sym_file_descriptor_t *sfd,
                                       const struct stat64 *default_stats) {
   switch(sfd->pmem_type) {
     case PMEM_SYMBOLIC:
+      _create_pmem_symbolic_file(dfile, sfd->file_size, sfd->file_path, default_stats);
+      break;
+    case PMEM_SYM_ZERO:
+    case PMEM_DELAY_CREATE:
+      _create_pmem_symbolic_file(dfile, sfd->file_size, sfd->file_path, default_stats);
+      memset(dfile->bbuf.contents, 0, dfile->bbuf.max_size);
+      break;
+    case PMEM_FROM_CONCRETE:
+      _create_pmem_file_from_real(dfile, sfd->file_path);
+      break;
+    case NOT_PMEM:
+      klee_error("called create_pmem on non-pmem file!");
     default:
-      klee_error("finish!");
+      klee_error("invalid value!");
+      break;
   }
 
   return dfile;

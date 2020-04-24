@@ -110,17 +110,12 @@ typedef struct {
 } filesystem_t;
 
 typedef struct {
-  union {
-    // file_size denotes the size of a pure symbolic file
-    int file_size;
-    // file_path denotes the backend of a symbolic/concrete file
-    // When creating a SYMBOLIC file, only the basename of this path will be
-    // used as the file name.
-    const char *file_path;
-    // file_name denotes the desired name of this file. Used primarily by PMEM
-    // related calls.
-    const char *file_name;
-  };
+  // file_size denotes the size of a pure symbolic file (or a pmem file)
+  long file_size;
+  // file_path denotes the backend of a symbolic/concrete file
+  // When creating a SYMBOLIC file, only the basename of this path will be
+  // used as the file name.
+  const char *file_path;
   enum sym_file_type file_type;
   enum sym_pmem_file_type pmem_type;
 } sym_file_descriptor_t;

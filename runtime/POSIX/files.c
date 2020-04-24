@@ -612,8 +612,13 @@ int _open_concrete(int concrete_fd, int flags) {
 int _open_symbolic(disk_file_t *dfile, int flags, mode_t mode) {
   // Checking the flags
   if ((flags & O_CREAT) && (flags & O_EXCL)) {
-    errno = EEXIST;
-    return -1;
+    if (dfile->pmem_type != PMEM_DELAY_CREATE) {
+      errno = EEXIST;
+      return -1;
+    } else {
+      // This allows the program to "create" the file once
+      dfile->pmem_type = PMEM_SYM_ZERO;
+    }
   }
 
   if ((flags & O_TRUNC) && (flags & O_ACCMODE) == O_RDONLY) {

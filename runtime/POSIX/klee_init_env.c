@@ -135,7 +135,8 @@ static char help_msg[] =
 static void __add_symfs_file(fs_init_descriptor_t *fid,
                              enum sym_file_type file_type,
                              enum sym_pmem_file_type pmem_type,
-                             const char *file_path) {
+                             const char *file_path,
+                             long file_size) {
   if (fid->n_sym_files >= MAX_FILES) {
     __emit_error("Maximum number of allowed symbolic files exceeded when "
                  "adding SYMBOLIC/CONCRETE files");
@@ -145,6 +146,7 @@ static void __add_symfs_file(fs_init_descriptor_t *fid,
   sfd->file_type = file_type;
   sfd->pmem_type = pmem_type;
   sfd->file_path = file_path;
+  sfd->file_size = file_size;
 }
 
 void klee_init_env(int *argcPtr, char ***argvPtr) {
@@ -269,7 +271,7 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
         __emit_error(msg);
 
       const char *file_path = argv[k++];
-      __add_symfs_file(&fid, SYMBOLIC, NOT_PMEM, file_path);
+      __add_symfs_file(&fid, SYMBOLIC, NOT_PMEM, file_path, 0);
     } else if (__streq(argv[k], "--con-file") ||
                __streq(argv[k], "-con-file")) {
       const char *msg = "--con-file expect one argument "
@@ -279,7 +281,7 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
         __emit_error(msg);
 
       const char *file_path = argv[k++];
-      __add_symfs_file(&fid, CONCRETE, NOT_PMEM, file_path);
+      __add_symfs_file(&fid, CONCRETE, NOT_PMEM, file_path, 0);
     } else if (__streq(argv[k], "--sym-pmem") || __streq(argv[k], "-sym-pmem")) {
       const char *msg = "--sym-pmem expects one string argument "
                 "<sym-pmem-filename> and one integer argument <sym-pmem-size>";
@@ -287,10 +289,10 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
       k++;
       const char *file_name = argv[k++];
       long file_size = __str_to_int(argv[k++], msg);
-      if (file_size) {
+      if (!file_size) {
         __emit_error("The second argument to --sym-pmem (file size) cannot be 0\n");
       }
-      __add_symfs_file(&fid, SYMBOLIC, PMEM_SYMBOLIC, file_name);
+      __add_symfs_file(&fid, SYMBOLIC, PMEM_SYMBOLIC, file_name, file_size);
     } else if (__streq(argv[k], "--sym-pmem-init-from") || 
                __streq(argv[k], "-sym-pmem-init-from")) {
       const char *msg = "--sym-pmem-init-from expects one string <init_from_path>";
@@ -298,7 +300,7 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
         __emit_error(msg);
       k++;
       const char *file_path = argv[k++];
-      __add_symfs_file(&fid, SYMBOLIC, PMEM_FROM_CONCRETE, file_path);
+      __add_symfs_file(&fid, SYMBOLIC, PMEM_FROM_CONCRETE, file_path, 0);
     } else if (__streq(argv[k], "--sym-pmem-zeroed") || 
                __streq(argv[k], "-sym-pmem-zeroed")) {
       const char *msg = "--sym-pmem-zeroed expects one string argument "
@@ -307,10 +309,10 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
       k++;
       const char *file_name = argv[k++];
       long file_size = __str_to_int(argv[k++], msg);
-      if (file_size) {
+      if (!file_size) {
         __emit_error("--sym-pmem-zeroed file size cannot be 0\n");
       }
-      __add_symfs_file(&fid, SYMBOLIC, PMEM_SYM_ZERO, file_name);
+      __add_symfs_file(&fid, SYMBOLIC, PMEM_SYM_ZERO, file_name, file_size);
     } else if (__streq(argv[k], "--sym-pmem-delay") || 
                __streq(argv[k], "-sym-pmem-delay")) {
       const char *msg = "--sym-pmem-delay expects one string argument "
@@ -319,10 +321,10 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
       k++;
       const char *file_name = argv[k++];
       long file_size = __str_to_int(argv[k++], msg);
-      if (file_size) {
-        __emit_error("The second argument to --sym-pmem (file size) cannot be 0\n");
+      if (!file_size) {
+        __emit_error("--sym-pmem-delay file size cannot be 0\n");
       }
-      __add_symfs_file(&fid, SYMBOLIC, PMEM_DELAY_CREATE, file_name);
+      __add_symfs_file(&fid, SYMBOLIC, PMEM_DELAY_CREATE, file_name, file_size);
     } else if (__streq(argv[k], "--sym-stdin") ||
                __streq(argv[k], "-sym-stdin")) {
       const char *msg =
@@ -395,7 +397,8 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
 
   klee_init_sym_env(save_all_writes_flag);
   klee_init_symfs(&fid);
-  klee_init_mmap();
+  // (iangneal): we have our own thanks
+  // klee_init_mmap();
   klee_init_network();
   klee_init_netlink();
   klee_init_sockets_simulator();
