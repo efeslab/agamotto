@@ -43,9 +43,6 @@
 #include "common.h"
 //#include "signals.h"
 
-
-#define DEFAULT_THREAD  0
-
 #define DEFAULT_PROCESS 2
 #define DEFAULT_PARENT  1
 #define DEFAULT_UMASK   (S_IWGRP | S_IWOTH)
