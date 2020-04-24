@@ -375,7 +375,8 @@ static disk_file_t *_create_pmem_file(disk_file_t *dfile,
     case PMEM_SYM_ZERO:
     case PMEM_DELAY_CREATE:
       _create_pmem_symbolic_file(dfile, sfd->file_size, sfd->file_path, default_stats);
-      memset(dfile->bbuf.contents, 0, dfile->bbuf.max_size);
+      // Infinitely faster than memset
+      klee_init_concrete_zero(dfile->bbuf.contents, dfile->bbuf.max_size);
       break;
     case PMEM_FROM_CONCRETE:
       _create_pmem_file_from_real(dfile, sfd->file_path);

@@ -345,6 +345,7 @@ Thread &ExecutionState::createThread(thread_id_t tid, KFunction *kf) {
   std::pair<threads_ty::iterator, bool> res =
       threads.insert(std::make_pair(newThread.tuid, newThread));
   assert(res.second);
+  assert(crtThread().getTid() != res.first->second.getTid());
   return res.first->second;
 }
 

@@ -352,11 +352,11 @@ void StatsTracker::stepInstruction(ExecutionState &es) {
         //
         // FIXME: This trick no longer works, we should fix this in the line
         // number propogation.
-          es.coveredLines[&ii.file].insert(ii.line);
-	es.coveredNew = true;
+        es.coveredLines[&ii.file].insert(ii.line);
+	      es.coveredNew = true;
         es.instsSinceCovNew = 1;
-	++stats::coveredInstructions;
-	stats::uncoveredInstructions += (uint64_t)-1;
+        ++stats::coveredInstructions;
+        stats::uncoveredInstructions += (uint64_t)-1;
       }
     }
   }
@@ -374,8 +374,12 @@ void StatsTracker::stepInstruction(ExecutionState &es) {
 
 /* Should be called _after_ the es->pushFrame() */
 void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame) {
+  framePushed(es.stack().back(), parentFrame);
+}
+
+/* Need this for new threads, because es.stack() gets the current thread's stack */
+void StatsTracker::framePushed(StackFrame &sf, StackFrame *parentFrame) {
   if (OutputIStats) {
-    StackFrame &sf = es.stack().back();
 
     if (UseCallPaths) {
       CallPathNode *parent = parentFrame ? parentFrame->callPathNode : 0;
@@ -388,8 +392,6 @@ void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame) {
   }
 
   if (updateMinDistToUncovered) {
-    StackFrame &sf = es.stack().back();
-
     uint64_t minDistAtRA = 0;
     if (parentFrame)
       minDistAtRA = parentFrame->minDistToUncoveredOnReturn;

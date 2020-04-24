@@ -78,6 +78,8 @@ namespace klee {
     // called after a new StackFrame has been pushed (for callpath tracing)
     void framePushed(ExecutionState &es, StackFrame *parentFrame);
 
+    void framePushed(StackFrame &sf, StackFrame *parentFrame);
+
     // called after a StackFrame has been popped
     void framePopped(ExecutionState &es);
 

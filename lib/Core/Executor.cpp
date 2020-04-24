@@ -4135,8 +4135,11 @@ void Executor::executeThreadCreate(ExecutionState &state, thread_id_t tid,
       KFunction *kf = find_it->second;                                           
       Thread &t = state.createThread(tid, kf);                                                                                                                                                                                                                                                                                                                                           
       bindArgumentToPthreadCreate(kf, 0, t.stack.back(), arg);                       
-      if (statsTracker)                                                              
-        statsTracker->framePushed(state, &t.stack.back());                           
+      if (statsTracker) {
+        // (iangneal): The old way updated the current state stack. This
+        // now updates the thread's stack
+        statsTracker->framePushed(t.stack.back(), &state.stack().back()); 
+      }                                                                                
       return;                                                                        
     }                                                                                
   }                                                                                  
@@ -4145,7 +4148,7 @@ void Executor::executeThreadCreate(ExecutionState &state, thread_id_t tid,
       state, "klee_thread_create cannot locate the start_function", User);           
 } 
 
- void Executor::executeThreadExit(ExecutionState &state) {                        
+void Executor::executeThreadExit(ExecutionState &state) {                        
   if (state.threads.size() == 1) {                                               
     terminateStateOnExit(state);                                                 
     return;                                                                      

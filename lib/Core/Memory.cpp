@@ -766,7 +766,7 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
   ref<Expr> falseExpr = getDirtyExpr();
 
   if (isUpdateListHeadEqualTo(cacheLineUpdates, cacheLine, falseExpr)) return;
-  
+
   cacheLineUpdates.extend(cacheLine, falseExpr);
   pendingCacheLineUpdates.extend(cacheLine, falseExpr);
 
@@ -815,6 +815,7 @@ ref<Expr> PersistentState::getIsOffsetPersistedExpr(ref<Expr> offset,
   if (!pendingCacheLineUpdates.getSize()) {
     return ConstantExpr::create(1, Expr::Bool);
   }
+
   return isCacheLinePersisted(getCacheLine(offset), pending);
 }
 
