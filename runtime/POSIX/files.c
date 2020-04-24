@@ -805,9 +805,20 @@ int __fd_ftruncate(int fd, off64_t length) {
   return syscall(__NR_ftruncate64, file->concrete_fd, length);
 #endif
   } else {
-    klee_warning("symbolic file fd_ftruncate, ignoring (EIO)");
-    errno = EIO;
-    return -1;
+
+    if (length > file->storage->bbuf.max_size) {
+      char buffer[4096];
+      snprintf(buffer, 4096, "cannot dynamically resize memory"
+                             " of symbolic files (%lu > %lu) (EIO)\n",
+                             length, file->storage->bbuf.max_size);
+      klee_warning(buffer);
+      errno = EIO;
+      return -1;
+    }
+
+    klee_warning("symbolic file, only changing stat64 struct");
+    file->storage->stat->st_size = length;
+    return 0;
   }
 }
 ////////////////////////////////////////////////////////////////////////////////
