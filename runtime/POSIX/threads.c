@@ -88,15 +88,18 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     tdata->joinable = 0;
   }
 
-  klee_thread_create(newIdx, start_routine, arg);
+  // Thread numbering starts at 1
+  unsigned int tid = newIdx + 1;
 
-  *thread = newIdx;
+  klee_thread_create(tid, start_routine, arg);
+
+  *thread = tid;
 
   return 0;
 }
 
 void pthread_exit(void *value_ptr) {
-  unsigned int idx = pthread_self();
+  unsigned int idx = pthread_self() - 1;
   thread_data_t *tdata = &__tsync.threads[idx];
 
   if (tdata->joinable) {
@@ -113,7 +116,9 @@ void pthread_exit(void *value_ptr) {
 
 
 int pthread_join(pthread_t thread, void **value_ptr) {
-  if (thread >= MAX_THREADS) {
+  unsigned int idx = thread - 1;
+
+  if (idx >= MAX_THREADS) {
     errno = ESRCH;
     return -1;
   }
@@ -123,7 +128,7 @@ int pthread_join(pthread_t thread, void **value_ptr) {
     return -1;
   }
 
-  thread_data_t *tdata = &__tsync.threads[thread];
+  thread_data_t *tdata = &__tsync.threads[idx];
 
   if (!tdata->allocated) {
     errno = ESRCH;
@@ -142,17 +147,19 @@ int pthread_join(pthread_t thread, void **value_ptr) {
     *value_ptr = tdata->ret_value;
   }
 
-  STATIC_LIST_CLEAR(__tsync.threads, thread);
+  STATIC_LIST_CLEAR(__tsync.threads, idx);
 
   return 0;
 }
 
 int pthread_detach(pthread_t thread) {
-  if (thread >= MAX_THREADS) {
+  unsigned int idx = thread - 1;
+
+  if (idx >= MAX_THREADS) {
     errno = ESRCH;
   }
 
-  thread_data_t *tdata = &__tsync.threads[thread];
+  thread_data_t *tdata = &__tsync.threads[idx];
 
   if (!tdata->allocated) {
     errno = ESRCH;
@@ -165,7 +172,7 @@ int pthread_detach(pthread_t thread) {
   }
 
   if (tdata->terminated) {
-    STATIC_LIST_CLEAR(__tsync.threads, thread);
+    STATIC_LIST_CLEAR(__tsync.threads, idx);
   } else {
     tdata->joinable = 0;
   }
@@ -206,6 +213,12 @@ int pthread_once(pthread_once_t *once_control, void (*init_routine)(void)) {
 
 int pthread_equal(pthread_t thread1, pthread_t thread2) {
   return thread1 == thread2;
+}
+
+int pthread_atfork(void (*prepare)(void), void (*parent)(void),
+                   void (*child)(void)) {
+  klee_warning_once("pthread_atfork does nothing");
+  return 0;
 }
 
 // Since we don't support multi-process, all pids are 0.

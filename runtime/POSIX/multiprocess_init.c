@@ -83,8 +83,8 @@ tsync_data_t __tsync;
 void klee_init_threads(void) {
   STATIC_LIST_INIT(__tsync.threads);
 
-  // Thread initialization
-  thread_data_t *def_data = &__tsync.threads[DEFAULT_THREAD];
+  // Initialize main thread's data
+  thread_data_t *def_data = &__tsync.threads[0];
   def_data->allocated = 1;
   def_data->terminated = 0;
   def_data->ret_value = 0;

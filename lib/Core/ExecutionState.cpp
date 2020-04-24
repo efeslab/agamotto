@@ -52,8 +52,8 @@ namespace klee {
 
 void ExecutionState::setupMain(KFunction *kf) {
   // single process, make its id always be 0
-  // the first thread, set its id to be 0
-  Thread mainThread = Thread(0, 0, kf);
+  // the first thread, set its id to be 1
+  Thread mainThread = Thread(1, 0, kf);
   threads.insert(std::make_pair(mainThread.tuid, mainThread));
   crtThreadIt = threads.begin();
 }
