@@ -285,6 +285,12 @@ int munmap(void *start, size_t length) {
 
   size_t pgsz = (size_t)getpagesize();
   start = __concretize_ptr(start);
+  // FIXME be able to partially unmap objects (to please jemalloc)
+  size_t pgoffset = (uintptr_t)start % pgsz;
+  if (pgoffset != 0) {
+    // Start on the next full page
+    start += (pgsz - pgoffset);
+  }
   void *addr;
   for (addr = start; addr < start + actual_size; addr += pgsz) {
     // snprintf(msg, 4096, "\tundef(addr=%p, length=%lu)", addr, pgsz);
