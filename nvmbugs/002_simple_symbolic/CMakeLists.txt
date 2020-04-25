@@ -7,6 +7,12 @@ klee_add_test_object(
 ) 
 
 klee_add_test_object(
+  TARGET 002_SimpleSymbolic
+  SOURCES simple_symbolic.c
+  EXTRA_OPTIONS -mclwb
+) 
+
+klee_add_test_object(
   TARGET 002_TwoObjectTest
   SOURCES symbolic_two_object.c
   EXTRA_OPTIONS -mclwb

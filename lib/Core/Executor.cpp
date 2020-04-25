@@ -3958,63 +3958,136 @@ void Executor::executeUpdateNvmInfo(ExecutionState &state,
 }
 
 void Executor::executePersistentMemoryFlush(ExecutionState &state,
+                                            const MemoryObject *mo,
+                                            PersistentState *ps,
+                                            ref<Expr> offset) {
+  // Check if offset already flushed.
+  ref<Expr> check = ps->getIsOffsetPersistedExpr(offset,
+                                                 true /* allow pending */);
+
+  // TODO: change to mustBeTrue or something
+  StatePair isAlreadyPersisted = fork(state, check, true);
+
+  auto *errState = isAlreadyPersisted.first;
+  auto *goodState = isAlreadyPersisted.second;
+
+  // Warn if already persisted.
+  if (errState) {
+    const ObjectState *os = errState->addressSpace.findObject(mo);
+    assert(os);
+    ObjectState *wos = errState->addressSpace.getWriteable(mo, os);
+    assert(wos);
+    PersistentState *ps = dyn_cast<PersistentState>(wos);
+    assert(ps);
+    /* klee_warning("Unnecessary Flush"); */
+
+    // avoid masking later bugs; emit error, but continue
+    emitPmemError(*errState, ps->getLastFlush(solver, *errState, offset));
+  }
+
+  // Process normally if not yet persisted.
+  if (goodState) {
+    const ObjectState *os = goodState->addressSpace.findObject(mo);
+    assert(os);
+    ObjectState *wos = goodState->addressSpace.getWriteable(mo, os);
+    assert(wos);
+    PersistentState *ps = dyn_cast<PersistentState>(wos);
+    assert(ps);
+    ps->persistCacheLineAtOffset(state, offset);
+    /* klee_warning("Good Flush"); */
+  }
+}
+
+void Executor::executePersistentMemoryFlush(ExecutionState &state,
                                             ref<Expr> address) {
   address = optimizer.optimizeExpr(address, true);
 
-  ObjectPair op;
-  bool success;
+  ref<Expr> rangeBegin = memory->alignToCache(address);
+  ref<Expr> rangeEnd = AddExpr::create(rangeBegin,
+                                       memory->getCacheAlignmentExpr());
+
+  ResolutionList rl;
   solver->setTimeout(coreSolverTimeout);
-  if (!state.addressSpace.resolveOne(state, solver, address, op, success)) {
-    address = toConstant(state, address, "resolveOne failure");
-    success = state.addressSpace.resolveOne(cast<ConstantExpr>(address), op);
-  }
+  bool incomplete = state.addressSpace.resolveRange(state, solver,
+                                                    rangeBegin, rangeEnd,
+                                                    rl, 0, coreSolverTimeout);
   solver->setTimeout(time::Span());
 
-  if (success) {
-    const MemoryObject *mo = op.first;
-    const ObjectState *os = op.second;
+  // XXX bgreeves debugging
+  /* std::string msg; */
+  /* llvm::raw_string_ostream out(msg); */
+  /* out << "ResolutionList[size=" << rl.size() << "]: "; */
+  /* for (ResolutionList::iterator i = rl.begin(), ie = rl.end(); i != ie; ++i) { */
+  /*   const MemoryObject *mo = i->first; */
+  /*   out << mo->name << "["; */
+  /*   out.write_hex(mo->address); */
+  /*   out << "] "; */
+  /* } */
+  /* klee_warning("%s", out.str().c_str()); */
+
+  if (incomplete) {
+    terminateStateEarly(state, "Query timed out (resolve).");
+  } else if (rl.empty()) {
+    terminateStateOnError(state, "memory error: out of bound pointer", Ptr,
+                          NULL, getAddressInfo(state, address));
+    return;
+  }
+
+  for (ResolutionList::iterator i = rl.begin(), ie = rl.end(); i != ie; ++i) {
+    const MemoryObject *mo = i->first;
+    const ObjectState *os = i->second;
     if (isPersistentMemory(state, mo)) {
       ObjectState *wos = state.addressSpace.getWriteable(mo, os);
       PersistentState *ps = dyn_cast<PersistentState>(wos);
+
+      // We found this MemoryObject by resolving within a range;
+      // the actual address we're flushing may not fall within the
+      // bounds of the object.
+      // If address < object base, then the object's *first* cache line
+      // still overlaps with the cache line being flushed.
+      // If offset >= object size, then the object's *last* cache line
+      // still overlaps with the cache line being flushed.
+
+      // If address less than object base, flush offset 0
+      ref<Expr> check = UltExpr::create(address, mo->getBaseExpr());
+      StatePair result = fork(state, check, true);
+      ExecutionState *less = result.first;
+      ExecutionState *remaining = result.second;
+      if (less) {
+        ref<Expr> firstByte = ConstantExpr::create(0, Expr::Int32);
+        executePersistentMemoryFlush(*less, mo, ps, firstByte);
+      }
+
+      // Definitely less than?
+      if (!remaining)
+        continue;
+
       ref<Expr> offset = mo->getOffsetExpr(address);
 
-      // Check if offset already flushed.
-      ref<Expr> check = ps->getIsOffsetPersistedExpr(offset,
-                                                     true /* allow pending */);
-
-      StatePair isAlreadyPersisted = fork(state, check, true);
-
-      auto *errState = isAlreadyPersisted.first;
-      auto *goodState = isAlreadyPersisted.second;
-
-      // Warn if already persisted.
-      if (errState) {
-        os = errState->addressSpace.findObject(mo);
-        assert(os);
-        wos = errState->addressSpace.getWriteable(mo, os);
-        assert(wos);
-        ps = dyn_cast<PersistentState>(wos);
-        assert(ps);
-        // llvm::errs() << "Unnecessary Flush\n";
-
-        // avoid masking later bugs; emit error, but continue
-        emitPmemError(*errState, ps->getLastFlush(solver, *errState, offset));
+      // If offset >= size, flush the last offset
+      check = UgeExpr::create(offset, mo->getSizeExpr());
+      result = fork(*remaining, check, true);
+      ExecutionState *greater = result.first;
+      remaining = result.second;
+      if (greater) {
+        ref<Expr> lastByte = ConstantExpr::create(mo->size - 1, Expr::Int32);
+        executePersistentMemoryFlush(*greater, mo, ps, lastByte);
       }
 
-      // Process normally if not yet persisted.
-      if (goodState) {
-        os = goodState->addressSpace.findObject(mo);
-        assert(os);
-        wos = goodState->addressSpace.getWriteable(mo, os);
-        assert(wos);
-        ps = dyn_cast<PersistentState>(wos);
-        assert(ps);
-        ps->persistCacheLineAtOffset(state, offset);
-        // llvm::errs() << "Good Flush\n";
+      // Definitely not in bounds?
+      if (!remaining)
+        continue;
+
+      executePersistentMemoryFlush(*remaining, mo, ps, offset);
+
+    } else {
+      if (ConstantExpr *CE = dyn_cast<ConstantExpr>(address)) {
+        klee_warning("Flushing volatile memory at address %lx",
+                     CE->getZExtValue());
+      } else {
+        klee_warning("Flushing volatile memory at symbolic address");
       }
     }
-  } else {
-    terminateStateEarly(state, "Cannot singly resolve address to memory object");
   }
 }
 

@@ -56,6 +56,17 @@ namespace klee {
                              ref<Expr> p, const ObjectPair &op,
                              ResolutionList &rl, unsigned maxResolutions) const;
 
+    /// Check if the memory object in the given object pair overlaps the
+    /// range `[begin, end)`. If so, add it to the given resolution list.
+    ///
+    /// \return 1 iff the resolution is incomplete (`maxResolutions`
+    /// is non-zero and it was reached, or a query timed out), 0 iff
+    /// the resolution is complete (object is definitely in range),
+    /// and 2 otherwise.
+    int checkObjectInRange(ExecutionState &state, TimingSolver *solver,
+                           ref<Expr> begin, ref<Expr> end, const ObjectPair &op,
+                           ResolutionList &rl, unsigned maxResolutions) const;
+
   public:
     /// The MemoryObject -> ObjectState map that constitutes the
     /// address space.
@@ -102,6 +113,19 @@ namespace klee {
                  ResolutionList &rl, 
                  unsigned maxResolutions=0,
                  time::Span timeout=time::Span()) const;
+
+    /// Resolve range `[begin, end)` to a list of `ObjectPairs` that
+    /// could overlap that range. If `maxResolutions` is non-zero then
+    /// no more than that many pairs will be returned.
+    ///
+    /// \return true iff the resolution is incomplete (`maxResolutions`
+    /// is non-zero and it was reached, or a query timed out).
+    bool resolveRange(ExecutionState &state,
+                      TimingSolver *solver,
+                      ref<Expr> begin, ref<Expr> end,
+                      ResolutionList &rl, 
+                      unsigned maxResolutions=0,
+                      time::Span timeout=time::Span()) const;
 
     /***/
 

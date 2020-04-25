@@ -10,6 +10,8 @@
 #ifndef KLEE_MEMORYMANAGER_H
 #define KLEE_MEMORYMANAGER_H
 
+#include "klee/Expr/Expr.h"
+
 #include <cstddef>
 #include <set>
 #include <cstdint>
@@ -59,7 +61,9 @@ public:
   size_t getUsedDeterministicSize();
 
   size_t getCacheAlignment() const { return cacheAlignment; }
+  ref<Expr> getCacheAlignmentExpr(Expr::Width width=Expr::Int64) const;
   uint64_t alignToCache(uint64_t addr) const;
+  ref<Expr> alignToCache(ref<Expr> addr) const;
   size_t getSizeInCacheLines(size_t sizeInBytes) const;
 };
 

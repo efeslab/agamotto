@@ -276,6 +276,98 @@ bool AddressSpace::resolve(ExecutionState &state, TimingSolver *solver,
   return false;
 }
 
+int AddressSpace::checkObjectInRange(ExecutionState &state, TimingSolver *solver,
+                                      ref<Expr> begin, ref<Expr> end,
+                                      const ObjectPair &op, ResolutionList &rl,
+                                      unsigned maxResolutions) const {
+  const MemoryObject *mo = op.first;
+  ref<Expr> objectBase = mo->getBaseExpr();
+  ref<Expr> objectEnd = AddExpr::create(objectBase, mo->getSizeExpr());
+
+  ref<Expr> inRange = AndExpr::create(UltExpr::create(begin, objectEnd),
+                                      UgtExpr::create(end, objectBase));
+
+  bool mustBeTrue;
+  if (!solver->mustBeTrue(state, inRange, mustBeTrue))
+    return 1;
+
+  if (mustBeTrue) {
+    rl.push_back(op);
+    return 0;
+  }
+
+  return 2;
+}
+
+bool AddressSpace::resolveRange(ExecutionState &state, TimingSolver *solver,
+                                ref<Expr> begin, ref<Expr> end,
+                                ResolutionList &rl, unsigned maxResolutions,
+                                time::Span timeout) const {
+  TimerStatIncrementer timer(stats::resolveTime);
+
+  // Sanity check range
+  bool mustBeTrue;
+  if (!solver->mustBeTrue(state, UltExpr::create(begin, end),
+                          mustBeTrue)) {
+    assert(false && "FIXME: Unhandled solver failure");
+  }
+  assert(mustBeTrue && "resolveRange: begin must be < end");
+
+  ref<ConstantExpr> cex;
+  if (!solver->getValue(state, begin, cex))
+    return true;
+  uint64_t example = cex->getZExtValue();
+  MemoryObject hack(example);
+
+  MemoryMap::iterator oi = objects.upper_bound(&hack);
+  MemoryMap::iterator obegin = objects.begin();
+  MemoryMap::iterator oend = objects.end();
+
+  MemoryMap::iterator start = oi;
+  // search backwards, start with one minus because this
+  // is the object that p *should* be within, which means we
+  // get write off the end with 4 queries
+  while (oi != obegin) {
+    --oi;
+    const MemoryObject *mo = oi->first;
+    if (timeout && timeout < timer.delta())
+      return true;
+
+    int incomplete =
+        checkObjectInRange(state, solver, begin, end, *oi, rl, maxResolutions);
+    if (incomplete == 1)
+      return true;
+
+    bool mustBeTrue;
+    if (!solver->mustBeTrue(state, UgeExpr::create(begin, mo->getBaseExpr()),
+                            mustBeTrue))
+      return true;
+    if (mustBeTrue)
+      break;
+  }
+
+  // search forwards
+  for (oi = start; oi != oend; ++oi) {
+    const MemoryObject *mo = oi->first;
+    if (timeout && timeout < timer.delta())
+      return true;
+
+    bool mustBeTrue;
+    if (!solver->mustBeTrue(state, UltExpr::create(end, mo->getBaseExpr()),
+                            mustBeTrue))
+      return true;
+    if (mustBeTrue)
+      break;
+
+    int incomplete =
+        checkObjectInRange(state, solver, begin, end, *oi, rl, maxResolutions);
+    if (incomplete == 1)
+      return true;
+  }
+
+  return false;
+}
+
 // These two are pretty big hack so we can sort of pass memory back
 // and forth to externals. They work by abusing the concrete cache
 // store inside of the object states, which allows them to

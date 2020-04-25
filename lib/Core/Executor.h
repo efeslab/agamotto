@@ -331,6 +331,10 @@ private:
 
   void executePersistentMemoryFlush(ExecutionState &state,
                                     ref<Expr> address);
+  void executePersistentMemoryFlush(ExecutionState &state,
+                                    const MemoryObject *mo,
+                                    PersistentState *ps,
+                                    ref<Expr> offset);
 
   void executePersistentMemoryFence(ExecutionState &state);
 
