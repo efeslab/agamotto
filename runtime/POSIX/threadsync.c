@@ -291,10 +291,12 @@ int pthread_cond_init(pthread_cond_t *cond, const pthread_condattr_t *attr) {
 }
 
 int pthread_cond_destroy(pthread_cond_t *cond) {
+#if 0
   condvar_data_t *cdata = _get_condvar_data(cond);
 
   free(cdata);
 
+#endif
   return 0;
 }
 
@@ -334,6 +336,7 @@ static int _atomic_cond_wait(condvar_data_t *cdata, mutex_data_t *mdata) {
 }
 
 int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex) {
+#if 0
   condvar_data_t *cdata = _get_condvar_data(cond);
   mutex_data_t *mdata = _get_mutex_data(mutex);
 
@@ -343,6 +346,8 @@ int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex) {
     __thread_preempt(0);
 
   return res;
+#endif
+  return 0;
 }
 
 static int _atomic_cond_notify(condvar_data_t *cdata, char all) {

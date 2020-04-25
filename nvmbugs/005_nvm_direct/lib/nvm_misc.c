@@ -329,9 +329,22 @@ void nvm_flush(
      if (!fc)
         return;
 
+    extern char* header_name_loc;
+    extern size_t header_name_sz;
+    void *x1 = ptr, *x2 = ptr+bytes;
+    void *y1 = header_name_loc, *y2 = header_name_loc+header_name_sz;
+    if (x1 <= y2 && y1 <= x2) {
+      printf("NVM_FLUSH INVOKED CONTAINS HEADER_NAME_LOC!!!\n");
+      printf("\theader_name_loc: %p\n", header_name_loc);
+      printf("\tnvm_flush invoked on %lu bytes from %p to %p\n",
+          bytes, ptr, ptr+bytes);
+      printf("\n\n");
+    }
     /* get the address of the cache line as a uint64_t and the number of
      * cache lines to flush. */
+    //stolerbs: 64 bytes per cacheline
     uint64_t clsz = td->params.cache_line; // cache line size
+    //stolerbs: cacheline-aligned of ptr
     uint64_t cl = (uint64_t)ptr & ~(clsz - 1); // cache line address
     uint64_t cnt = ((uint64_t)ptr + bytes - cl + clsz - 1) / clsz;
 
@@ -374,6 +387,9 @@ void nvm_flush(
         /* next slot. May wrap to slot zero */
         if (++index >= td->params.flush_cache_sz)
             index = 0;
+        // stolerbs: BUG: wtf, doesn't cl need to be incremented??
+        //PATCH:
+        cl += clsz;
     }
 }
 #endif //NVM_EXT
@@ -515,9 +531,9 @@ void nvm_persist()
 
     /* flush the processor caches if necessary */
     if (fc != 0) {
-      printf("nvm_persist: processor cache being flushed!\n");
+      //printf("nvm_persist: processor cache being flushed!\n");
     } else {
-      printf("nvm_persist: processor cache no flush\n");
+      //printf("nvm_persist: processor cache no flush\n");
     }
     if (fc != 0)
     {

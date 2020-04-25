@@ -2932,7 +2932,10 @@ static void nvm_freelist_link(nvm_heap *heap, nvm_blk *nvb)
         NVM_UNDO(*fl);
         nvm_blk_set(&fl->head, nvb);
         nvm_blk_set(&fl->tail, nvb);
-        nvm_flush(fl, sizeof(fl));
+        //stolerbs: BUG, doesn't flush fully
+        //nvm_flush(fl, sizeof(fl));
+        //stolerbs: PATCH
+        nvm_flush(fl, sizeof(*fl)); 
         nvm_blk_set(&nvb->group.fwrd, NULL);
         nvm_blk_set(&nvb->group.back, NULL);
     }

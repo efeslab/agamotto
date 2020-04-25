@@ -870,7 +870,10 @@ void nvm_txend()
      * its state to reserved so it does not go on the freelist. This can only
      * happen if the transaction was in use when the maximum number of
      * transactions is reduced by nvm_set_txconfig. */
+    // stolerbs: BUG
     tx->state = reserved ? nvm_reserved_state : nvm_idle_state;
+    // stolerbs: PATCH
+    nvm_flush(&(tx->state), sizeof(tx->state));
     nvm_persist();
     td->persist_tx++;
 
@@ -5373,6 +5376,9 @@ void nvm_recover(nvm_desc desc)
 
             /* add to the list of free undo blocks */
             nvm_undo_blk_set(&ub->link, ttd->free_undo);
+            //stolerbs: BUG, missing flush
+            //stolerbs: PATCH
+            nvm_flush(&ub->link, sizeof(ub->link));
             ttd->free_undo = ub;
         }
     }
