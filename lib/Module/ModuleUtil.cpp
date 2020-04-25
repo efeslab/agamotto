@@ -203,26 +203,26 @@ removeMultipleSymbols(llvm::Module *Dest, std::unique_ptr<llvm::Module> Src) {
 
   // Start deleting symbols
   for (const std::string &symb : multSymbols) {
-    if (symb == "fstat") {
-      klee_warning_once(&symb, "found %s", symb.c_str());
-      errs() << *(Function*)Src->getNamedValue(symb);
-      errs() << *(Function*)Dest->getNamedValue(symb);
-    }
-    llvm::GlobalValue *gv = Dest->getNamedValue(symb);
-    if (isa<ArrayType>(gv->getValueType())) {
+    llvm::GlobalValue *gvDest = Dest->getNamedValue(symb);
+    llvm::GlobalValue *gvSrc  = Src->getNamedValue(symb);
+
+    if (isa<ArrayType>(gvDest->getValueType())) {
       // These guys have special linkage.
       klee_warning("Symbol '%s' needs appending linkage (%d => %d).", 
-                   symb.c_str(), gv->getLinkage(),
+                   symb.c_str(), gvDest->getLinkage(),
                    llvm::GlobalValue::LinkageTypes::AppendingLinkage);
-      gv->setLinkage(llvm::GlobalValue::LinkageTypes::AppendingLinkage);
-    } else if (gv->getLinkage() < llvm::GlobalValue::LinkageTypes::LinkOnceODRLinkage) {
+      gvDest->setLinkage(llvm::GlobalValue::LinkageTypes::AppendingLinkage);
+      continue;
+    } else if (gvSrc->getLinkage() < llvm::GlobalValue::LinkageTypes::LinkOnceODRLinkage) {
       klee_warning("Symbol '%s' is multiply defined (modules %s and %s)."
                  " Deleting one copy from module %s (%d).", symb.c_str(),
                  Dest->getName().str().c_str(), Src->getName().str().c_str(),
-                 Dest->getName().str().c_str(), gv->getLinkage());
-      gv->setLinkage(llvm::GlobalValue::LinkageTypes::LinkOnceODRLinkage);
+                 Dest->getName().str().c_str(), gvDest->getLinkage());
+      gvSrc->setLinkage(llvm::GlobalValue::LinkageTypes::WeakODRLinkage);
+      gvDest->setLinkage(llvm::GlobalValue::LinkageTypes::ExternalLinkage);
+      // assert(gvDest->getLinkage() < gvSrc->getLinkage());
+      // llvm::errs() << *gvSrc << "now weak, " << *gvDest << "now external\n";
     }
-    // gv->eraseFromParent();
   }
 
   return Src;

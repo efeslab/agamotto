@@ -1142,6 +1142,7 @@ int listen(int sockfd, int backlog) {
     sock->listen = _stream_create(backlog * sizeof(socket_t*), 1);
   }
 
+  posix_debug_msg("Attempting to trigger socket handler on sock FD: %d\n", sockfd);
   TRIGGER_SOCKET_HANDLER(post_listen, sock, backlog);
   return 0;
 }
