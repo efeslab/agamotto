@@ -191,8 +191,20 @@ size_t MemoryManager::getUsedDeterministicSize() {
   return nextFreeSlot - deterministicSpace;
 }
 
+ref<Expr> MemoryManager::getCacheAlignmentExpr(Expr::Width width) const {
+  return ConstantExpr::create(getCacheAlignment(), width);
+}
+
 uint64_t MemoryManager::alignToCache(uint64_t addr) const {
-  return addr - (addr % cacheAlignment);
+  return addr & ~(getCacheAlignment() - 1);
+}
+
+ref<Expr> MemoryManager::alignToCache(ref<Expr> addr) const {
+  Expr::Width width = addr->getWidth();
+  ref<Expr> alignment = getCacheAlignmentExpr(width);
+  ref<Expr> mask = NotExpr::create(SubExpr::create(alignment,
+                                                   ConstantExpr::create(1, width)));
+  return AndExpr::create(addr, mask);
 }
 
 size_t MemoryManager::getSizeInCacheLines(size_t sizeInBytes) const {
