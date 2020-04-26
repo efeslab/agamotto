@@ -207,3 +207,20 @@ int pthread_once(pthread_once_t *once_control, void (*init_routine)(void)) {
 int pthread_equal(pthread_t thread1, pthread_t thread2) {
   return thread1 == thread2;
 }
+
+// Since we don't support multi-process, all pids are 0.
+
+pid_t getpid(void) {
+  return 0;
+}
+
+int kill(pid_t pid, int sig) {
+  if (pid == 0) {
+    klee_warning("killing pid 0, which we interpret as a shutdown");
+    exit(0);
+  }
+  
+  klee_warning("ignoring (EPERM)");
+  errno = EPERM;
+  return -1;
+}

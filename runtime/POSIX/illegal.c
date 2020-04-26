@@ -19,12 +19,6 @@
 void klee_warning(const char*);
 void klee_warning_once(const char*);
 
-int kill(pid_t pid, int sig) {
-  klee_warning("ignoring (EPERM)");
-  errno = EPERM;
-  return -1;
-}
-
 #ifndef __FreeBSD__
 int _setjmp (struct __jmp_buf_tag __env[1]) __attribute__((weak));
 int _setjmp (struct __jmp_buf_tag __env[1]) {

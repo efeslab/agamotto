@@ -1,6 +1,7 @@
 #include "sockets_simulator.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <pthread.h>
 
 char useSymbolicHandler;
@@ -89,15 +90,27 @@ static void *memcached_1_5_13_handler_post_listen_newthread(void *_arg) {
                             sizeof(server_addr));
   assert(ret == 0 && "memcached_1_5_13 listen handler fails to connect to "
                       "the server socket");
-  unsigned char payload[] = {0x6c, 0x72, 0x75, 0x20, 0x6d, 0x6f, 0x64,
-                              0x65, 0x0a, 0x6f, 0xb1, 0xb4, 0x00, 0x6c,
-                              0x72, 0x75, 0x64, 0x65, 0xea, 0x07, 0x6d,
-                              0x4e, 0x4f, 0x54, 0x5f};
-  posix_debug_msg("Attempting to write the payload from the client socket\n");
-  if (useSymbolicHandler)
-    klee_make_symbolic(payload, sizeof(payload), "memcached1_5_13_payload");
-  ret = _write_socket(self_hdl->client_sock, payload, sizeof(payload));
-  posix_debug_msg("payload write result %d\n", ret);
+  // char payload[1024];
+  // const char val[] = "the_value";
+  // snprintf(payload, sizeof(payload), "set the_key 1 0 %lu\n", sizeof(val));
+  const char payload[] = "set the_key 1 0 1\r\na\r\n";
+  // if (useSymbolicHandler) {
+  //   klee_make_symbolic(payload, sizeof(payload), "memcached1_5_13_payload");
+  //   strncpy(payload, "set", 3);
+  // }
+  ret = _write_socket(self_hdl->client_sock, payload, sizeof(payload) - 1);
+  posix_debug_msg("payload (set) write result %d\n", ret);
+
+  // sleep(30);
+
+  // snprintf(payload, sizeof(payload), "%s\n", val);
+  // ret = _write_socket(self_hdl->client_sock, payload, sizeof(payload));
+  // posix_debug_msg("payload (val) write result %d\n", ret);
+
+  // snprintf(payload, sizeof(payload), "shutdown\r\n");
+  const char shutdown[] = "shutdown\r\n";
+  ret = _write_socket(self_hdl->client_sock, shutdown, sizeof(shutdown));
+  posix_debug_msg("payload (shutdown) write result %d\n", ret);
   return NULL;
 }
 
