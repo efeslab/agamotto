@@ -273,6 +273,7 @@ protected:
 /// dirtiness/persistedness of each cache line that the MemoryObject spans.
 class PersistentState : public ObjectState {
   private:
+    TimingSolver *solver;
     /// Both of these UpdateLists share one underlying symbolic bool Array.
     /// The Array has one entry per cache line: 1 if persisted, 0 if not.
     /// Each write and each cache line flush are tracked as updates to this array.
@@ -387,7 +388,7 @@ class PersistentState : public ObjectState {
     Expr::Width rootCauseWidth;
     // We store all of the unique root cause locations. We can't use the pointer
     // due to copies, but we can make unique IDs
-    RootCauseManager rootCauses;
+    std::shared_ptr<RootCauseManager> rootCauseMgr;
 
     /// DO NOT USE. Use clone() instead.
     PersistentState(const PersistentState &ps);
@@ -401,7 +402,9 @@ class PersistentState : public ObjectState {
     ///
     /// We now take the state to add the array names to state.arrayNames and 
     /// fail if any arrays we create internally already exist.
-    PersistentState(ExecutionState &state, const ObjectState *os);
+    PersistentState(TimingSolver *solver, 
+                    ExecutionState &state, 
+                    const ObjectState *os);
 
     ObjectState *clone() const override;
 
@@ -450,21 +453,26 @@ class PersistentState : public ObjectState {
     void clearRootCauses();
 
     /**
-     * Get the last flush to the location at a given offset. Helps get
-     * the root cause for unnecessary flushes.
+     * If we have duplicate flushes/otherwise, we mark the flush at that 
+     * location as a bug. We also return all the IDs we just marked as bugs 
+     * for immediate test case generation.
      */
-    std::unordered_set<std::string> getLastFlush(TimingSolver *solver, 
-                                                 ExecutionState &state,
-                                                 ref<Expr> offset) const;
+    std::unordered_set<uint64_t> 
+    markLastFlushAsBug(ExecutionState &state,
+                       ref<Expr> offset) const;
 
     /**
-     * Get all the unflushed writes remaining.
+     * Mark all the writes that are unpersisted as bugs.
      */
-    std::unordered_set<std::string> getReasonsNotPersisted(TimingSolver *solver, 
-                                                           ExecutionState &state) const;
+    std::unordered_set<uint64_t> 
+    markNonPersistedWritesAsBugs(ExecutionState &state) const;
 
     ref<ConstantExpr> createRootCauseIdExpr(const ExecutionState &state, 
                                             RootCauseReason reason);
+
+    ref<ConstantExpr> createRootCauseIdExpr(const ExecutionState &state, 
+                                            RootCauseReason reason,
+                                            std::unordered_set<uint64_t> prev);
 
     // check from PENDING cache line updates if it's clean or not
     ref<Expr> isOffsetAlreadyPersisted(ref<Expr> offset) const;
@@ -482,18 +490,16 @@ class PersistentState : public ObjectState {
     ref<Expr> isCacheLinePersisted(unsigned offset, bool pending=false) const;
     ref<Expr> isCacheLinePersisted(ref<Expr> offset, bool pending=false) const;
 
-    std::unordered_set<std::string> getRootCauses(TimingSolver *solver, 
-                                                  ExecutionState &state,
-                                                  const UpdateList &ul) const;
+    std::unordered_set<uint64_t> getRootCauses(ExecutionState &state,
+                                               const UpdateList &ul) const;
 
-    std::unordered_set<std::string> getRootCause(TimingSolver *solver, 
-                                                 ExecutionState &state,
-                                                 const UpdateList &ul, 
-                                                 unsigned offset) const;
-    std::unordered_set<std::string> getRootCause(TimingSolver *solver, 
-                                                 ExecutionState &state, 
-                                                 const UpdateList &ul,
-                                                 ref<Expr> offset) const;
+    std::unordered_set<uint64_t> getRootCause(const ExecutionState &state,
+                                              const UpdateList &ul, 
+                                              unsigned offset) const;
+
+    std::unordered_set<uint64_t> getRootCause(const ExecutionState &state, 
+                                              const UpdateList &ul,
+                                              ref<Expr> offset) const;
 
     static ref<Expr> ptrAsExpr(void *kinst);
 

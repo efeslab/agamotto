@@ -40,6 +40,7 @@ class MemoryObject;
 class PTreeNode;
 struct InstructionInfo;
 class Executor;
+class RootCauseManager;
 
 llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const MemoryMap &mm);
 
@@ -73,11 +74,14 @@ public:
   /// @brief (iangneal): Information about the current state of NVM and the predicted state
   std::shared_ptr<NvmHeuristicInfo> nvmInfo;
 
+  /// @brief (iangneal): Root cause tracking for NVM bugs. Could be extended
+  std::shared_ptr<RootCauseManager> rootCauseMgr;
+
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;
 
   /// @brief Constraints collected so far
-  ConstraintManager constraints;
+  mutable ConstraintManager constraints;
 
   /// Statistics and information
 

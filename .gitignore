@@ -45,3 +45,7 @@ nvmbugs/**/*.bc
 
 # Google test
 googletest-release-*
+
+# VSCode
+*.code-workspace
+settings.json

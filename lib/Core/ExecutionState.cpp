@@ -26,6 +26,7 @@
 
 #include "../Core/UserSearcher.h"
 #include "Executor.h"
+#include "RootCause.h"
 
 #include <cassert>
 #include <iomanip>
@@ -64,6 +65,7 @@ void ExecutionState::setupTime() {
 
 ExecutionState::ExecutionState(Executor *executor, KFunction *kf) :
     wlistCounter(1),
+    rootCauseMgr(executor->rootCauseMgr),
     depth(0),
     instsSinceCovNew(0),
     coveredNew(false),
@@ -104,6 +106,10 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     waitingLists(state.waitingLists),
     wlistCounter(state.wlistCounter),
     stateTime(state.stateTime),
+
+    nvmInfo(nullptr),
+    rootCauseMgr(state.rootCauseMgr),
+
     addressSpace(state.addressSpace),
     constraints(state.constraints),
 

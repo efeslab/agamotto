@@ -446,6 +446,7 @@ const char *Executor::TerminateReasonNames[] = {
 Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
                    InterpreterHandler *ih)
     : Interpreter(opts), interpreterHandler(ih), searcher(0),
+      rootCauseMgr(new RootCauseManager()),
       externalDispatcher(new ExternalDispatcher(ctx)), statsTracker(0),
       pathWriter(0), symPathWriter(0), specialFunctionHandler(0), timers{time::Span(TimerInterval)},
       replayKTest(0), replayPath(0), usingSeeds(0),
@@ -3025,6 +3026,15 @@ void Executor::doDumpStates() {
   updateStates(nullptr);
 }
 
+void Executor::dumpRootCauses() {
+  auto streamPtr = interpreterHandler->openOutputFile("all.pmem.err");
+  assert(streamPtr && "could not open file!");
+  auto &stream = *streamPtr;
+  
+  interpreterHandler->getInfoStream() << rootCauseMgr->getSummary();
+  stream << rootCauseMgr->str();
+}
+
 void Executor::run(ExecutionState &initialState) {
   bindModuleConstants();
 
@@ -3046,6 +3056,7 @@ void Executor::run(ExecutionState &initialState) {
     while (!seedMap.empty()) {
       if (haltExecution) {
         doDumpStates();
+        dumpRootCauses();
         return;
       }
 
@@ -3139,6 +3150,7 @@ void Executor::run(ExecutionState &initialState) {
   searcher = nullptr;
 
   doDumpStates();
+  dumpRootCauses();
 }
 
 std::string Executor::getAddressInfo(ExecutionState &state,
@@ -3927,7 +3939,7 @@ void Executor::executeMarkPersistent(ExecutionState &state,
   assert(os && "Cannot mark unbound MemoryObject persistent");
 
   // Construct a persistent ObjectState and bind it to the memory object.
-  state.addressSpace.bindObject(mo, new PersistentState(state, os));
+  state.addressSpace.bindObject(mo, new PersistentState(solver, state, os));
 
   /* std::string name; */
   /* mo->getAllocInfo(name); */
@@ -3971,7 +3983,13 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
   // Warn if already flushed, otherwise process normally.
   if (isAlreadyPersisted) {
     /* klee_warning("Unnecessary Flush"); */
-    emitPmemError(state, ps->getLastFlush(solver, state, offset));
+    // avoid masking later bugs; emit error, but continue
+    auto errIds = ps->markLastFlushAsBug(*errState, offset);
+    std::unordered_set<std::string> errStrs;
+    for (auto id : errIds) {
+      errStrs.insert(rootCauseMgr->getRootCauseString(id));
+    }
+    emitPmemError(*errState, errStrs);
   } else {
     /* klee_warning("Good Flush"); */
     ps->persistCacheLineAtOffset(state, offset);
@@ -4044,6 +4062,7 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
 
       ref<Expr> offset = mo->getOffsetExpr(address);
 
+<<<<<<< HEAD
       // If offset >= size, flush the last offset
       check = UgeExpr::create(offset, mo->getSizeExpr());
       result = fork(*remaining, check, true);
@@ -4052,6 +4071,15 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
       if (greater) {
         ref<Expr> lastByte = ConstantExpr::create(mo->size - 1, Expr::Int32);
         executePersistentMemoryFlush(*greater, mo, ps, lastByte);
+=======
+        // avoid masking later bugs; emit error, but continue
+        auto errIds = ps->markLastFlushAsBug(*errState, offset);
+        std::unordered_set<std::string> errStrs;
+        for (auto id : errIds) {
+          errStrs.insert(rootCauseMgr->getRootCauseString(id));
+        }
+        emitPmemError(*errState, errStrs);
+>>>>>>> Extend root causes
       }
 
       // Definitely not in bounds?
@@ -4106,8 +4134,10 @@ bool Executor::getPersistenceErrors(ExecutionState &state,
   state.constraints.removeConstraint(inBoundsConstraint);
 
   if (!isPersisted) {
-    auto rootCauses = ps->getReasonsNotPersisted(solver, state);
-    errors.insert(rootCauses.begin(), rootCauses.end());
+    auto rootCauses = ps->markNonPersistedWritesAsBugs(state);
+    for (auto id : rootCauses) {
+      errors.insert(rootCauseMgr->getRootCauseString(id));
+    }
   }
 
   return !isPersisted;
@@ -4201,7 +4231,17 @@ void Executor::executeThreadExit(ExecutionState &state) {
   thrIt->second.enabled = false;                                                 
                                                                                   
   if (!schedule(state, false))                                                   
-    return;                                                                      
+    return;
+
+  /**
+   * Currently, thread scheduling only occurs at synchronization points.
+   * It makes sense to me that if a thread has unpersisted writes between
+   * synchronization points, something may be wrong.
+   */
+  std::unordered_set<std::string> errors;
+  if (getAllPersistenceErrors(state, errors)) {
+    emitPmemError(state, errors);
+  }                                                                   
   state.terminateThread(thrIt);                                                  
 }   
 
