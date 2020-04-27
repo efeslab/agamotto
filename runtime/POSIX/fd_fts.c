@@ -12,6 +12,7 @@
 #include <stdlib.h>
 
 #include "fd_fts.h"
+#include "common.h"
 
 
 FTS *fts_open(char * const *path_argv, int options,

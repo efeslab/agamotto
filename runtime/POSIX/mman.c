@@ -55,20 +55,6 @@ typedef struct {
 static mmap_entry_t mmap_entries[MAX_FDS];
 static int next_free = 0;
 
-static void insert_entry(disk_file_t *df, void *start, void *end) {
-  if (next_free >= MAX_FDS) {
-    klee_error("too many mmaps!");
-  }
-
-  if (find_index(start, end) > 0) return;
-
-  mmap_entries[next_free].start = start;
-  mmap_entries[next_free].end = end;
-  mmap_entries[next_free].df = df;
-  
-  ++next_free;
-}
-
 static int find_index(void *start, void *end) {
   int i;
   /**
@@ -100,6 +86,19 @@ static disk_file_t *get_mmap_file(int index) {
   return mmap_entries[index].df;
 }
 
+static void insert_entry(disk_file_t *df, void *start, void *end) {
+  if (next_free >= MAX_FDS) {
+    klee_error("too many mmaps!");
+  }
+
+  if (find_index(start, end) > 0) return;
+
+  mmap_entries[next_free].start = start;
+  mmap_entries[next_free].end = end;
+  mmap_entries[next_free].df = df;
+  
+  ++next_free;
+}
 
 static void remove_entry(int index) {
   int i;
