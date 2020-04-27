@@ -1417,7 +1417,7 @@ void Executor::executeCall(ExecutionState &state,
       Expr::Width WordSize = Context::get().getPointerWidth();
       if (WordSize == Expr::Int32) {
         executeMemoryOperation(state, true, arguments[0],
-                               sf.varargs->getBaseExpr(), ki);
+                               sf.varargs->getBaseExpr(), nullptr);
       } else {
         assert(WordSize == Expr::Int64 && "Unknown word size!");
 
@@ -1425,19 +1425,19 @@ void Executor::executeCall(ExecutionState &state,
         // instead of implementing it, we can do a simple hack: just
         // make a function believe that all varargs are on stack.
         executeMemoryOperation(state, true, arguments[0],
-                               ConstantExpr::create(48, 32), ki); // gp_offset
+                               ConstantExpr::create(48, 32), nullptr); // gp_offset
         executeMemoryOperation(state, true,
                                AddExpr::create(arguments[0],
                                                ConstantExpr::create(4, 64)),
-                               ConstantExpr::create(304, 32), ki); // fp_offset
+                               ConstantExpr::create(304, 32), nullptr); // fp_offset
         executeMemoryOperation(state, true,
                                AddExpr::create(arguments[0],
                                                ConstantExpr::create(8, 64)),
-                               sf.varargs->getBaseExpr(), ki); // overflow_arg_area
+                               sf.varargs->getBaseExpr(), nullptr); // overflow_arg_area
         executeMemoryOperation(state, true,
                                AddExpr::create(arguments[0],
                                                ConstantExpr::create(16, 64)),
-                               ConstantExpr::create(0, 64), ki); // reg_save_area
+                               ConstantExpr::create(0, 64), nullptr); // reg_save_area
       }
       break;
     }
@@ -4104,20 +4104,7 @@ bool Executor::schedule(ExecutionState &state, bool yield) {
   } while (!it->second.enabled);                                                 
   state.scheduleNext(it);                                                        
   thread_uid_t afterSchedule = state.crtThread().tuid;                           
-  // if (pathWriter) {                                                              
-  //   PathEntry pe;                                                                                                                                                                                                                                                                                                                                                                        
-  //   pe.t = PathEntry::SCHEDULE;                                                  
-  //   pe.body.tgtid = afterSchedule.first;                                         
-  //   state.pathOS << pe;                                                          
-  // }                                                                              
-  // if (replayPath) {                                                              
-  //   PathEntry pe;                                                                
-  //   getNextPathEntry(state, pe);                                                 
-  //   assert(pe.t == PathEntry::SCHEDULE && "Wrong PathEntry_t during schedule");  
-  //   if (pe.body.tgtid != afterSchedule.first) {                                  
-  //     klee_message("Ambiguous scheduling, why?");                                
-  //   }                                                                            
-  // }                                                                              
+                                                                             
   if (DebugScheduling) {                                                         
     klee_message("Context Swtich: from %lu to %lu", beforeSchedule.first,        
         afterSchedule.first);                                                    

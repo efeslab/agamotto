@@ -218,10 +218,15 @@ removeMultipleSymbols(llvm::Module *Dest, std::unique_ptr<llvm::Module> Src) {
                  " Deleting one copy from module %s (%d).", symb.c_str(),
                  Dest->getName().str().c_str(), Src->getName().str().c_str(),
                  Dest->getName().str().c_str(), gvDest->getLinkage());
+      /**
+       * Priorities existing symbols (already linked in the destination module)
+       * over symbols from new libraries.
+       * 
+       * XXX: this is just a hack that works for now. An elegant solution needs
+       * to be created at some point, or Shub-Niggurath will return.
+       */
       gvSrc->setLinkage(llvm::GlobalValue::LinkageTypes::WeakODRLinkage);
       gvDest->setLinkage(llvm::GlobalValue::LinkageTypes::ExternalLinkage);
-      // assert(gvDest->getLinkage() < gvSrc->getLinkage());
-      // llvm::errs() << *gvSrc << "now weak, " << *gvDest << "now external\n";
     }
   }
 

@@ -103,7 +103,7 @@ disk_file_t *__get_sym_file(const char *pathname) {
       matched = (strcmp(pathname, sym_name) == 0);
     }
     if (matched) {
-      printf("get symbolic file %s\n", __sym_fs.sym_files[i].name);
+      posix_debug_msg("get symbolic file %s\n", __sym_fs.sym_files[i].name);
       disk_file_t *df = &__sym_fs.sym_files[i];
       if (df->stat->st_ino == 0)
         return NULL;

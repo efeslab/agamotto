@@ -18,7 +18,7 @@ FTS *fts_open(char * const *path_argv, int options,
               int (*compar)(const FTSENT **, const FTSENT **)) {
   int i = 0;
   while (path_argv[i])
-    printf("%s\n", path_argv[i++]);
+    posix_debug_msg("%s\n", path_argv[i++]);
   return NULL;
 }
 

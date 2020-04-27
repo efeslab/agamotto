@@ -147,7 +147,7 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("klee_pmem_check_ordered_before", handleIsOrderedBefore, false),
   add("klee_pmem_is_pmem", handleIsPmem, true),
 
-  /* For mmap? */
+  /* For the good of the MMAP! */
   add("klee_define_fixed_object_from_existing", handleDefineFixedObjectFromExisting, false),
   add("klee_init_concrete_zero", handleInitConcreteZero, false),
   add("klee_undefine_fixed_object", handleUndefineFixedObject, false),

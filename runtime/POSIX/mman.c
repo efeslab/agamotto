@@ -60,6 +60,8 @@ static void insert_entry(disk_file_t *df, void *start, void *end) {
     klee_error("too many mmaps!");
   }
 
+  if (find_index(start, end) > 0) return;
+
   mmap_entries[next_free].start = start;
   mmap_entries[next_free].end = end;
   mmap_entries[next_free].df = df;
