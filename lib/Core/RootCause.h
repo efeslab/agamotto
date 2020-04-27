@@ -93,7 +93,7 @@ namespace klee {
 
       std::string str(void) const;
 
-      std::string fullString(const RootCauseManager &mgr, size_t idWidth) const;
+      std::string fullString(const RootCauseManager &mgr) const;
 
       const char *reasonString(void) const;
 

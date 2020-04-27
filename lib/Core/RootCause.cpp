@@ -78,17 +78,22 @@ std::string RootCauseLocation::str(void) const {
 }
 
 std::string 
-RootCauseLocation::fullString(const RootCauseManager &mgr, size_t idWidth) const {
+RootCauseLocation::fullString(const RootCauseManager &mgr) const {
   std::string infoStr;
   llvm::raw_string_ostream info(infoStr);
 
   info << "Type of modification: " << reasonString() << "\n";
 
-  info << str() << "\nPossible Masked:\n";
+  if (maskedRoots.size()) {
+    info << str() << "\nPossible Masked:\n";
 
-  for (auto id : maskedRoots) {
-    info << "\tID #" << llvm::format_decimal(id, idWidth) << "\n";
+    for (auto id : maskedRoots) {
+      info << "\tID #" << id << "\n";
+    }
+  } else {
+    info << "<no masked bugs>\n";
   }
+  
 
   return info.str();
 }
@@ -148,7 +153,12 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
   RootCauseLocation rcl(state, allocationSite, pc, reason);
 
   /**
-   * We want all the ids so we can flatten.
+   * We want all the ids so we can flatten the masking set (i.e., the masking 
+   * set) tells you all writes this write masks, even if they may mask each 
+   * other.
+   * 
+   * Since we do this each time, each id in ids should be flattened already, so
+   * we shouldn't have to do anything recursively here.
    */
 
   for (auto id : ids) {
@@ -182,10 +192,22 @@ void RootCauseManager::markAsBug(uint64_t id) {
     klee_error("ID %lu is not in our mappings!", id);
   }
 
-  ++idToRoot[id]->occurences;
-  ++totalOccurences;
-  buggyIds.insert(id);
-  assert(totalOccurences > 0 && "overflow!");
+  std::unordered_set<uint64_t> allIds(idToRoot.at(id)->rootCause.getMaskedSet());
+  allIds.insert(id);
+
+  /**
+   * We want to mark all of the masked root cause locations as occurences as 
+   * well. This may result in some overcounting (i.e., some of the unpersisted
+   * writes may be temporary work), but without full semantic information this
+   * is impossible to get 100% accurate.
+   */
+
+  for (auto i : allIds) {
+    ++idToRoot[i]->occurences;
+    ++totalOccurences;
+    buggyIds.insert(i);
+    assert(totalOccurences > 0 && "overflow!");
+  }
 }
 
 std::string RootCauseManager::getRootCauseString(uint64_t id) const {
@@ -218,12 +240,10 @@ std::string RootCauseManager::str(void) const {
 
   info << getSummary();
 
-  size_t width = (size_t)std::ceil(std::log10(buggyIds.size()));
-
   for (const auto &id : buggyIds) {
-    info << "\n(" << bugNo << ") ID #" << llvm::format_decimal(id, width); 
+    info << "\n(" << bugNo << ") ID #" << id; 
     info << " with " << idToRoot.at(id)->occurences << " occurences:\n";
-    info << idToRoot.at(id)->rootCause.fullString(*this, width);
+    info << idToRoot.at(id)->rootCause.fullString(*this);
     bugNo++;
   }
 
