@@ -43,6 +43,7 @@ namespace expr {
       RParen,                   ///< ')'
       RSquare,                  ///< ']'
       Semicolon,                ///< ';'
+      UniqID,                   ///< "#!"
       Unknown,                  ///< <other>
       
       KWKindFirst=KWArray,

@@ -10,6 +10,8 @@
 #include "klee/Statistics.h"
 
 #include <vector>
+#include <iomanip>
+#include <sstream>
 
 using namespace klee;
 

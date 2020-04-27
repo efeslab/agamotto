@@ -41,10 +41,14 @@ namespace klee {
     int *operands;
     /// Destination register index.
     unsigned dest;
+    /// How many times this Instruction has been executed
+    /// Maintained at Executor::executeInstruction
+    unsigned int frequency = 0;
 
   public:
     virtual ~KInstruction();
     std::string getSourceLocation() const;
+    unsigned int getLoadedFreq() const;
 
   };
 

@@ -191,6 +191,12 @@ TreeOStream &TreeOStream::operator<<(const std::string &s) {
   return *this;
 }
 
+TreeOStream &TreeOStream::operator<<(const char c) {
+  assert(writer);
+  write(&c, 1);
+  return *this;
+}
+
 void TreeOStream::flush() {
   assert(writer);
   writer->flush();

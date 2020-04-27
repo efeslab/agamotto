@@ -60,7 +60,7 @@ namespace klee {
       False = -1,
       Unknown = 0
     };
-  
+
   public:
     /// validity_to_str - Return the name of given Validity enum value.
     static const char *validity_to_str(Validity v);
@@ -86,9 +86,9 @@ namespace klee {
     ///
     /// \return True on success.
     bool evaluate(const Query&, Validity &result);
-  
+
     /// mustBeTrue - Determine if the expression is provably true.
-    /// 
+    ///
     /// This evaluates the following logical formula:
     ///
     /// \f[ \forall X constraints(X) \to query(X) \f]
@@ -184,7 +184,7 @@ namespace klee {
     // FIXME: This API is lame. We should probably just provide an API which
     // returns an Assignment object, then clients can get out whatever values
     // they want. This also allows us to optimize the representation.
-    bool getInitialValues(const Query&, 
+    bool getInitialValues(const Query&,
                           const std::vector<const Array*> &objects,
                           std::vector< std::vector<unsigned char> > &result);
 

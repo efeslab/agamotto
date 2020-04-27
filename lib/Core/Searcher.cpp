@@ -30,7 +30,6 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Analysis/PostDominators.h"
 
 #include <cassert>
 #include <climits>
@@ -181,6 +180,7 @@ WeightedRandomSearcher::WeightedRandomSearcher(Executor &executor, WeightType _t
   case RP:
     updateWeights = false;
     break;
+  case InstCount:
   case CPInstCount:
   case QueryCost:
   case MinDistToUncovered:
@@ -202,40 +202,40 @@ ExecutionState &WeightedRandomSearcher::selectState() {
 
 double WeightedRandomSearcher::getWeight(ExecutionState *es) {
   switch(type) {
-    default:
-    case Depth:
-      return es->depth;
-    case RP:
-      return std::pow(0.5, es->depth);
-    case InstCount: {
-      uint64_t count = theStatisticManager->getIndexedValue(stats::instructions,
-                                                            es->pc->info->id);
-      double inv = 1. / std::max((uint64_t) 1, count);
-      return inv * inv;
-    }
-    case CPInstCount: {
-      StackFrame &sf = es->stack.back();
-      uint64_t count = sf.callPathNode->statistics.getValue(stats::instructions);
-      double inv = 1. / std::max((uint64_t) 1, count);
-      return inv;
-    }
-    case QueryCost:
-      return (es->queryCost.toSeconds() < .1) ? 1. : 1./ es->queryCost.toSeconds();
-    case CoveringNew:
-    case MinDistToUncovered: {
-      uint64_t md2u = computeMinDistToUncovered(es->pc,
-                                                es->stack.back().minDistToUncoveredOnReturn);
+  default:
+  case Depth:
+    return es->depth;
+  case RP:
+    return std::pow(0.5, es->depth);
+  case InstCount: {
+    uint64_t count = theStatisticManager->getIndexedValue(stats::instructions,
+                                                          es->pc()->info->id);
+    double inv = 1. / std::max((uint64_t) 1, count);
+    return inv * inv;
+  }
+  case CPInstCount: {
+    StackFrame &sf = es->stack().back();
+    uint64_t count = sf.callPathNode->statistics.getValue(stats::instructions);
+    double inv = 1. / std::max((uint64_t) 1, count);
+    return inv;
+  }
+  case QueryCost:
+    return (es->queryCost.toSeconds() < .1) ? 1. : 1./ es->queryCost.toSeconds();
+  case CoveringNew:
+  case MinDistToUncovered: {
+    uint64_t md2u = computeMinDistToUncovered(es->pc(),
+                                              es->stack().back().minDistToUncoveredOnReturn);
 
-      double invMD2U = 1. / (md2u ? md2u : 10000);
-      if (type==CoveringNew) {
-        double invCovNew = 0.;
-        if (es->instsSinceCovNew)
-          invCovNew = 1. / std::max(1, (int) es->instsSinceCovNew - 1000);
-        return (invCovNew * invCovNew + invMD2U * invMD2U);
-      } else {
-        return invMD2U * invMD2U;
-      }
+    double invMD2U = 1. / (md2u ? md2u : 10000);
+    if (type==CoveringNew) {
+      double invCovNew = 0.;
+      if (es->instsSinceCovNew)
+        invCovNew = 1. / std::max(1, (int) es->instsSinceCovNew - 1000);
+      return (invCovNew * invCovNew + invMD2U * invMD2U);
+    } else {
+      return invMD2U * invMD2U;
     }
+  }
   }
 }
 
@@ -302,7 +302,6 @@ bool RandomPathSearcher::empty() {
   return executor.states.empty();
 }
 
-///
 
 
 bool NvmPathSearcher::priority_less::operator()(const priority_tuple &lhs, const priority_tuple &rhs) {
@@ -313,10 +312,7 @@ bool NvmPathSearcher::priority_less::operator()(const priority_tuple &lhs, const
 }
 
 NvmPathSearcher::NvmPathSearcher(Executor &_executor) 
-  : Searcher(_executor)
-{
-  executor.interpreterHandler->setNvm();
-}
+  : Searcher(_executor) {}
 
 NvmPathSearcher::~NvmPathSearcher() {}
 
@@ -410,6 +406,7 @@ NvmPathSearcher::update(ExecutionState *current,
 bool NvmPathSearcher::empty() {
   return states.empty();
 }
+
 
 ///
 

@@ -326,10 +326,3 @@ bool AddressSpace::copyInConcrete(const MemoryObject *mo, const ObjectState *os,
   }
   return true;
 }
-
-/***/
-
-bool MemoryObjectLT::operator()(const MemoryObject *a, const MemoryObject *b) const {
-  return a->address < b->address;
-}
-

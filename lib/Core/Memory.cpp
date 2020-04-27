@@ -744,6 +744,17 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
   dirtyCacheLineAtOffset(state, ConstantExpr::create(offset, Expr::Int32));
 }
 
+static bool isUpdateListHeadEqualTo(const UpdateList &updates,
+                                    ref<Expr> index, ref<Expr> value) {
+  if (!updates.head)
+    return false;
+  if (updates.head->index.compare(index))
+    return false;
+  if (updates.head->value.compare(value))
+    return false;
+  return true;
+}
+
 void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
                                              ref<Expr> offset) {
   /* llvm::errs() << getObject()->name << ":\n"; */
@@ -753,6 +764,9 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
   // (so that we can properly identify unpersisted lines in the middle of an epoch).
   ref<Expr> cacheLine = getCacheLine(offset);
   ref<Expr> falseExpr = getDirtyExpr();
+
+  if (isUpdateListHeadEqualTo(cacheLineUpdates, cacheLine, falseExpr)) return;
+
   cacheLineUpdates.extend(cacheLine, falseExpr);
   pendingCacheLineUpdates.extend(cacheLine, falseExpr);
 
@@ -798,6 +812,10 @@ void PersistentState::commitPendingPersists(const ExecutionState &state) {
 
 ref<Expr> PersistentState::getIsOffsetPersistedExpr(ref<Expr> offset,
                                                     bool pending) const {
+  if (!pendingCacheLineUpdates.getSize()) {
+    return ConstantExpr::create(1, Expr::Bool);
+  }
+
   return isCacheLinePersisted(getCacheLine(offset), pending);
 }
 
@@ -841,6 +859,7 @@ PersistentState::getRootCauses(TimingSolver *solver,
                                ExecutionState &state,
                                const UpdateList &ul) const {
   std::unordered_set<std::string> causes;
+  if (!ul.getSize()) return causes;
 
   auto idx = getAnyOffsetExpr();
   auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
@@ -886,14 +905,6 @@ PersistentState::getRootCause(TimingSolver *solver,
   std::unordered_set<uint64_t> possibleCauses;
   std::unordered_set<std::string> causes;
 
-  std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, result);
-  ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
-  ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second); 
-  assert(!lo.isNull() && !hi.isNull());
-  if (lo->getZExtValue() == 0 && hi->getZExtValue() == 0) {
-    return causes;
-  }
-
   for (uint64_t cl = 0; cl < numCacheLines(); ++cl) {
     ref<Expr> clVal = ReadExpr::create(ul, ConstantExpr::create(cl, Expr::Int32));
     std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, clVal);
@@ -928,9 +939,7 @@ PersistentState::getRootCause(TimingSolver *solver,
     }
   }
 
-  for (uint64_t id : possibleCauses) {
-    causes.insert(rootCauses.getRootCauseString(id));
-  }
+  causes = rootCauses.getUniqueRootCauseStrings(possibleCauses);
 
   return causes;
 }
@@ -977,7 +986,7 @@ PersistentState::createRootCauseIdExpr(const ExecutionState &state,
 
   uint64_t id = rootCauses.getRootCauseLocationID(state, 
                                                   getObject()->allocSite, 
-                                                  state.prevPC,
+                                                  state.prevPC(),
                                                   reason);
 
   return ConstantExpr::create(id, rootCauseWidth);                               

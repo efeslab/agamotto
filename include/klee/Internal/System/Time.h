@@ -114,6 +114,7 @@ namespace klee {
     Span microseconds(std::uint64_t);
     Span nanoseconds(std::uint64_t);
 
+    constexpr const char *fmt_str = "%Y-%m-%d %H:%M:%S";
   } // time
 } // klee
 

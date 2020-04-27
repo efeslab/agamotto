@@ -11,6 +11,7 @@
 #define KLEE_FD_H
 
 #include "klee/Config/config.h"
+#include "config.h"
 
 #ifndef _LARGEFILE64_SOURCE
 #error "_LARGEFILE64_SOURCE should be defined"
@@ -18,7 +19,6 @@
 
 #include <dirent.h>
 #include <sys/types.h>
-#include <stdbool.h>
 
 #ifdef HAVE_SYSSTATFS_H
 #include <sys/statfs.h>
@@ -38,93 +38,74 @@
 #endif
 #endif
 
-typedef struct exe_disk_file {
-  unsigned size;  /* in bytes */
-  char* contents;
-  struct stat64* stat;
-  unsigned* page_refs; /* for mmap page refs */
-} exe_disk_file_t;
+#include <sys/uio.h>
 
-typedef enum exe_file_flag {
-  eOpen         = (1 << 0),
+typedef enum {
+  eOpen         = (1 << 0), /* eOpen is set when this fd is valid*/
   eCloseOnExec  = (1 << 1),
-  eReadable     = (1 << 2),
-  eWriteable    = (1 << 3)
+  eIsFile       = (1 << 4),
+  eIsPIPE       = (1 << 5),
+  eIsSocket     = (1 << 6)
 } exe_file_flag_t;
 
-typedef struct exe_file {      
-  int fd;                   /* actual fd if not symbolic */
-  unsigned flags;           /* set of exe_file_flag_t values. fields
-                               are only defined when flags at least
-                               has eOpen. */
-  off64_t off;              /* offset */
-  exe_disk_file_t* dfile;   /* ptr to file on disk, if symbolic */
-} exe_file_t;
+typedef struct {
+  unsigned int refcount;
+  unsigned int queued;
+  int flags;      /* O_RDONLY, O_WRONLY, O_RDWR, O_CLOEXEC, etc... */
+} file_base_t;
 
-typedef struct exe_file_system {
-  unsigned n_sym_files; /* number of symbolic input files, excluding stdin */
-  exe_disk_file_t *sym_stdin, *sym_stdout;
-  unsigned stdout_writes; /* how many chars were written to stdout */
-  exe_disk_file_t *sym_files;
-
-  // TODO: We should in theory support multiple persistent files.
-  exe_disk_file_t *sym_pmem;
-  unsigned sym_pmem_size; // in bytes
-  //FIXME: handle sizes better
-  char sym_pmem_filename[128];
-  // --- for the "concrete" initializations.
-  bool sym_pmem_init_concrete;
-  bool sym_pmem_init_to_zero;
-  bool sym_pmem_delay_create;
-  bool sym_pmem_created;
-  char sym_pmem_init_from[128];
-  /* --- */
-  /* the maximum number of failures on one path; gets decremented after each failure */
-  unsigned max_failures; 
-
-  /* Which read, write etc. call should fail */
-  int *read_fail, *write_fail, *close_fail, *ftruncate_fail, *getcwd_fail;
-  int *chmod_fail, *fchmod_fail;
-} exe_file_system_t;
-
-#define MAX_FDS 32
+/* model a linux file descriptor (could be a regular file, pipe, socket, etc.)
+ * If the `dfile` field is a nullptr, then this is a concrete file descriptor.
+ * Otherwise, a symbolic file descriptor
+ */
+typedef struct {
+  unsigned int attr;      /* flags from exec_file_flag_t */
+  file_base_t *io_object; /* This is dynamically allocated
+                           * type: file_t*, if fd is a regular file;
+                           * TODO pipe type;
+                           * TODO socket type;
+                           */
+} fd_entry_t;
+// NOTE: exe_file_t -> fd_entry_t
 
 /* Note, if you change this structure be sure to update the
    initialization code if necessary. New fields should almost
    certainly be at the end. */
 typedef struct {
-  exe_file_t fds[MAX_FDS];
+  fd_entry_t fds[MAX_FDS];
   mode_t umask; /* process umask */
   unsigned version;
-  /* If set, writes execute as expected.  Otherwise, writes extending
-     the file size only change the contents up to the initial
-     size. The file offset is always incremented correctly. */
+  /* If set, writes execute as expected (but writes exceeding a symbolic file
+     size will abort).  Otherwise, writes extending the file size only change
+     the contents up to the initial size. The file offset is always incremented
+     correctly. */
   int save_all_writes; 
 } exe_sym_env_t;
 
-extern exe_file_system_t __exe_fs;
 extern exe_sym_env_t __exe_env;
 
-void klee_init_fds(unsigned n_files, unsigned file_length,
-                   unsigned stdin_length, int sym_stdout_flag,
-                   int do_all_writes_flag, unsigned max_failures,
-                   char* sym_pmem_filename, unsigned sym_pmem_size,
-                   char* sym_pmem_init, bool sym_pmem_delay_create);
 void klee_init_env(int *argcPtr, char ***argvPtr);
 
 /* *** */
+struct stat64;
+int __fd_allocate();
+void __fd_clear(int fd);
+fd_entry_t *__get_fd(int fd);
 
-int __fd_open(const char *pathname, int flags, mode_t mode);
-int __fd_openat(int basefd, const char *pathname, int flags, mode_t mode);
-off64_t __fd_lseek(int fd, off64_t offset, int whence);
-int __fd_stat(const char *path, struct stat64 *buf);
-int __fd_lstat(const char *path, struct stat64 *buf);
 int __fd_fstat(int fd, struct stat64 *buf);
 int __fd_ftruncate(int fd, off64_t length);
 int __fd_statfs(const char *path, struct statfs *buf);
-int __fd_getdents(unsigned int fd, struct dirent64 *dirp, unsigned int count);
 
-// non-static wrapper
-void create_new_dfile(exe_disk_file_t *dfile, unsigned size, 
-                      const char *name, struct stat64 *defaults);
+/* *** */
+#define _FD_SET(n, p)    ((p)->fds_bits[(n)/NFDBITS] |= (1 << ((n) % NFDBITS)))
+#define _FD_CLR(n, p)    ((p)->fds_bits[(n)/NFDBITS] &= ~(1 << ((n) % NFDBITS)))
+#define _FD_ISSET(n, p)  ((p)->fds_bits[(n)/NFDBITS] & (1 << ((n) % NFDBITS)))
+#define _FD_ZERO(p)  memset((char *)(p), '\0', sizeof(*(p)))
+
+ssize_t _scatter_read(int fd, const struct iovec *iov, int iovcnt);
+ssize_t _gather_write(int fd, const struct iovec *iov, int iovcnt);
+
+/* INIT */
+void klee_init_sym_env(int save_all_writes);
+
 #endif /* KLEE_FD_H */

@@ -14,7 +14,6 @@
 #include <set>
 #include <string>
 #include <vector>
-
 struct KTest;
 
 namespace llvm {
@@ -41,10 +40,6 @@ public:
   virtual std::unique_ptr<llvm::raw_fd_ostream> openOutputFile(const std::string &filename) = 0;
 
   virtual void incPathsExplored() = 0;
-
-  // (iangneal): for NVM heuristic stats. I want to know what kind of states we
-  // got rid of.
-  virtual void setNvm() = 0;
 
   virtual void processTestCase(const ExecutionState &state,
                                const char *err,
@@ -130,9 +125,6 @@ public:
   // interpretation down a user specified path. use null to reset.
   virtual void setReplayKTest(const struct KTest *out) = 0;
 
-  // supply a list of branch decisions specifying which direction to
-  // take on forks. this can be used to drive the interpretation down
-  // a user specified path. use null to reset.
   virtual void setReplayPath(const std::vector<bool> *path) = 0;
 
   // supply a set of symbolic bindings that will be used as "seeds"

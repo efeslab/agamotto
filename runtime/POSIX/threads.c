@@ -32,8 +32,9 @@
 
 #include "multiprocess.h"
 
-#include "signals.h"
+//#include "signals.h"
 
+#include <assert.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,21 +43,28 @@
 
 #include <klee/klee.h>
 
+
+////////////////////////////////////////////////////////////////////////////////
+// PThread Internal Data Structure
+////////////////////////////////////////////////////////////////////////////////
+struct pthread_attr {
+  char joinable;
+};
 ////////////////////////////////////////////////////////////////////////////////
 // The PThreads API
 ////////////////////////////////////////////////////////////////////////////////
 
 pthread_t pthread_self(void) {
-  pthread_t result = 0;
-#if 0
+  pthread_t result;
+
   klee_get_context(&result, 0);
-#endif
+
   return result;
 }
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     void *(*start_routine)(void*), void *arg) {
-#if 0
+
   if (INJECT_FAULT(pthread_create, EAGAIN)) {
     return -1;
   }
@@ -71,18 +79,23 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 
   thread_data_t *tdata = &__tsync.threads[newIdx];
   tdata->terminated = 0;
-  tdata->joinable = 1; // TODO: Read this from an attribute
   tdata->wlist = klee_get_wlist();
+  // read from attr
+  if (attr) {
+    struct pthread_attr *iattr = (struct pthread_attr*)attr;
+    tdata->joinable = iattr->joinable;
+  } else {
+    tdata->joinable = 0;
+  }
 
   klee_thread_create(newIdx, start_routine, arg);
 
   *thread = newIdx;
-#endif 
+
   return 0;
 }
 
 void pthread_exit(void *value_ptr) {
-#if 0
   unsigned int idx = pthread_self();
   thread_data_t *tdata = &__tsync.threads[idx];
 
@@ -96,8 +109,6 @@ void pthread_exit(void *value_ptr) {
   }
 
   klee_thread_terminate(); // Does not return
-#endif 
-  exit(0);
 }
 
 
@@ -163,12 +174,23 @@ int pthread_detach(pthread_t thread) {
 }
 
 int pthread_attr_init(pthread_attr_t *attr) {
-  klee_warning("pthread_attr_init does nothing");
+  assert(sizeof(*attr) >= sizeof(struct pthread_attr));
+  memset(attr, 0, sizeof(*attr));
   return 0;
 }
 
 int pthread_attr_destroy(pthread_attr_t *attr) {
   klee_warning("pthread_attr_destroy does nothing");
+  return 0;
+}
+
+int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate) {
+  struct pthread_attr *iattr = (struct pthread_attr *)attr;
+  if (detachstate == PTHREAD_CREATE_JOINABLE) {
+    iattr->joinable = 1;
+  } else {
+    iattr->joinable = 0;
+  }
   return 0;
 }
 
@@ -184,4 +206,21 @@ int pthread_once(pthread_once_t *once_control, void (*init_routine)(void)) {
 
 int pthread_equal(pthread_t thread1, pthread_t thread2) {
   return thread1 == thread2;
+}
+
+// Since we don't support multi-process, all pids are 0.
+
+pid_t getpid(void) {
+  return 0;
+}
+
+int kill(pid_t pid, int sig) {
+  if (pid == 0) {
+    klee_warning("killing pid 0, which we interpret as a shutdown");
+    exit(0);
+  }
+  
+  klee_warning("ignoring (EPERM)");
+  errno = EPERM;
+  return -1;
 }

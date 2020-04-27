@@ -23,7 +23,8 @@
 #include <sstream>
 
 using namespace klee;
-using namespace llvm;
+using llvm::APInt;
+using llvm::errs;
 
 namespace klee {
 llvm::cl::OptionCategory
@@ -32,11 +33,11 @@ llvm::cl::OptionCategory
 }
 
 namespace {
-cl::opt<bool> ConstArrayOpt(
-    "const-array-opt", cl::init(false),
-    cl::desc(
+llvm::cl::opt<bool> ConstArrayOpt(
+    "const-array-opt", llvm::cl::init(false),
+    llvm::cl::desc(
         "Enable an optimization involving all-constant arrays (default=false)"),
-    cl::cat(klee::ExprCat));
+    llvm::cl::cat(klee::ExprCat));
 }
 
 /***/

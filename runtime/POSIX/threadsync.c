@@ -31,7 +31,7 @@
  */
 
 #include "multiprocess.h"
-#include "signals.h"
+//#include "signals.h"
 
 #include <pthread.h>
 #include <errno.h>
@@ -74,7 +74,7 @@ int pthread_setspecific(pthread_key_t key, const void *value) {
 ////////////////////////////////////////////////////////////////////////////////
 // POSIX Mutexes
 ////////////////////////////////////////////////////////////////////////////////
-#if 0
+
 static void _mutexattr_init(pthread_mutexattr_t *attr) {
   memset(attr,0,sizeof(pthread_mutexattr_t));
 }
@@ -108,7 +108,6 @@ int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type)
 }
 
 static void _mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr) {
-#if 0
   mutex_data_t *mdata = (mutex_data_t*)malloc(sizeof(mutex_data_t));
   memset(mdata, 0, sizeof(mutex_data_t));
 
@@ -125,7 +124,6 @@ static void _mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr)
   }
   else
     mdata->count = -1;
-#endif
 }
 
 static mutex_data_t *_get_mutex_data(pthread_mutex_t *mutex) {
@@ -231,37 +229,18 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex) {
 
   return res;
 }
-#endif
-
-int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr) {
-  return 0;
-}
-
-int pthread_mutex_destroy(pthread_mutex_t *mutex) {
-  return 0;
-}
-
-int pthread_mutex_lock(pthread_mutex_t *mutex) {
-  return 0;
-}
-
-int pthread_mutex_unlock(pthread_mutex_t *mutex) {
-  return 0;
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // POSIX Condition Variables
 ////////////////////////////////////////////////////////////////////////////////
 
 static void _cond_init(pthread_cond_t *cond, const pthread_condattr_t *attr) {
-#if 0
   condvar_data_t *cdata = (condvar_data_t*)malloc(sizeof(condvar_data_t));
   memset(cdata, 0, sizeof(condvar_data_t));
 
   *((condvar_data_t**)cond) = cdata;
 
   cdata->wlist = klee_get_wlist();
-#endif 
 }
 
 static condvar_data_t *_get_condvar_data(pthread_cond_t *cond) {
@@ -377,7 +356,6 @@ int pthread_cond_signal(pthread_cond_t *cond) {
 ////////////////////////////////////////////////////////////////////////////////
 
 static void _barrier_init(pthread_barrier_t *barrier, const pthread_barrierattr_t *attr, unsigned int count) {
-#if 0
   barrier_data_t *bdata = (barrier_data_t*)malloc(sizeof(barrier_data_t));
   memset(bdata, 0, sizeof(barrier_data_t));
 
@@ -387,7 +365,6 @@ static void _barrier_init(pthread_barrier_t *barrier, const pthread_barrierattr_
   bdata->curr_event = 0;
   bdata->init_count = count;
   bdata->left = count;
-#endif
 }
 
 static barrier_data_t *_get_barrier_data(pthread_barrier_t *barrier) {
@@ -449,9 +426,8 @@ int pthread_barrier_wait(pthread_barrier_t *barrier) {
 ////////////////////////////////////////////////////////////////////////////////
 // POSIX Read Write Locks
 ////////////////////////////////////////////////////////////////////////////////
-#if 0
+
 static void _rwlock_init(pthread_rwlock_t *rwlock, const pthread_rwlockattr_t *attr) {
-#if 0
   rwlock_data_t *rwdata = (rwlock_data_t*)malloc(sizeof(rwlock_data_t));
   memset(rwdata, 0, sizeof(rwlock_data_t));
 
@@ -460,7 +436,6 @@ static void _rwlock_init(pthread_rwlock_t *rwlock, const pthread_rwlockattr_t *a
   rwdata->wlist_readers = klee_get_wlist();
   rwdata->wlist_writers = klee_get_wlist();
   rwdata->nr_readers = 0;
-#endif 
 }
 
 static rwlock_data_t *_get_rwlock_data(pthread_rwlock_t *rwlock) {
@@ -635,4 +610,3 @@ int pthread_rwlock_unlock(pthread_rwlock_t *rwlock) {
 
   return res;
 }
-#endif

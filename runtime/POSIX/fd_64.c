@@ -19,6 +19,7 @@
 #define _LARGEFILE64_SOURCE
 #define _FILE_OFFSET_BITS 64
 #include "fd.h"
+#include "files.h"
 
 #include "klee/Config/Version.h"
 #include "klee/klee.h"
@@ -74,7 +75,7 @@ int openat(int fd, const char *pathname, int flags, ...) {
 }
 
 off64_t lseek(int fd, off64_t offset, int whence) {
-  return __fd_lseek(fd, offset, whence);
+  return __fd_lseek64(fd, offset, whence);
 }
 
 int __xstat(int vers, const char *path, struct stat *buf) {

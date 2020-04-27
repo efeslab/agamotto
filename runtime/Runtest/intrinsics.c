@@ -187,7 +187,9 @@ void klee_print_expr(const char *msg, ...) { }
 
 void klee_set_forking(unsigned enable) { }
 
-void *klee_pmem_mark_persistent(void *addr, size_t size, const char *name) {}
+void *klee_pmem_mark_persistent(void *addr, size_t size, const char *name) {
+  return addr;
+}
 void klee_pmem_check_persisted(void *addr, size_t size) {}
 void klee_pmem_check_ordered_before(void *addrA, size_t sizeA,
                                     void *addrB, size_t sizeB) {}

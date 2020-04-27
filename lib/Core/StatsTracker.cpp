@@ -121,22 +121,6 @@ bool StatsTracker::useStatistics() {
 bool StatsTracker::useIStats() {
   return OutputIStats;
 }
-// (iangneal): Calculate NVM-KLEE numbers
-uint64_t StatsTracker::getNvmNumBlocksCovered() const {
-  uint64_t num = 0;
-  for (const auto &p : nvmBlockCoverage) num += (p.second / p.first->size());
-  return num;
-}
-
-uint64_t StatsTracker::getNvmNumBlocksUnique() const {
-  uint64_t num = 0;
-  for (const auto &p : nvmBlockCoverage) num += (p.second != 0 ? 1 : 0);
-  return num;
-}
-
-double StatsTracker::getNvmCoverage() const {
-  return ((double)getNvmNumBlocksUnique()) / ((double)nvmBlockCoverage.size());
-}
 
 /// Check for special cases where we statically know an instruction is
 /// uncoverable. Currently the case is an unreachable instruction
@@ -351,9 +335,9 @@ void StatsTracker::stepInstruction(ExecutionState &es) {
       }
     }
 
-    Instruction *inst = es.pc->inst;
-    const InstructionInfo &ii = *es.pc->info;
-    StackFrame &sf = es.stack.back();
+    Instruction *inst = es.pc()->inst;
+    const InstructionInfo &ii = *es.pc()->info;
+    StackFrame &sf = es.stack().back();
     theStatisticManager->setIndex(ii.id);
     if (UseCallPaths)
       theStatisticManager->setContext(&sf.callPathNode->statistics);
@@ -368,11 +352,11 @@ void StatsTracker::stepInstruction(ExecutionState &es) {
         //
         // FIXME: This trick no longer works, we should fix this in the line
         // number propogation.
-          es.coveredLines[&ii.file].insert(ii.line);
-	es.coveredNew = true;
+        es.coveredLines[&ii.file].insert(ii.line);
+	      es.coveredNew = true;
         es.instsSinceCovNew = 1;
-	++stats::coveredInstructions;
-	stats::uncoveredInstructions += (uint64_t)-1;
+        ++stats::coveredInstructions;
+        stats::uncoveredInstructions += (uint64_t)-1;
       }
     }
   }
@@ -390,8 +374,12 @@ void StatsTracker::stepInstruction(ExecutionState &es) {
 
 /* Should be called _after_ the es->pushFrame() */
 void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame) {
+  framePushed(es.stack().back(), parentFrame);
+}
+
+/* Need this for new threads, because es.stack() gets the current thread's stack */
+void StatsTracker::framePushed(StackFrame &sf, StackFrame *parentFrame) {
   if (OutputIStats) {
-    StackFrame &sf = es.stack.back();
 
     if (UseCallPaths) {
       CallPathNode *parent = parentFrame ? parentFrame->callPathNode : 0;
@@ -404,8 +392,6 @@ void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame) {
   }
 
   if (updateMinDistToUncovered) {
-    StackFrame &sf = es.stack.back();
-
     uint64_t minDistAtRA = 0;
     if (parentFrame)
       minDistAtRA = parentFrame->minDistToUncoveredOnReturn;
@@ -595,10 +581,10 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, 21, stats::nvmHeuristicTime);
   sqlite3_bind_int64(insertStmt, 22, stats::nvmGetSharedTime);
   sqlite3_bind_int64(insertStmt, 23, stats::nvmAndersenTime);
-  sqlite3_bind_int64(insertStmt, 24, nvmBlockCoverage.size());
-  sqlite3_bind_int64(insertStmt, 25, getNvmNumBlocksCovered());
-  sqlite3_bind_int64(insertStmt, 26, getNvmNumBlocksUnique());
-  sqlite3_bind_int64(insertStmt, 27, getNvmCoverage());
+  sqlite3_bind_int64(insertStmt, 24, 0);
+  sqlite3_bind_int64(insertStmt, 25, 0);
+  sqlite3_bind_int64(insertStmt, 26, 0);
+  sqlite3_bind_int64(insertStmt, 27, 0);
   sqlite3_bind_int64(insertStmt, 28, stats::nvmStatesKilledEndTrace + stats::nvmStatesKilledIrrelevant);
   sqlite3_bind_int64(insertStmt, 29, stats::nvmStatesDeferred);
 #ifdef KLEE_ARRAY_DEBUG
@@ -625,10 +611,10 @@ void StatsTracker::updateStateStatistics(uint64_t addend) {
   for (std::set<ExecutionState*>::iterator it = executor.states.begin(),
          ie = executor.states.end(); it != ie; ++it) {
     ExecutionState &state = **it;
-    const InstructionInfo &ii = *state.pc->info;
+    const InstructionInfo &ii = *state.pc()->info;
     theStatisticManager->incrementIndexedValue(stats::states, ii.id, addend);
     if (UseCallPaths)
-      state.stack.back().callPathNode->statistics.incrementValue(stats::states, addend);
+      state.stack().back().callPathNode->statistics.incrementValue(stats::states, addend);
   }
 }
 
@@ -1049,13 +1035,13 @@ void StatsTracker::computeReachableUncovered() {
          ie = executor.states.end(); it != ie; ++it) {
     ExecutionState *es = *it;
     uint64_t currentFrameMinDist = 0;
-    for (ExecutionState::stack_ty::iterator sfIt = es->stack.begin(),
-           sf_ie = es->stack.end(); sfIt != sf_ie; ++sfIt) {
+    for (ExecutionState::stack_ty::iterator sfIt = es->stack().begin(),
+           sf_ie = es->stack().end(); sfIt != sf_ie; ++sfIt) {
       ExecutionState::stack_ty::iterator next = sfIt + 1;
       KInstIterator kii;
 
-      if (next==es->stack.end()) {
-        kii = es->pc;
+      if (next==es->stack().end()) {
+        kii = es->pc();
       } else {
         kii = next->caller;
         ++kii;

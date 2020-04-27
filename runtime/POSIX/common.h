@@ -36,6 +36,7 @@
 #include "config.h"
 
 #include <sys/types.h>
+#include <sys/syscall.h>
 #include <string.h>
 #include <stdint.h>
 
@@ -86,8 +87,7 @@ static inline uint64_t get_fuzz_reason(int offset, int entropy) {
 // an existing C library call.
 
 #define __DECLARE_MODEL(type, name, ...) \
-  type __klee_model_ ## name(__VA_ARGS__); \
-  type __klee_original_ ## name(__VA_ARGS__);
+  type name(__VA_ARGS__);
 
 #ifdef __FORCE_USE_MODELS
 #define DECLARE_MODEL(type, name, ...) \
@@ -102,13 +102,13 @@ static inline uint64_t get_fuzz_reason(int offset, int entropy) {
   __attribute__((used)) static const void* __usage_ ## name = (void*) &name;
 
 #define CALL_UNDERLYING(name, ...) \
-    __klee_original_ ## name(__VA_ARGS__)
+    syscall(__NR_##name, __VA_ARGS__)
 
 #define CALL_MODEL(name, ...) \
-    __klee_model_ ## name(__VA_ARGS__);
+    name(__VA_ARGS__);
 
 #define DEFINE_MODEL(type, name, ...) \
-    type __klee_model_ ## name(__VA_ARGS__)
+    type name(__VA_ARGS__)
 
 
 #ifdef HAVE_FAULT_INJECTION
@@ -128,37 +128,6 @@ void *__concretize_ptr(const void *p);
 size_t __concretize_size(size_t s);
 off_t __concretize_offset(off_t o);
 const char *__concretize_string(const char *s);
-
-unsigned __fork_values(unsigned min, unsigned max, int reason);
-
-int __inject_fault(const char *fname, int errno, ...);
-
-////////////////////////////////////////////////////////////////////////////////
-// Basic Arrays
-////////////////////////////////////////////////////////////////////////////////
-
-// XXX Remove this, since it's unused?
-
-#define ARRAY_INIT(arr) \
-  do { memset(&arr, 0, sizeof(arr)); } while (0)
-
-#define ARRAY_ALLOC(arr, item) \
-  do { \
-    item = sizeof(arr)/sizeof(arr[0]); \
-    unsigned int __i; \
-    for (__i = 0; __i < sizeof(arr)/sizeof(arr[0]); __i++) { \
-      if (!arr[__i]) { \
-        item = __i; break; \
-      } \
-    } \
-  } while (0)
-
-#define ARRAY_CLEAR(arr, item) \
-  do { arr[item] = 0; } while (0)
-
-#define ARRAY_CHECK(arr, item) \
-  ((item < sizeof(arr)/sizeof(arr[0])) && arr[item] != 0)
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // Static Lists
@@ -225,5 +194,48 @@ struct list_head {
 
 struct iovec;
 size_t _count_iovec(const struct iovec *iov, int iovcnt);
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Basic Types
+////////////////////////////////////////////////////////////////////////////////
+typedef uint64_t wlist_id_t;
+
+////////////////////////////////////////////////////////////////////////////////
+// Debugging message
+////////////////////////////////////////////////////////////////////////////////
+// This flag is configurable in klee_init_env (option "-posix-debug")
+extern char enableDebug;
+void posix_debug_msg(const char *fmt, ...);
+////////////////////////////////////////////////////////////////////////////////
+// Bidirectional string mapping helper: const char * <-> customizable types
+////////////////////////////////////////////////////////////////////////////////
+#define BEGIN_BISTRMAPPING(type, name)                                         \
+  typedef struct {                                                             \
+    const char *str;                                                           \
+    type x;                                                                    \
+  } STRMAP_##name##_t;                                                         \
+  STRMAP_##name##_t MAPPING_##name[] = {
+#define BISTRMAPPING_ENTRY(str,x) {str, x},
+#define END_BISTRMAPPING(type, name, notfound)                                 \
+  };                                                                           \
+  const char *name##_to_str(type x) {                                          \
+    int i;                                                                     \
+    for (i = 0; i < sizeof(MAPPING_##name) / sizeof(STRMAP_##name##_t); ++i) { \
+      if (x == MAPPING_##name[i].x) {                                          \
+        return MAPPING_##name[i].str;                                          \
+      }                                                                        \
+    }                                                                          \
+    return NULL;                                                               \
+  }                                                                            \
+  type name##_from_str(const char *str) {                                      \
+    int i;                                                                     \
+    for (i = 0; i < sizeof(MAPPING_##name) / sizeof(STRMAP_##name##_t); ++i) { \
+      if (strcmp(str, MAPPING_##name[i].str) == 0) {                           \
+        return MAPPING_##name[i].x;                                            \
+      }                                                                        \
+    }                                                                          \
+    return notfound;                                                           \
+  }
 
 #endif /* COMMON_H_ */
