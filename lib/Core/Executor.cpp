@@ -4073,11 +4073,9 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
         executePersistentMemoryFlush(*greater, mo, ps, lastByte);
 =======
         // avoid masking later bugs; emit error, but continue
-        auto errIds = ps->markLastFlushAsBug(*errState, offset);
+        auto id = ps->markFlushAsBug(*errState, offset);
         std::unordered_set<std::string> errStrs;
-        for (auto id : errIds) {
-          errStrs.insert(rootCauseMgr->getRootCauseString(id));
-        }
+        errStrs.insert(rootCauseMgr->getRootCauseString(id));
         emitPmemError(*errState, errStrs);
 >>>>>>> Extend root causes
       }

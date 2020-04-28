@@ -8,6 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include <functional>
+#include <sstream>
+#include <iostream>
 #include <cmath>
 
 #include "RootCause.h"
@@ -83,12 +85,18 @@ RootCauseLocation::fullString(const RootCauseManager &mgr) const {
   llvm::raw_string_ostream info(infoStr);
 
   info << "Type of modification: " << reasonString() << "\n";
+  info << str() << "\n";
 
   if (maskedRoots.size()) {
-    info << str() << "\nPossible Masked:\n";
+    info << "Possible Masked:\n";
 
     for (auto id : maskedRoots) {
       info << "\tID #" << id << "\n";
+      std::istringstream f(mgr.get(id).stackStr);
+      std::string line;    
+      while (std::getline(f, line)) {
+        info << "\t\t" << line << "\n";
+      }
     }
   } else {
     info << "<no masked bugs>\n";
@@ -254,9 +262,37 @@ std::string RootCauseManager::getSummary(void) const {
   std::string infoStr;
   llvm::raw_string_ostream info(infoStr);
 
+  size_t nUnpersisted = 0, nExtra = 0, nClean = 0;
+  size_t nUnpersistedOc = 0, nExtraOc = 0, nCleanOc = 0;
+  for (const auto &id : buggyIds) {
+    switch(idToRoot.at(id)->rootCause.getReason()) {
+      case PM_Unpersisted:
+        nUnpersisted++;
+        nUnpersistedOc += idToRoot.at(id)->occurences;
+        break;
+      case PM_UnnecessaryFlush:
+        nExtra++;
+        nExtraOc += idToRoot.at(id)->occurences;
+        break;
+      case PM_FlushOnUnmodified:
+        nClean++;
+        nCleanOc += idToRoot.at(id)->occurences;
+        break;
+      default:
+        klee_error("unsupported!");
+        break;
+    }
+  }
+
   info << "Persistent Memory Bugs:\n";
   info << "\tNumber of bugs: " << buggyIds.size() << "\n";
+  info << "\t\tNumber of unpersisted write bugs (correctness): " << nUnpersisted << "\n";
+  info << "\t\tNumber of extra flush bugs (performance): " << nExtra << "\n";
+  info << "\t\tNumber of flushes to untouched memory (performance): " << nClean << "\n";
   info << "\tOverall bug occurences: " << totalOccurences << "\n";
+  info << "\t\tNumber of unpersisted write occurences (correctness): " << nUnpersistedOc << "\n";
+  info << "\t\tNumber of extra flush occurences (performance): " << nExtraOc << "\n";
+  info << "\t\tNumber of untouched memory flush occurences (performance): " << nCleanOc << "\n";
 
   return info.str();
 }

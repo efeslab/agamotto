@@ -747,7 +747,8 @@ void PersistentState::write8(const ExecutionState &state,
 
 /* Used to avoid pushing duplicates onto update lists */
 static bool isUpdateListHeadEqualTo(const UpdateList &updates,
-                                    ref<Expr> index, ref<Expr> value) {
+                                    ref<Expr> index, 
+                                    ref<Expr> value) {
   if (!updates.head)
     return false;
   if (updates.head->index.compare(index))
@@ -764,9 +765,6 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
 
 void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
                                              ref<Expr> offset) {
-  /* llvm::errs() << getObject()->name << ":\n"; */
-  /* ExprPPrinter::printOne(llvm::errs(), "dirtyCacheLineAtOffset", offset); */
-
   // Apply the dirty to the authoritative update list as well as the pending one
   // (so that we can properly identify unpersisted lines in the middle of an epoch).
   ref<Expr> cacheLine = getCacheLine(offset);
@@ -780,7 +778,6 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
    */
   auto idx = getAnyOffsetExpr();
   auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
-  // auto idx = getObject()->getBoundsCheckOffset(getAnyOffsetExpr());
 
   state.constraints.addConstraint(inBoundsConstraint);
   auto prevWrites = getRootCause(state, rootCauseWrites, offset);
@@ -846,18 +843,28 @@ void PersistentState::clearRootCauses() {
  * Get the last flush to the location at a given offset. Helps get
  * the root cause for unnecessary flushes.
  */
-std::unordered_set<uint64_t> 
-PersistentState::markLastFlushAsBug(ExecutionState &state,
-                                    ref<Expr> offset) const {
-  auto errs = getRootCause(state, rootCauseFlushes, getCacheLine(offset));
-  assert(errs.size() && 
-         "we called mark as bug for flush without there being a bug!");
-
-  for (auto id : errs) {
-    rootCauseMgr->markAsBug(id);
+uint64_t 
+PersistentState::markFlushAsBug(ExecutionState &state, 
+                                ref<Expr> offset) const {
+  auto errs = getRootCause(state, rootCauseFlushes, getCacheLine(offset)); 
+  uint64_t id; 
+  if (errs.empty()) {
+    id = rootCauseMgr->getRootCauseLocationID(state, 
+                                              getObject()->allocSite,
+                                              state.prevPC(),
+                                              PM_FlushOnUnmodified);
+    
+  } else {
+    id = rootCauseMgr->getRootCauseLocationID(state, 
+                                              getObject()->allocSite,
+                                              state.prevPC(),
+                                              PM_UnnecessaryFlush,
+                                              errs);
   }
+ 
+  rootCauseMgr->markAsBug(id);
 
-  return errs;
+  return id;
 }
 
 /**
@@ -884,6 +891,7 @@ PersistentState::getRootCauses(ExecutionState &state,
   if (ul.head == nullptr) return causes;
 =======
   std::unordered_set<uint64_t> causes;
+  // I checked, this is constant time.
   if (!ul.getSize()) return causes;
 >>>>>>> Extend root causes
 

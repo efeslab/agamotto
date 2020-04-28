@@ -453,13 +453,11 @@ class PersistentState : public ObjectState {
     void clearRootCauses();
 
     /**
-     * If we have duplicate flushes/otherwise, we mark the flush at that 
-     * location as a bug. We also return all the IDs we just marked as bugs 
-     * for immediate test case generation.
+     * If we have duplicate flushes/otherwise, we mark the flush that we 
+     * just executed at that location as a bug. We also return the ID we 
+     * just marked as a bug for immediate test case generation.
      */
-    std::unordered_set<uint64_t> 
-    markLastFlushAsBug(ExecutionState &state,
-                       ref<Expr> offset) const;
+    uint64_t markFlushAsBug(ExecutionState &state, ref<Expr> offset) const;
 
     /**
      * Mark all the writes that are unpersisted as bugs.

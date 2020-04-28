@@ -97,6 +97,8 @@ namespace klee {
 
       const char *reasonString(void) const;
 
+      RootCauseReason getReason(void) const { return reason; }
+
       friend bool operator==(const RootCauseLocation &lhs, 
                              const RootCauseLocation &rhs);
   };

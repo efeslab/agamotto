@@ -368,6 +368,8 @@ static disk_file_t *_create_pmem_file_from_real(disk_file_t *dfile,
 static disk_file_t *_create_pmem_file(disk_file_t *dfile,
                                       sym_file_descriptor_t *sfd,
                                       const struct stat64 *default_stats) {
+  dfile->pmem_type = sfd->pmem_type;
+  
   switch(sfd->pmem_type) {
     case PMEM_SYMBOLIC:
       _create_pmem_symbolic_file(dfile, sfd->file_size, sfd->file_path, default_stats);
