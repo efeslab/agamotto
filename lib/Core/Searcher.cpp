@@ -364,15 +364,18 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current,
   size_t gen = calculateGeneration(current, execState);
 
   size_t priority = execState->nvmInfo()->getCurrentPriority();
-  if (!priority) {
-    stats::nvmStatesKilledEndTrace++;
-    executor.terminateStateEarlyPmem(*execState);
-  } else {
-    states.emplace(execState, gen, priority);
-    return true;
-  }
+  // if (!priority) {
+  //   stats::nvmStatesKilledEndTrace++;
+  //   executor.terminateStateEarlyPmem(*execState);
+  // } else {
+  //   states.emplace(execState, gen, priority);
+  //   return true;
+  // }
 
-  return false;
+  states.emplace(execState, gen, priority);
+  return true;
+
+  // return false;
 }
 
 void

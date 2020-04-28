@@ -118,13 +118,30 @@ namespace klee {
        */
       std::unordered_set<llvm::Value*> not_local_nvm_, not_global_nvm_;
 
+      /**
+       * Each value has a points-to set given by the Andersen alias analysis.
+       * This is a helper method to get that set, as it passes through the 
+       * cache first.
+       */
       bool getPointsToSet(const llvm::Value *v, 
                           std::vector<const llvm::Value *> &ptsSet) const;
 
+      /**
+       * Returns true if A may point to B. A may point to B if their points-to
+       * sets overlap.
+       */
       bool mayPointTo(const llvm::Value *a, const llvm::Value *b) const;
 
+      /**
+       * Returns true if the points-to set of A is equivalent to the points-to
+       * set of B.
+       */
       bool pointsToIsEq(const llvm::Value *a, const llvm::Value *b) const;
 
+      /**
+       * Returns true if posNvm (possible NVM value) matches a value that we 
+       * know to be a volatile value.
+       */
       bool matchesKnownVolatile(const llvm::Value *posNvm) const;
 
       /**
@@ -171,6 +188,9 @@ namespace klee {
       /**
        * Directly create a new description. This is generally for when we actually
        * execute and want to update our assumptions.
+       * 
+       * If the state is updated, returns a new shared pointer. Else, returns
+       * shared_from_this.
        */
       NvmValueDesc::Shared updateState(llvm::Value *val, bool nvm) const;
 

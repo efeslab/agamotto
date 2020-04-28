@@ -49,6 +49,11 @@ namespace klee {
 
 bool NvmValueDesc::getPointsToSet(const llvm::Value *v, 
                                   std::vector<const llvm::Value *> &ptsSet) const {
+  /**
+   * Using a cache for this dramatically reduces the amount of time spent here, 
+   * as the call to "getPointsToSet" has to re-traverse a bunch of internal 
+   * data structures to construct the set.
+   */
   TimerStatIncrementer timer(stats::nvmAndersenTime);
   bool ret = true;
   if (!anders_cache_->count(v)) {
