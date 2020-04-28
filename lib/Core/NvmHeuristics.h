@@ -405,6 +405,8 @@ namespace klee {
       virtual bool needsRecomputation() const = 0;
 
     public:
+
+      typedef std::shared_ptr<NvmHeuristicInfo> Shared;
     
       virtual ~NvmHeuristicInfo() = 0;
 

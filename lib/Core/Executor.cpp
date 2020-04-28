@@ -1740,7 +1740,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           bindLocal(kcaller, state, result);
 
           // (iangneal): update NVM allocation sites
-          if (state.nvmInfo && 
+          if (state.nvmInfo() && 
               result->getWidth() == Context::get().getPointerWidth() &&
               utils::isNvmAllocationSite(kmodule->module.get(), kcaller->inst)) {
             
@@ -2008,8 +2008,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     InlineAsm *ia = nullptr;
 
     // (iangneal): It helps NVM heuristics to resolve function pointers.
-    if (state.nvmInfo) {
-      state.nvmInfo->resolveFunctionCall(ki, f);
+    if (state.nvmInfo()) {
+      state.nvmInfo()->resolveFunctionCall(ki, f);
     }
 
     if ((ia = dyn_cast<InlineAsm>(fp))) {
@@ -2870,14 +2870,14 @@ void Executor::updateStates(ExecutionState *current) {
    * (iangneal): Update the heuristic first, so that the priorities are up
    * to date for the NvmPathSearcher.
    */ 
-  if (current && current->nvmInfo) {
+  if (current && current->nvmInfo()) {
     std::vector<ExecutionState*> toUpdate;
     toUpdate.push_back(current);
     toUpdate.insert(toUpdate.end(), addedStates.begin(), addedStates.end());
 
     for (ExecutionState *s : toUpdate) {
-      assert(s && s->nvmInfo);
-      s->nvmInfo->stepState(s, s->prevPC(), s->pc());
+      assert(s && s->nvmInfo());
+      s->nvmInfo()->stepState(s, s->prevPC(), s->pc());
     }
   }
   
@@ -3964,8 +3964,8 @@ bool Executor::isPersistentMemory(ExecutionState &state, const MemoryObject *mo)
 void Executor::executeUpdateNvmInfo(ExecutionState &state, 
                                     KInstruction *loc, 
                                     const ObjectState *cos) {
-  if (state.nvmInfo && loc && cos) {
-    state.nvmInfo->updateCurrentState(&state, loc, isa<PersistentState>(cos));
+  if (state.nvmInfo() && loc && cos) {
+    state.nvmInfo()->updateCurrentState(&state, loc, isa<PersistentState>(cos));
   }
 }
 

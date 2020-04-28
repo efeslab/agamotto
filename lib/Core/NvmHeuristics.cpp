@@ -7,6 +7,8 @@ using namespace klee;
 #include <sstream>
 #include <utility>
 
+#include "llvm/IR/GlobalAlias.h"
+
 #include "CoreStats.h"
 #include "Executor.h"
 #include "klee/ExecutionState.h"
@@ -628,8 +630,16 @@ void NvmStaticHeuristic::computePriority(void) {
         possibleFns.insert(f);
       } else if (Function *f = ci->getCalledFunction()) {
         possibleFns.insert(f);
+      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(ci->getCalledValue())) {
+        Function *f = dyn_cast<Function>(ga->getAliasee());
+        assert(f && "bad assumption about aliases!");
+        possibleFns.insert(f);
       } else {
-        if (!ci->isIndirectCall()) errs() << *ci << "\n";
+        if (!ci->isIndirectCall()) {
+          errs() << *ci << "\n";
+          errs() << ci->getCalledValue() << "\n";
+          if (ci->getCalledValue()) errs() << *ci->getCalledValue() << "\n";
+        }
         assert(ci->isIndirectCall());
 
         for (Function &f : *curr_->getModule()) {
@@ -786,6 +796,10 @@ void NvmStaticHeuristic::computePriority(void) {
       if (Function *f = utils::getCallInstFunction(ci)) {
         possibleFns.insert(f);
       } else if (Function *f = ci->getCalledFunction()) {
+        possibleFns.insert(f);
+      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(ci->getCalledValue())) {
+        Function *f = dyn_cast<Function>(ga->getAliasee());
+        assert(f && "bad assumption about aliases!");
         possibleFns.insert(f);
       } else {
         if (!ci->isIndirectCall()) errs() << *ci << "\n";

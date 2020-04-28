@@ -45,16 +45,17 @@ cl::opt<bool> DebugLogStateMerge(
     cl::cat(MergeCat));
 }
 
-namespace klee {
-  extern cl::opt<NvmHeuristicBuilder::Type> NvmCheck;
-}
-
 /***/
 
 void ExecutionState::setupMain(KFunction *kf) {
   // single process, make its id always be 0
+<<<<<<< HEAD
   // the first thread, set its id to be 1
   Thread mainThread = Thread(1, 0, kf);
+=======
+  // the first thread, set its id to be 0
+  Thread mainThread = Thread(0, 0, executor_, kf);
+>>>>>>> Move NVM heuristic to thread state.
   threads.insert(std::make_pair(mainThread.tuid, mainThread));
   crtThreadIt = threads.begin();
 }
@@ -71,7 +72,8 @@ ExecutionState::ExecutionState(Executor *executor, KFunction *kf) :
     coveredNew(false),
     forkDisabled(false),
     ptreeNode(0),
-    steppedInstructions(0) {
+    steppedInstructions(0),
+    executor_(executor) {
   setupMain(kf);
   setupTime();
 }
@@ -107,7 +109,6 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     wlistCounter(state.wlistCounter),
     stateTime(state.stateTime),
 
-    nvmInfo(nullptr),
     rootCauseMgr(state.rootCauseMgr),
 
     addressSpace(state.addressSpace),
@@ -126,7 +127,8 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     symbolics(state.symbolics),
     arrayNames(state.arrayNames),
     openMergeStack(state.openMergeStack),
-    steppedInstructions(state.steppedInstructions)
+    steppedInstructions(state.steppedInstructions),
+    executor_(state.executor_)
 {
   for (unsigned int i=0; i<symbolics.size(); i++)
     symbolics[i].first->refCount++;
@@ -346,7 +348,7 @@ void ExecutionState::popFrame(Thread &t) {
 /* Multithreading related function  */
 Thread &ExecutionState::createThread(thread_id_t tid, KFunction *kf) {
   // we currently assume there is only one process and its id is 0
-  Thread newThread = Thread(tid, 0, kf);
+  Thread newThread = Thread(tid, 0, NvmHeuristicBuilder::copy(nvmInfo()), kf);
   
   std::pair<threads_ty::iterator, bool> res =
       threads.insert(std::make_pair(newThread.tuid, newThread));
