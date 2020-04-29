@@ -3896,6 +3896,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     // bound can be 0 on failure or overlapped
     if (bound) {
+      executeUpdateNvmInfo(state, state.prevPC(), os);
       // Actually do the read or write
       doOperation(*bound, mo, os, mo->getOffsetExpr(address));
     }
@@ -3965,6 +3966,17 @@ void Executor::executeUpdateNvmInfo(ExecutionState &state,
                                     KInstruction *loc, 
                                     const ObjectState *cos) {
   if (state.nvmInfo() && loc && cos) {
+    assert(cos->getObject() && "I don't know what to do!");
+    if (!cos->getObject()->allocSite) {
+      // errs() << __func__ << " object: " << cos->getObject()->name << "\n";
+      // errs() << __func__ << " usage: " << *loc->inst << " @ " << loc->inst->getFunction()->getName() << "\n";
+      return;
+    }
+    assert(cos->getObject()->allocSite && "What do we do if alloc site is null???");
+    if (isa<AllocaInst>(cos->getObject()->allocSite)) {
+      return;
+    }
+    if (isa<LoadInst>(loc->inst)) return;
     state.nvmInfo()->updateCurrentState(&state, loc, isa<PersistentState>(cos));
   }
 }

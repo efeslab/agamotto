@@ -103,6 +103,16 @@ Thread::Thread(thread_id_t tid,
   validateAndInit(start_function);
 }
 
+Thread::Thread(const Thread &thread) 
+  : pc(thread.pc),
+    prevPC(thread.pc),
+    stack(thread.stack),
+    incomingBBIndex(thread.incomingBBIndex),
+    enabled(thread.enabled),
+    waitingList(thread.waitingList),
+    tuid(thread.tuid),
+    nvmInfo(NvmHeuristicBuilder::copy(thread.nvmInfo)) {}
+
 /* Debugging helper */
 void Thread::dumpStack(llvm::raw_ostream &out) const {
   unsigned idx = 0;

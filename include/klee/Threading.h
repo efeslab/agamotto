@@ -122,6 +122,11 @@ public:
   Thread(thread_id_t tid, process_id_t pid, Executor *e, KFunction *start_function);
   Thread(thread_id_t tid, process_id_t pid, 
          std::shared_ptr<NvmHeuristicInfo> &&info, KFunction *start_function);
+  
+  // (iangneal): we need a custom copy constructor so that the nvmInfo is properly
+  // separated.
+  Thread(const Thread &thread);
+
   thread_id_t getTid() const { return tuid.first; }
   process_id_t getPid() const { return tuid.second; }
 

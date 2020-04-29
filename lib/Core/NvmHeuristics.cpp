@@ -47,8 +47,8 @@ namespace klee {
 
 /* #region NvmValueDesc */
 
-bool NvmValueDesc::getPointsToSet(const llvm::Value *v, 
-                                  std::vector<const llvm::Value *> &ptsSet) const {
+bool NvmValueDesc::getPointsToSet(const Value *v, 
+                                  std::unordered_set<const Value*> &ptsSet) const {
   /**
    * Using a cache for this dramatically reduces the amount of time spent here, 
    * as the call to "getPointsToSet" has to re-traverse a bunch of internal 
@@ -57,8 +57,13 @@ bool NvmValueDesc::getPointsToSet(const llvm::Value *v,
   TimerStatIncrementer timer(stats::nvmAndersenTime);
   bool ret = true;
   if (!anders_cache_->count(v)) {
-    ret = andersen_->getResult().getPointsToSet(v, ptsSet);
+    std::vector<const Value*> rawSet;
+    ret = andersen_->getResult().getPointsToSet(v, rawSet);
     if (ret) {
+      for (const Value *v : rawSet) {
+        if (nvm_allocs_.count(v)) ptsSet.insert(v);
+      }
+
       (*anders_cache_)[v] = ptsSet;
     }
   } else {
