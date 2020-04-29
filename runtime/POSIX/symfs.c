@@ -410,7 +410,9 @@ void klee_init_symfs(fs_init_descriptor_t *fid) {
   int i;
   for (i=0; i < n_sym_files; ++i) {
     disk_file_t *dfile = &__sym_fs.sym_files[i];
-    if (fid->sym_files[i].pmem_type != NOT_PMEM) {
+    dfile->pmem_type = fid->sym_files[i].pmem_type;
+
+    if (dfile->pmem_type != NOT_PMEM) {
       _create_pmem_file(dfile, &fid->sym_files[i], &def_stat);
       continue;
     }

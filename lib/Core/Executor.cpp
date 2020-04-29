@@ -3331,6 +3331,8 @@ void Executor::terminateStateOnError(ExecutionState &state,
       msg << "assembly.ll line: " << ii.assemblyLine << "\n";
     }
 
+    // Print the call stack to both stdout and the .err file
+    state.dumpStack(msg);
     state.dumpStack(llvm::errs());
 
     std::string info_str = info.str();
@@ -4067,6 +4069,11 @@ bool Executor::getAllPersistenceErrors(ExecutionState &state,
   bool hasErr = false;
   if (state.persistentObjects.size()) {
     for (const MemoryObject *mo : state.persistentObjects) {
+      if (haltExecution) {
+        klee_warning("Halting execution while solving for persistence errors. "
+                     "Results will be incomplete.");
+        return hasErr;
+      }
       bool objHasErr = getPersistenceErrors(state, mo, errors);
       hasErr = hasErr || objHasErr;
     }

@@ -739,11 +739,7 @@ void PersistentState::write8(const ExecutionState &state,
   dirtyCacheLineAtOffset(state, offset);
 }
 
-void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
-                                             unsigned offset) {
-  dirtyCacheLineAtOffset(state, ConstantExpr::create(offset, Expr::Int32));
-}
-
+/* Used to avoid pushing duplicates onto update lists */
 static bool isUpdateListHeadEqualTo(const UpdateList &updates,
                                     ref<Expr> index, ref<Expr> value) {
   if (!updates.head)
@@ -753,6 +749,11 @@ static bool isUpdateListHeadEqualTo(const UpdateList &updates,
   if (updates.head->value.compare(value))
     return false;
   return true;
+}
+
+void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
+                                             unsigned offset) {
+  dirtyCacheLineAtOffset(state, ConstantExpr::create(offset, Expr::Int32));
 }
 
 void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
@@ -812,10 +813,6 @@ void PersistentState::commitPendingPersists(const ExecutionState &state) {
 
 ref<Expr> PersistentState::getIsOffsetPersistedExpr(ref<Expr> offset,
                                                     bool pending) const {
-  if (!pendingCacheLineUpdates.getSize()) {
-    return ConstantExpr::create(1, Expr::Bool);
-  }
-
   return isCacheLinePersisted(getCacheLine(offset), pending);
 }
 
@@ -859,7 +856,7 @@ PersistentState::getRootCauses(TimingSolver *solver,
                                ExecutionState &state,
                                const UpdateList &ul) const {
   std::unordered_set<std::string> causes;
-  if (!ul.getSize()) return causes;
+  if (ul.head == nullptr) return causes;
 
   auto idx = getAnyOffsetExpr();
   auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
@@ -882,6 +879,11 @@ ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine,
                                                 bool pending) const {
   // llvm::errs() << "isCacheLinePersisted: " << *cacheLine << "\n";
   auto &updateList = pending ? pendingCacheLineUpdates : cacheLineUpdates;
+
+  // If no updates, then trivially persisted
+  if (updateList.head == nullptr)
+    return getPersistedExpr();
+
   ref<Expr> result = ReadExpr::create(updateList,
                                       ZExtExpr::create(cacheLine, Expr::Int32));
   return EqExpr::create(result, getPersistedExpr());
@@ -907,7 +909,7 @@ PersistentState::getRootCause(TimingSolver *solver,
 
   for (uint64_t cl = 0; cl < numCacheLines(); ++cl) {
     ref<Expr> clVal = ReadExpr::create(ul, ConstantExpr::create(cl, Expr::Int32));
-    std::pair<ref<Expr>, ref<Expr>> range = solver->getRange(state, clVal);
+    std::pair<ref<Expr>, ref<Expr> > range = solver->getRange(state, clVal);
 
     ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
     ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);  

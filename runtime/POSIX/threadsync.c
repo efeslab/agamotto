@@ -152,6 +152,7 @@ int pthread_mutex_destroy(pthread_mutex_t *mutex) {
   mutex_data_t *mdata = _get_mutex_data(mutex);
 
   free(mdata);
+  *((mutex_data_t**)mutex) = STATIC_MUTEX_VALUE;
 
   return 0;
 }
@@ -269,6 +270,7 @@ int pthread_cond_destroy(pthread_cond_t *cond) {
   condvar_data_t *cdata = _get_condvar_data(cond);
 
   free(cdata);
+  *((condvar_data_t**)cond) = STATIC_CVAR_VALUE;
 
   return 0;
 }
@@ -393,6 +395,7 @@ int pthread_barrier_destroy(pthread_barrier_t *barrier) {
   barrier_data_t *bdata = _get_barrier_data(barrier);
 
   free(bdata);
+  *((barrier_data_t**)barrier) = STATIC_BARRIER_VALUE;
 
   return 0;
 }
@@ -464,6 +467,7 @@ int pthread_rwlock_destroy(pthread_rwlock_t *rwlock) {
   rwlock_data_t *rwdata = _get_rwlock_data(rwlock);
 
   free(rwdata);
+  *((rwlock_data_t**)rwlock) = STATIC_RWLOCK_VALUE;
 
   return 0;
 }
