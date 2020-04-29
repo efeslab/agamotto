@@ -66,7 +66,7 @@ namespace klee {
    */
   class Executor;
   class ExecutionState;
-  class NvmContextDynamicHeuristic;
+  class NvmDynamicHeuristic;
   class NvmHeuristicBuilder; // Defined at the end
 
   typedef std::shared_ptr<AndersenAAWrapperPass> SharedAndersen;
@@ -270,7 +270,7 @@ namespace klee {
     public: 
       typedef std::shared_ptr<NvmContextDesc> Shared;
     private:
-      friend class NvmContextDynamicHeuristic;
+      friend class NvmDynamicHeuristic;
       SharedAndersen andersen;
 
       /**
@@ -575,59 +575,13 @@ namespace klee {
 
   /* #endregion */
 
-  /* #region NvmInsensitiveDynamicHeuristic */
-
-  /**
-   * TODO: resolve function pointers
-   */
-  class NvmInsensitiveDynamicHeuristic : public NvmStaticHeuristic {
-    friend class NvmHeuristicBuilder;
-    protected:
-      
-      ValueSet activeNvmSites_;
-      ValueSet knownVolatiles_;
-
-      NvmInsensitiveDynamicHeuristic(Executor *executor, KFunction *mainFn) 
-        : NvmStaticHeuristic(executor, mainFn) {}
-
-      virtual const ValueSet &getCurrentNvmSites() const override { 
-        return activeNvmSites_;
-      }
-
-      /**
-       * Since we track volatiles, we know something modifies NVM if:
-       * - It can point to an active NVM allocation.
-       * - There is no known volatile that has the same points-to set.
-       */
-      // virtual bool modifiesNvm(llvm::Instruction *i) const override;
-
-      virtual bool needsRecomputation() const override;
-
-    public:
-
-      NvmInsensitiveDynamicHeuristic(const NvmInsensitiveDynamicHeuristic &other) = default;
-
-      virtual ~NvmInsensitiveDynamicHeuristic() {}
-
-      /**
-       * May change one of the current states, or could not.
-       */
-      virtual void updateCurrentState(ExecutionState *es, 
-                                      KInstruction *pc, 
-                                      bool isNvm) override;
-
-      virtual void dump(void) const override;
-  };
-
-  /* #endregion */
-
-  /* #region NvmContextDynamicHeuristic */
+  /* #region NvmDynamicHeuristic */
 
   /**
    * We keep call stack information with our values, but not flow information.
    * We forgo a flow-sensitive analysis as it is extremely costly.
    */
-  class NvmContextDynamicHeuristic : public NvmHeuristicInfo {
+  class NvmDynamicHeuristic : public NvmHeuristicInfo {
     friend class NvmHeuristicBuilder;
     protected:
       
@@ -641,7 +595,7 @@ namespace klee {
        * re-computing priority fairly efficient.
        */
 
-      NvmContextDynamicHeuristic(Executor *executor, KFunction *mainFn);
+      NvmDynamicHeuristic(Executor *executor, KFunction *mainFn);
 
       virtual void computePriority() override {
         contextDesc->setAuxWeights(contextDesc->setCoreWeights());
@@ -652,9 +606,9 @@ namespace klee {
 
     public:
 
-      NvmContextDynamicHeuristic(const NvmContextDynamicHeuristic &other) = default;
+      NvmDynamicHeuristic(const NvmDynamicHeuristic &other) = default;
 
-      virtual ~NvmContextDynamicHeuristic() {}
+      virtual ~NvmDynamicHeuristic() {}
 
       virtual uint64_t getCurrentPriority(void) const override {
         return contextDesc->getPriority(curr);
@@ -703,8 +657,7 @@ namespace klee {
       enum Type {
         None = 0,
         Static,
-        InsensitiveDynamic,
-        ContextDynamic,
+        Dynamic,
         Invalid
       };
 

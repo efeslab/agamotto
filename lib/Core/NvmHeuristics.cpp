@@ -29,8 +29,7 @@ namespace klee {
         cl::desc("Choose the search heuristic used by the NVM searcher."),
         cl::values(clNvmEnumValN(NvmHeuristicBuilder::Type::None),
                    clNvmEnumValN(NvmHeuristicBuilder::Type::Static),
-                   clNvmEnumValN(NvmHeuristicBuilder::Type::InsensitiveDynamic),
-                   clNvmEnumValN(NvmHeuristicBuilder::Type::ContextDynamic)
+                   clNvmEnumValN(NvmHeuristicBuilder::Type::Dynamic)
                    KLEE_LLVM_CL_VAL_END),
         cl::init(NvmHeuristicBuilder::Type::None),
         cl::cat(NvmCat));
@@ -953,156 +952,16 @@ void NvmStaticHeuristic::dump(void) const {
 
 /* #endregion */
 
-/* #region NvmInsensitiveDynamicHeuristic */
+/* #region NvmDynamicHeuristic */
 
-bool NvmInsensitiveDynamicHeuristic::needsRecomputation() const { 
-  for (Function &f : *module_) {
-    for (BasicBlock &b : f) {
-      for (Instruction &i : b) {
-        if (mayHaveWeight(&i)) {
-          if ((*weights_)[&i] != computeInstWeight(&i)) {
-            return true;
-          }
-        }
-      }
-    }
-  }
-
-  return false;
-}
-
-// bool NvmInsensitiveDynamicHeuristic::modifiesNvm(Instruction *i) const {
-//   if (isa<StoreInst>(i) || utils::isFlush(i)) {
-//     Value *v = dyn_cast<Value>(i);
-//     if (utils::isFlush(i)) {
-//       assert(isa<CallInst>(i));
-//       v = dyn_cast<CallInst>(i)->getArgOperand(0);
-//     }
-//     std::vector<const Value*> ptsSet;
-
-//     TimerStatIncrementer timer(stats::nvmAndersenTime);
-//     bool ret = analysis_->getResult().getPointsToSet(v, ptsSet);
-
-//     if (!ret) {
-//       if (getCurrentNvmSites().count(v)) {
-//         return true;
-//       } else if (AllocaInst *ai = dyn_cast<AllocaInst>(i)) {
-//         if (ai->getType()->isFunctionTy()) return 0u;
-//       } else if (StoreInst *si = dyn_cast<StoreInst>(i)) {
-//         if (isa<GlobalValue>(si->getPointerOperand()->stripPointerCasts())) return 0u;
-
-//         assert(analysis_->getResult().getPointsToSet(si->getPointerOperand(), ptsSet));
-//       } else {
-//         errs() << *i << "\n";
-//         assert(false && "could not get points-to!");
-//       }
-//     }
-    
-//     bool pointsToNvm = false;
-//     for (const Value *ptsTo : ptsSet) {
-//       if (getCurrentNvmSites().count(ptsTo)) {
-//         pointsToNvm = true;
-//         break;
-//       }
-//     }
-
-//     if (!pointsToNvm) return false;
-
-//     ValueSet truePtsSet(ptsSet.begin(), ptsSet.end());
-
-//     for (const Value *vol : knownVolatiles_) {
-//       std::vector<const Value*> volPtsSet;
-//       assert(analysis_->getResult().getPointsToSet(vol, volPtsSet));
-//       ValueSet trueVolSet(volPtsSet.begin(), volPtsSet.end());
-
-//       if (truePtsSet == trueVolSet) return false;
-//     }
-
-//     return true;
-//   }
-
-//   return false;
-// }
-
-void NvmInsensitiveDynamicHeuristic::updateCurrentState(ExecutionState *es, 
-                                                        KInstruction *pc, 
-                                                        bool isNvm) {
-  TimerStatIncrementer timer(stats::nvmHeuristicTime);
-
-  // errs() << "[updateCurrentState] " << *pc->inst << "\n";
-
-  bool modified = false;
-  if (nvmSites_.count(pc->inst)) {
-    if (isNvm) {
-      activeNvmSites_.insert(pc->inst);
-    } else {
-      activeNvmSites_.erase(pc->inst);
-    }
-    modified = true;
-  } else {
-    Value *v = nullptr;
-    if (LoadInst *li = dyn_cast<LoadInst>(pc->inst)) {
-      v = li->getPointerOperand();
-    } else if (StoreInst *si = dyn_cast<StoreInst>(pc->inst)) {
-      v = si->getPointerOperand();
-    }
-
-    if (v) {
-      // We only want to add a known volatile to something that points to NVM
-      std::vector<const Value*> volPtsSet;
-      assert(analysis_->getResult().getPointsToSet(v, volPtsSet));
-
-      if (nvmSites_.count(v)) {
-        if (isNvm) {
-          knownVolatiles_.erase(pc->inst);
-        } else {
-          knownVolatiles_.insert(pc->inst);
-        }
-        modified = true;
-      }
-    }
-  }
-  
-  // I like lazy eval
-  if (modified && needsRecomputation()) {
-    computePriority();
-    dump();
-  } 
-}
-
-void NvmInsensitiveDynamicHeuristic::dump(void) const {
-  uint64_t nonZeroWeights = 0, nonZeroPriorities = 0;
-
-  for (const auto &p : *weights_) nonZeroWeights += (p.second > 0);
-  for (const auto &p : *priorities_) nonZeroPriorities += (p.second > 0);
-
-  double pWeights = 100.0 * ((double)nonZeroWeights / (double)weights_->size());
-  double pPriorities = 100.0 * ((double)nonZeroPriorities / (double)priorities_->size());
-
-  for (auto *v : utils::getNvmAllocationSites(executor_->kmodule->module.get(), analysis_)) {
-    errs() << *v << "\n";
-  }
-
-  fprintf(stderr, "NvmInsensitiveDynamicHeuristic:\n"
-                  "\tNVM allocation sites: %lu/%lu\n"
-                  "\t%% instructions with weight: %f%%\n"
-                  "\t%% instructions with priority: %f%%\n",
-                  activeNvmSites_.size(), nvmSites_.size(), 
-                  pWeights, pPriorities);
-}
-
-/* #endregion */
-
-/* #region NvmContextDynamicHeuristic */
-
-NvmContextDynamicHeuristic::NvmContextDynamicHeuristic(Executor *executor,
+NvmDynamicHeuristic::NvmDynamicHeuristic(Executor *executor,
                                                        KFunction *mainFn)
   : contextDesc(std::make_shared<NvmContextDesc>(utils::createAndersen(*executor->kmodule->module), 
                                                  executor->kmodule->module.get(),
                                                  mainFn->function)),
     curr(mainFn->getKInstruction(mainFn->function->getEntryBlock().getFirstNonPHIOrDbg())) {}
 
-void NvmContextDynamicHeuristic::updateCurrentState(ExecutionState *es, 
+void NvmDynamicHeuristic::updateCurrentState(ExecutionState *es, 
                                                     KInstruction *pc, 
                                                     bool isNvm) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
@@ -1133,7 +992,7 @@ void NvmContextDynamicHeuristic::updateCurrentState(ExecutionState *es,
   }
 }
 
-void NvmContextDynamicHeuristic::stepState(ExecutionState *es, 
+void NvmDynamicHeuristic::stepState(ExecutionState *es, 
                                            KInstruction *pc, 
                                            KInstruction *nextPC) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
@@ -1194,11 +1053,8 @@ const char *NvmHeuristicBuilder::typeNames[] = {
 const char *NvmHeuristicBuilder::typeDesc[] = {
   "None: uses a no-op heuristic (disables the features)",
   "Static: this only uses the points-to information from Andersen's analysis",
-  "Insensitive-Dynamic: this updates Andersen's analysis as runtime "
-    "variables are resolved",
-  "Context-Dynamic: this updates Andersen's analysis while being context"
-    " (call-site) sensitive",
-};
+  "Dynamic: this updates Andersen's analysis based on runtime information.",
+  };
 
 std::shared_ptr<NvmHeuristicInfo> 
 NvmHeuristicBuilder::create(Type t, Executor *executor, KFunction *main) {
@@ -1212,11 +1068,8 @@ NvmHeuristicBuilder::create(Type t, Executor *executor, KFunction *main) {
     case Static:
       ptr = new NvmStaticHeuristic(executor, main);
       break;
-    case InsensitiveDynamic:
-      ptr = new NvmInsensitiveDynamicHeuristic(executor, main);
-      break;
-    case ContextDynamic:
-      ptr = new NvmContextDynamicHeuristic(executor, main);
+    case Dynamic:
+      ptr = new NvmDynamicHeuristic(executor, main);
       break;
     default:
       assert(false && "unsupported!");
@@ -1245,12 +1098,8 @@ NvmHeuristicBuilder::copy(const std::shared_ptr<NvmHeuristicInfo> &info) {
     return info;
   }
 
-  if (auto iptr = dynamic_cast<const NvmInsensitiveDynamicHeuristic*>(info.get())) {
-    ptr = new NvmInsensitiveDynamicHeuristic(*iptr);
-  }
-
-  if (auto cptr = dynamic_cast<const NvmContextDynamicHeuristic*>(info.get())) {
-    ptr = new NvmContextDynamicHeuristic(*cptr);
+  if (auto cptr = dynamic_cast<const NvmDynamicHeuristic*>(info.get())) {
+    ptr = new NvmDynamicHeuristic(*cptr);
   }
 
   assert(ptr && "null!");

@@ -97,8 +97,7 @@ class Executor : public Interpreter {
   friend class NvmPathSearcher;
   friend class NvmHeuristicInfo;
   friend class NvmStaticHeuristic;
-  friend class NvmInsensitiveDynamicHeuristic;
-  friend class NvmContextDynamicHeuristic;
+  friend class NvmDynamicHeuristic;
   friend class NvmHeuristicBuilder;
   friend class NvmInstructionDesc;
 
