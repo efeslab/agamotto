@@ -90,7 +90,7 @@ namespace klee {
     public:
       typedef std::shared_ptr<NvmValueDesc> Shared;
       typedef std::unordered_map<const llvm::Value*, 
-                                 std::vector<const llvm::Value*> > AndersenCache;
+                                 std::unordered_set<const llvm::Value*> > AndersenCache;
       typedef std::shared_ptr<AndersenCache> SharedAndersenCache;
     private:
       /**
@@ -122,9 +122,11 @@ namespace klee {
        * Each value has a points-to set given by the Andersen alias analysis.
        * This is a helper method to get that set, as it passes through the 
        * cache first.
+       * 
+       * We also filter down the set to only values which can return NVM.
        */
       bool getPointsToSet(const llvm::Value *v, 
-                          std::vector<const llvm::Value *> &ptsSet) const;
+                          std::unordered_set<const llvm::Value *> &ptsSet) const;
 
       /**
        * Returns true if A may point to B. A may point to B if their points-to
@@ -192,7 +194,7 @@ namespace klee {
        * If the state is updated, returns a new shared pointer. Else, returns
        * shared_from_this.
        */
-      NvmValueDesc::Shared updateState(llvm::Value *val, bool nvm) const;
+      NvmValueDesc::Shared updateState(llvm::Value *val, bool nvm);
 
       /**
        * When we do an indirect function call, we can't propagate local nvm variables
@@ -279,22 +281,25 @@ namespace klee {
       bool __attribute__((unused)) returnHasWeight; 
 
       /**
-       * Many function contexts will be the same.
+       * Many function contexts will be the same. Particularly, when we do 
+       * updates, we don't want to recompute the priority every time, as they
+       * will likely have common themes. So, we will cache more than just the
+       * initial state.
        */
       struct ContextCacheKey {
         llvm::Function *function;
-        NvmValueDesc::Shared initialState;
+        NvmValueDesc::Shared valueState;
 
-        ContextCacheKey(llvm::Function *f, NvmValueDesc::Shared init) 
-          : function(f), initialState(init) {}
+        ContextCacheKey(llvm::Function *f, NvmValueDesc::Shared vals) 
+          : function(f), valueState(vals) {}
 
         bool operator==(const ContextCacheKey &rhs) const {
-          return function == rhs.function && *initialState == *rhs.initialState;
+          return function == rhs.function && *valueState == *rhs.valueState;
         }
 
         struct Hash {
           uint64_t operator()(const ContextCacheKey &cck) const {
-            return std::hash<void*>{}(cck.function) ^ cck.initialState->hash();
+            return std::hash<void*>{}(cck.function) ^ cck.valueState->hash();
           }
         };
       };
@@ -627,6 +632,7 @@ namespace klee {
     protected:
       
       std::list<NvmContextDesc::Shared> contextStack;
+      std::list<llvm::CallInst*> callInstStack; 
       NvmContextDesc::Shared contextDesc;
       KInstruction *curr;
 
