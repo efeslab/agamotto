@@ -3964,37 +3964,17 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
   // Check if offset already flushed.
   ref<Expr> check = ps->getIsOffsetPersistedExpr(offset,
                                                  true /* allow pending */);
+  bool isAlreadyPersisted;
+  bool success = solver->mustBeTrue(state, check, isAlreadyPersisted);
+  assert(success && "FIXME: Unhandled solver failure");
 
-  // TODO: change to mustBeTrue or something
-  StatePair isAlreadyPersisted = fork(state, check, true);
-
-  auto *errState = isAlreadyPersisted.first;
-  auto *goodState = isAlreadyPersisted.second;
-
-  // Warn if already persisted.
-  if (errState) {
-    const ObjectState *os = errState->addressSpace.findObject(mo);
-    assert(os);
-    ObjectState *wos = errState->addressSpace.getWriteable(mo, os);
-    assert(wos);
-    PersistentState *ps = dyn_cast<PersistentState>(wos);
-    assert(ps);
+  // Warn if already flushed, otherwise process normally.
+  if (isAlreadyPersisted) {
     /* klee_warning("Unnecessary Flush"); */
-
-    // avoid masking later bugs; emit error, but continue
-    emitPmemError(*errState, ps->getLastFlush(solver, *errState, offset));
-  }
-
-  // Process normally if not yet persisted.
-  if (goodState) {
-    const ObjectState *os = goodState->addressSpace.findObject(mo);
-    assert(os);
-    ObjectState *wos = goodState->addressSpace.getWriteable(mo, os);
-    assert(wos);
-    PersistentState *ps = dyn_cast<PersistentState>(wos);
-    assert(ps);
-    ps->persistCacheLineAtOffset(state, offset);
+    emitPmemError(state, ps->getLastFlush(solver, state, offset));
+  } else {
     /* klee_warning("Good Flush"); */
+    ps->persistCacheLineAtOffset(state, offset);
   }
 }
 
@@ -4117,12 +4097,8 @@ bool Executor::getPersistenceErrors(ExecutionState &state,
   auto anyOffset = ps->getAnyOffsetExpr();
   auto inBoundsConstraint = mo->getBoundsCheckOffset(anyOffset);
   state.constraints.addConstraint(inBoundsConstraint);
-  // auto inBoundsOffset = mo->getBoundsCheckOffset(anyOffset);
-  // auto anyOffset = mo->getBoundsCheckOffset(ps->getAnyOffsetExpr());
 
   bool isPersisted;
-  // bool success = solver->mustBeTrue(state, ps->getIsOffsetPersistedExpr(inBoundsOffset),
-  //                                   isPersisted);
   bool success = solver->mustBeTrue(state, ps->getIsOffsetPersistedExpr(anyOffset),
                                     isPersisted);
   assert(success && "FIXME: Unhandled solver failure");
