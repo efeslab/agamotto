@@ -82,41 +82,41 @@ NvmValueDesc::Shared NvmValueDesc::doCall(CallInst *ci, Function *f) const {
     }
   }
 
-  // for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
-  //   Value *op = ci->getArgOperand(i);
-  //   if (!op->getType()->isPtrOrPtrVectorTy()) continue;
-  //   assert(op);
+  for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
+    Value *op = ci->getArgOperand(i);
+    if (!op->getType()->isPtrOrPtrVectorTy()) continue;
+    assert(op);
 
-  //   bool pointsToNvm = true;
-  //   // We actually want the points-to set for this
-  //   std::vector<const Value*> ptsSet;
-  //   // errs() << "doing call instruction stuff\n";
-  //   // errs() << *op << "\n";
+    bool pointsToNvm = true;
+    // We actually want the points-to set for this
+    std::unordered_set<const Value*> ptsSet;
+    // errs() << "doing call instruction stuff\n";
+    // errs() << *op << "\n";
   
-  //   bool ret = getPointsToSet(op, ptsSet);
-  //   assert(ret && "could not get points-to set!");
-  //   for (const Value *ptsTo : ptsSet) {
-  //     if (!isNvm(ptsTo)) {
-  //       pointsToNvm = false;
-  //       break;
-  //     }
-  //   }
+    bool ret = getPointsToSet(op, ptsSet);
+    assert(ret && "could not get points-to set!");
+    for (const Value *ptsTo : ptsSet) {
+      if (!isNvm(ptsTo)) {
+        pointsToNvm = false;
+        break;
+      }
+    }
 
-  //   if (pointsToNvm) continue;
+    if (pointsToNvm) continue;
 
-  //   if (i >= f->arg_size()) {
-  //     // assert(f->isVarArg() && "argument size mismatch!");
-  //     // newDesc.varargs_contain_nvm_ = true;
-  //     break;
-  //   } else {
-  //     Argument *arg = (f->arg_begin() + i);
-  //     assert(arg);
-  //     // Scalars don't necessarily point to anything.
-  //     if (!arg->getType()->isPtrOrPtrVectorTy()) continue;
-  //     newDesc.not_local_nvm_.insert(arg);
-  //   }
+    if (i >= f->arg_size()) {
+      // assert(f->isVarArg() && "argument size mismatch!");
+      // newDesc.varargs_contain_nvm_ = true;
+      break;
+    } else {
+      Argument *arg = (f->arg_begin() + i);
+      assert(arg);
+      // Scalars don't necessarily point to anything.
+      if (!arg->getType()->isPtrOrPtrVectorTy()) continue;
+      newDesc.not_local_nvm_.insert(arg);
+    }
 
-  // }
+  }
 
   return std::make_shared<NvmValueDesc>(newDesc);
 }
@@ -195,31 +195,26 @@ bool NvmValueDesc::pointsToIsEq(const Value *a, const Value *b) const {
 
 bool NvmValueDesc::matchesKnownVolatile(const Value *posNvm) const {
   if (isa<GlobalValue>(posNvm)) {
-    for (const Value *vol : not_global_nvm_) {
+    if (not_global_nvm_.count(posNvm)) {
+      return true;
+    }
 
+    for (const Value *vol : not_global_nvm_) {
       for (const User *u : vol->users()) {
         if (isa<CallInst>(u)) continue;
         if (u == posNvm) return true;
       }
-
-      // if (vol->getType() != posNvm->getType()) continue;
-      // if (pointsToIsEq(posNvm, vol)) {
-      //   // errs() << "known is " << *vol << "\n";
-      //   return true;
-      // }
     }
   } else {
+    if (not_local_nvm_.count(posNvm)) {
+      return true;
+    }
+
     for (const Value *vol : not_local_nvm_) {
       for (const User *u : vol->users()) {
         if (isa<CallInst>(u)) continue;
         if (u == posNvm) return true;
       }
-
-      // if (vol->getType() != posNvm->getType()) continue;
-      // if (pointsToIsEq(posNvm, vol)) {
-      //   // errs() << "known is " << *vol << "\n";
-      //   return true;
-      // }
     }
   }
   
@@ -227,30 +222,9 @@ bool NvmValueDesc::matchesKnownVolatile(const Value *posNvm) const {
 }
 
 NvmValueDesc::Shared NvmValueDesc::updateState(Value *val, bool isNvm) {
-  TimerStatIncrementer timer(stats::nvmGetSharedTime);
+
   if (!val->getType()->isPtrOrPtrVectorTy()) {
     return shared_from_this();
-  }
-
-  // if (LoadInst *li = dyn_cast<LoadInst>(val)) {
-  //   if (!pointsToIsEq(li, li->getPointerOperand())) {
-  //     std::unordered_set<const Value *> ptsSet;
-  //     getPointsToSet(li, ptsSet);
-  //     errs() << *li << "@" << li->getFunction()->getName() << "\n";
-  //     for (const auto *v : ptsSet) errs() << "\t=> " << *v << "\n"; 
-
-  //     errs() << *li->getPointerOperand() << "\n";
-  //     getPointsToSet(li->getPointerOperand(), ptsSet);
-  //     for (const auto *v : ptsSet) errs() << "\t=> " << *v << "\n";
-  //   }
-  //   assert(pointsToIsEq(li, li->getPointerOperand()));
-  // }
-  // if (StoreInst *si = dyn_cast<StoreInst>(val)) {
-  //   assert(pointsToIsEq(si, si->getPointerOperand()));
-  // }
-
-  if (matchesKnownVolatile(val)) {
-    assert(!this->isNvm(val) && "wut");
   }
 
   if (isNvm && matchesKnownVolatile(val)) {
@@ -386,14 +360,14 @@ std::string NvmValueDesc::str(void) const {
     s << "\n\t\t" << tmp;
   }
   s << "\n\tNumber of known global runtime non-nvm values: " << not_global_nvm_.size();
-  for (Value *v : not_global_nvm_) {
+  for (const Value *v : not_global_nvm_) {
     std::string tmp;
     llvm::raw_string_ostream rs(tmp);
     v->print(rs);
     s << "\n\t\t" << tmp;
   }
   s << "\n\tNumber of known local runtime non-nvm values: " << not_local_nvm_.size();
-  for (Value *v : not_local_nvm_) {
+  for (const Value *v : not_local_nvm_) {
     std::string tmp;
     llvm::raw_string_ostream rs(tmp);
     v->print(rs);
@@ -512,8 +486,8 @@ bool NvmContextDesc::isaAuxInst(Instruction *i) const {
 
 uint64_t NvmContextDesc::computeAuxInstWeight(Instruction *i) {
   if (isa<ReturnInst>(i)) {
-    // return returnHasWeight ? 1lu : 0lu;
-    return 1lu;
+    return returnHasWeight ? 1lu : 0lu;
+    // return 1lu;
   } else if (auto *ci = dyn_cast<CallInst>(i)) {
     return constructCalledContext(ci);
   }
@@ -573,7 +547,7 @@ std::list<Instruction*> NvmContextDesc::setCoreWeights(void) {
   for (BasicBlock &bb : *function) {
     for (Instruction &i : bb) {
       if (isaCoreInst(&i)) {
-        weights[&i] = 1lu;
+        weights[&i] = 3lu;
         hasCoreWeight = true;
       } else if (isaAuxInst(&i)) {
         auxInsts.push_back(&i);
@@ -611,8 +585,11 @@ NvmContextDesc::Shared NvmContextDesc::tryGetNextContext(KInstruction *pc,
 }
 
 NvmContextDesc::Shared NvmContextDesc::tryUpdateContext(Value *v, bool isValNvm) {
+  TimerStatIncrementer timer2(stats::nvmGetSharedTime);
   NvmValueDesc::Shared newDesc = valueState->updateState(v, isValNvm);
+
   if (valueState != newDesc) {
+    
     // First, check the cache.
     ContextCacheKey cck(function, newDesc);
     if (contextCache.count(cck)) {
@@ -620,8 +597,14 @@ NvmContextDesc::Shared NvmContextDesc::tryUpdateContext(Value *v, bool isValNvm)
     }
     // Else, update and add to the cache.
     auto updated = dup();
+
     updated->valueState = newDesc;
-    updated->setPriorities();
+    auto auxInsts = updated->setCoreWeights();
+    if (updated->weights != weights) {
+      updated->setAuxWeights(std::move(auxInsts));
+      updated->setPriorities();
+    }
+
     contextCache[cck] = updated;
     return updated;
   }
@@ -955,15 +938,15 @@ void NvmStaticHeuristic::dump(void) const {
 /* #region NvmDynamicHeuristic */
 
 NvmDynamicHeuristic::NvmDynamicHeuristic(Executor *executor,
-                                                       KFunction *mainFn)
+                                         KFunction *mainFn)
   : contextDesc(std::make_shared<NvmContextDesc>(utils::createAndersen(*executor->kmodule->module), 
                                                  executor->kmodule->module.get(),
                                                  mainFn->function)),
     curr(mainFn->getKInstruction(mainFn->function->getEntryBlock().getFirstNonPHIOrDbg())) {}
 
 void NvmDynamicHeuristic::updateCurrentState(ExecutionState *es, 
-                                                    KInstruction *pc, 
-                                                    bool isNvm) {
+                                             KInstruction *pc, 
+                                             bool isNvm) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
 
   // Get the value we actually want to update.
@@ -979,12 +962,6 @@ void NvmDynamicHeuristic::updateCurrentState(ExecutionState *es,
     assert(false && "we didn't capture all memory operations!");
   }
 
-  // if (pc->inst->getFunction()->getName() == "memcpy") {
-  //   errs() << "[updateCurrentState] UPDATING " << *pc->inst << "\n";
-  //   errs() << "[updateCurrentState] MEMVAL IS " << *memVal << " ISNVM=" << isNvm << "\n";
-  // }
-
-
   auto newDesc = contextDesc->tryUpdateContext(memVal, isNvm);
   if (newDesc != contextDesc) {
     contextDesc = newDesc;
@@ -993,8 +970,8 @@ void NvmDynamicHeuristic::updateCurrentState(ExecutionState *es,
 }
 
 void NvmDynamicHeuristic::stepState(ExecutionState *es, 
-                                           KInstruction *pc, 
-                                           KInstruction *nextPC) {
+                                    KInstruction *pc, 
+                                    KInstruction *nextPC) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
 
   if (auto *ci = dyn_cast<CallInst>(pc->inst)) {
@@ -1046,15 +1023,13 @@ void NvmDynamicHeuristic::stepState(ExecutionState *es,
 
 /* #region NvmHeuristicBuilder */
 
-const char *NvmHeuristicBuilder::typeNames[] = {
-  "none", "static", "insensitive-dynamic", "context-dynamic"
-};
+const char *NvmHeuristicBuilder::typeNames[] = { "none", "static", "dynamic" };
 
 const char *NvmHeuristicBuilder::typeDesc[] = {
   "None: uses a no-op heuristic (disables the features)",
   "Static: this only uses the points-to information from Andersen's analysis",
   "Dynamic: this updates Andersen's analysis based on runtime information.",
-  };
+};
 
 std::shared_ptr<NvmHeuristicInfo> 
 NvmHeuristicBuilder::create(Type t, Executor *executor, KFunction *main) {

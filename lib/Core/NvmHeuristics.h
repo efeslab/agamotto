@@ -116,7 +116,7 @@ namespace klee {
        * We count do global and local to avoid propagating unnecessary local 
        * variables when we go to the next context.
        */
-      std::unordered_set<llvm::Value*> not_local_nvm_, not_global_nvm_;
+      std::unordered_set<const llvm::Value*> not_local_nvm_, not_global_nvm_;
 
       /**
        * Each value has a points-to set given by the Andersen alias analysis.
@@ -158,7 +158,7 @@ namespace klee {
       NvmValueDesc(SharedAndersen apa, 
                    SharedAndersenCache cache,
                    std::unordered_set<const llvm::Value*> mmap,
-                   std::unordered_set<llvm::Value*> globals) 
+                   std::unordered_set<const llvm::Value*> globals) 
                    : andersen_(apa),
                      anders_cache_(cache),
                      nvm_allocs_(mmap), 
@@ -278,7 +278,7 @@ namespace klee {
        */
       llvm::Function *function;
       NvmValueDesc::Shared valueState;
-      bool __attribute__((unused)) returnHasWeight; 
+      bool returnHasWeight; 
 
       /**
        * Many function contexts will be the same. Particularly, when we do 
