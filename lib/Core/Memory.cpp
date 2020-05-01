@@ -881,8 +881,10 @@ ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine,
   auto &updateList = pending ? pendingCacheLineUpdates : cacheLineUpdates;
 
   // If no updates, then trivially persisted
-  if (updateList.head == nullptr)
-    return getPersistedExpr();
+  if (updateList.head == nullptr) {
+     //return getPersistedExpr(); 
+    return ConstantExpr::create(1, Expr::Bool);
+  }
 
   ref<Expr> result = ReadExpr::create(updateList,
                                       ZExtExpr::create(cacheLine, Expr::Int32));

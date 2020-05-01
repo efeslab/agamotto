@@ -537,6 +537,10 @@ int fcntl(int fd, int cmd, ...) {
     }
     return res;
   }
+  case F_SETLK: {
+    // (stolerbs): TODO: should we do anything else here?
+    return 0;
+  }
   default:
     klee_warning("symbolic file, ignoring (EINVAL)");
     errno = EINVAL;

@@ -821,6 +821,37 @@ int __fd_ftruncate(int fd, off64_t length) {
     return 0;
   }
 }
+
+int fallocate(int fd, int mode, off_t offset, off_t len) {
+  fd_entry_t *fde;
+  CHECK_IS_FILE(fd, fde);
+  file_t *file = (file_t*)fde->io_object;
+
+  if (!_file_is_concrete(file)) {
+    // klee_error("iangneal: mmap not supported for symbolic files!");
+    // errno = ENOTSUP;
+    // return -1;
+    if (offset + len > file->storage->bbuf.max_size) {
+      errno = EIO;
+      return -1;
+    } else {
+      file->storage->stat->st_size = offset + len;
+    }
+
+    return 0;
+  }
+
+#if __WORDSIZE == 64
+  return syscall(__NR_fallocate, file->concrete_fd, mode, offset, len);
+#else
+  return syscall(__NR_fallocate64, file->concrete_fd, mode, offset, len);
+#endif
+}
+
+
+int posix_fallocate(int fd, off_t offset, off_t len) {
+  return fallocate(fd, 0, offset, len);
+}
 ////////////////////////////////////////////////////////////////////////////////
 
 DEFINE_MODEL(char *, getcwd, char *buf, size_t size) {
@@ -927,6 +958,25 @@ off64_t __fd_lseek64(int fd, off64_t offset, int whence) {
   }
 
   return _lseek(file, offset, whence);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// (stolerbs): TODO: verify validity/location of these functions
+ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
+  off_t orig = lseek(fd, 0, SEEK_CUR);
+  lseek(fd, offset, SEEK_SET);
+  ssize_t s = read(fd, buf, count);
+  lseek(fd, orig, SEEK_SET);
+  return s;
+}
+
+ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset) {
+  off_t orig = lseek(fd, 0, SEEK_CUR);
+  lseek(fd, offset, SEEK_SET);
+  ssize_t s = write(fd, buf, count);
+  lseek(fd, orig, SEEK_SET);
+  return s;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
