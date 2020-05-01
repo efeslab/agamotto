@@ -974,6 +974,8 @@ void NvmDynamicHeuristic::stepState(ExecutionState *es,
                                     KInstruction *nextPC) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
 
+  if (nextPC->inst->getFunction()->getName() == "pthread_exit") return;
+
   if (auto *ci = dyn_cast<CallInst>(pc->inst)) {
     if (pc->inst->getFunction() != nextPC->inst->getFunction()) {
       contextDesc = contextDesc->tryResolveFnPtr(ci, nextPC->inst->getFunction());
@@ -994,6 +996,8 @@ void NvmDynamicHeuristic::stepState(ExecutionState *es,
 
   } else if (auto *ri = dyn_cast<ReturnInst>(pc->inst)) {
     // errs() << __func__ << " returning " << *ri << " @ " << ri->getFunction()->getName() << "\n";
+    // if (nextPC) errs() << __func__ << " next is: " << *nextPC->inst << " @ " << nextPC->inst->getFunction()->getName() << "\n";
+    // else errs() << __func__ << " next is NULL\n";
     auto parentCtx = contextStack.back();
     contextStack.pop_back();
     auto retValDest = callInstStack.back();
@@ -1013,6 +1017,17 @@ void NvmDynamicHeuristic::stepState(ExecutionState *es,
     } else errs() << "CD NULL\n";
 
     errs() << nextPC->inst->getFunction()->getName() << "\n";
+
+    if (contextDesc->function->getName() == "pthread_create") {
+      contextStack.clear();
+      callInstStack.clear();
+
+      SharedAndersen sa = contextDesc->andersen;
+      Module *m = nextPC->inst->getModule();
+      Function *threadMain = nextPC->inst->getFunction();
+      contextDesc.reset(new NvmContextDesc(sa, m, threadMain));
+      computePriority();
+    }
   }
   
   assert(contextDesc->function == nextPC->inst->getFunction() && "bad context!");
