@@ -7,6 +7,8 @@ using namespace klee;
 #include <sstream>
 #include <utility>
 
+#include "llvm/IR/GlobalAlias.h"
+
 #include "CoreStats.h"
 #include "Executor.h"
 #include "klee/ExecutionState.h"
@@ -27,8 +29,7 @@ namespace klee {
         cl::desc("Choose the search heuristic used by the NVM searcher."),
         cl::values(clNvmEnumValN(NvmHeuristicBuilder::Type::None),
                    clNvmEnumValN(NvmHeuristicBuilder::Type::Static),
-                   clNvmEnumValN(NvmHeuristicBuilder::Type::InsensitiveDynamic),
-                   clNvmEnumValN(NvmHeuristicBuilder::Type::ContextDynamic)
+                   clNvmEnumValN(NvmHeuristicBuilder::Type::Dynamic)
                    KLEE_LLVM_CL_VAL_END),
         cl::init(NvmHeuristicBuilder::Type::None),
         cl::cat(NvmCat));
@@ -45,13 +46,23 @@ namespace klee {
 
 /* #region NvmValueDesc */
 
-bool NvmValueDesc::getPointsToSet(const llvm::Value *v, 
-                                  std::vector<const llvm::Value *> &ptsSet) const {
+bool NvmValueDesc::getPointsToSet(const Value *v, 
+                                  std::unordered_set<const Value*> &ptsSet) const {
+  /**
+   * Using a cache for this dramatically reduces the amount of time spent here, 
+   * as the call to "getPointsToSet" has to re-traverse a bunch of internal 
+   * data structures to construct the set.
+   */
   TimerStatIncrementer timer(stats::nvmAndersenTime);
   bool ret = true;
   if (!anders_cache_->count(v)) {
-    ret = andersen_->getResult().getPointsToSet(v, ptsSet);
+    std::vector<const Value*> rawSet;
+    ret = andersen_->getResult().getPointsToSet(v, rawSet);
     if (ret) {
+      for (const Value *v : rawSet) {
+        if (nvm_allocs_.count(v)) ptsSet.insert(v);
+      }
+
       (*anders_cache_)[v] = ptsSet;
     }
   } else {
@@ -78,7 +89,7 @@ NvmValueDesc::Shared NvmValueDesc::doCall(CallInst *ci, Function *f) const {
 
     bool pointsToNvm = true;
     // We actually want the points-to set for this
-    std::vector<const Value*> ptsSet;
+    std::unordered_set<const Value*> ptsSet;
     // errs() << "doing call instruction stuff\n";
     // errs() << *op << "\n";
   
@@ -116,11 +127,11 @@ NvmValueDesc::Shared NvmValueDesc::doReturn(NvmValueDesc::Shared callerVals,
   Value *retVal = ri->getReturnValue();
   if (retVal && retVal->getType()->isPtrOrPtrVectorTy()) {
     
-    std::vector<const Value*> ptsTo;
+    std::unordered_set<const Value*> ptsTo;
     bool success = getPointsToSet(retVal, ptsTo);
 
     if (success && ptsTo.size()) {
-      // errs() << "doRet " << *retVal << "\n";
+      // errs() << "doRet " << *dest << " <<<" << isNvm(retVal) << ">>>\n";
       return callerVals->updateState(dest, isNvm(retVal));
     } else {
       //  errs() << "doRet doesn't point to a memory object! " << success << " " << ptsTo.size() << "\n";
@@ -131,7 +142,8 @@ NvmValueDesc::Shared NvmValueDesc::doReturn(NvmValueDesc::Shared callerVals,
 }
 
 bool NvmValueDesc::mayPointTo(const Value *a, const Value *b) const {
-  std::vector<const Value*> aSet, bSet, interSet;
+  std::unordered_set<const Value*> aSet, bSet;
+  std::vector<const Value*> interSet;
   bool ret = getPointsToSet(a, aSet);
   if (!ret) errs() << *a << "\n";
   assert(ret && "could not get points-to set!");
@@ -156,7 +168,8 @@ bool NvmValueDesc::mayPointTo(const Value *a, const Value *b) const {
 }
 
 bool NvmValueDesc::pointsToIsEq(const Value *a, const Value *b) const {
-  std::vector<const Value*> aSet, bSet, interSet;
+  std::unordered_set<const Value*> aSet, bSet;
+  std::vector<const Value*> interSet;
   bool ret = getPointsToSet(a, aSet);
   if (!ret) errs() << *a << "\n";
   assert(ret && "could not get points-to set!");
@@ -182,17 +195,25 @@ bool NvmValueDesc::pointsToIsEq(const Value *a, const Value *b) const {
 
 bool NvmValueDesc::matchesKnownVolatile(const Value *posNvm) const {
   if (isa<GlobalValue>(posNvm)) {
+    if (not_global_nvm_.count(posNvm)) {
+      return true;
+    }
+
     for (const Value *vol : not_global_nvm_) {
-      if (pointsToIsEq(posNvm, vol)) {
-        // errs() << "known is " << *vol << "\n";
-        return true;
+      for (const User *u : vol->users()) {
+        if (isa<CallInst>(u)) continue;
+        if (u == posNvm) return true;
       }
     }
   } else {
+    if (not_local_nvm_.count(posNvm)) {
+      return true;
+    }
+
     for (const Value *vol : not_local_nvm_) {
-      if (pointsToIsEq(posNvm, vol)) {
-        // errs() << "known is " << *vol << "\n";
-        return true;
+      for (const User *u : vol->users()) {
+        if (isa<CallInst>(u)) continue;
+        if (u == posNvm) return true;
       }
     }
   }
@@ -200,21 +221,51 @@ bool NvmValueDesc::matchesKnownVolatile(const Value *posNvm) const {
   return false;
 }
 
-NvmValueDesc::Shared NvmValueDesc::updateState(Value *val, bool isNvm) const {
-  NvmValueDesc vd = *this;
+NvmValueDesc::Shared NvmValueDesc::updateState(Value *val, bool isNvm) {
 
-  if (!isNvm && val->getType()->isPtrOrPtrVectorTy()) {
-    // errs() << "UPDATE " << *val << "\n";
-    if (isa<GlobalValue>(val)) vd.not_global_nvm_.insert(val);
-    else vd.not_local_nvm_.insert(val);
+  if (!val->getType()->isPtrOrPtrVectorTy()) {
+    return shared_from_this();
   }
 
-  return std::make_shared<NvmValueDesc>(vd);
+  if (isNvm && matchesKnownVolatile(val)) {
+    /**
+     * Global values can in theory flip-flop.
+     */
+    if (isa<GlobalValue>(val)) {
+      NvmValueDesc vd = *this;
+      vd.not_global_nvm_.erase(val);
+      return std::make_shared<NvmValueDesc>(vd);
+    } else {
+      errs() << *val << " @ " << dyn_cast<Instruction>(val)->getFunction()->getName() << "\n";
+      std::unordered_set<const Value *> ptsSet;
+      getPointsToSet(val, ptsSet);
+      for (const Value *v : ptsSet) errs() << "\t" << *v << "\n";
+      for (const Value *v : not_local_nvm_) {
+        // is it a user of any not local nvm?
+        for (const User *u : v->users()) {
+          errs() << "\t\tNOT LOCAL NVM: " << *v << ";\n\t\t\t User " << *u << "\n";
+        }
+      }
+      assert(false && "we violated an assumption about how points-to works!");
+    }
+  } else if (!isNvm && !matchesKnownVolatile(val)) {
+    NvmValueDesc vd = *this;
+
+    if (isa<GlobalValue>(val)) {
+      vd.not_global_nvm_.insert(val);
+    } else {
+      vd.not_local_nvm_.insert(val);
+    }
+    
+    return std::make_shared<NvmValueDesc>(vd);
+  }
+
+  return shared_from_this();
 }
 
 bool NvmValueDesc::isNvm(const Value *ptr) const {
 
-  std::vector<const Value*> ptsSet;
+  std::unordered_set<const Value*> ptsSet;
 
   bool ret = getPointsToSet(ptr, ptsSet);
   if (!ret) {
@@ -224,6 +275,8 @@ bool NvmValueDesc::isNvm(const Value *ptr) const {
   if (!nvm_allocs_.size()) {
     errs() << "\t!!!!cannot point because no calls!\n"; 
   }
+  
+  if (matchesKnownVolatile(ptr)) return false;
 
   bool may_point_nvm_alloc = false;
   for (const Value *mm : nvm_allocs_) {
@@ -248,14 +301,19 @@ bool NvmValueDesc::isNvm(const Value *ptr) const {
       for (const Value *q : ptsSet) {
         if (!matchesKnownVolatile(apa, q)) return true;
       }
-      #else
+      #elif 0
       for (const Value *l : not_local_nvm_) {
         if (pointsToIsEq(l, ptr)) return false;
       }
       for (const Value *l : not_global_nvm_) {
         if (pointsToIsEq(l, ptr)) return false;
       }
-      
+      #elif 0
+
+      if (matchesKnownVolatile(ptr)) return false;
+
+      #else
+      return true;      
       #endif
 
     } else {
@@ -265,6 +323,7 @@ bool NvmValueDesc::isNvm(const Value *ptr) const {
   }
   
   return may_point_nvm_alloc;
+  // return false;
 }
 
 bool NvmValueDesc::mayModifyNvm(const Instruction *i) const {
@@ -301,14 +360,14 @@ std::string NvmValueDesc::str(void) const {
     s << "\n\t\t" << tmp;
   }
   s << "\n\tNumber of known global runtime non-nvm values: " << not_global_nvm_.size();
-  for (Value *v : not_global_nvm_) {
+  for (const Value *v : not_global_nvm_) {
     std::string tmp;
     llvm::raw_string_ostream rs(tmp);
     v->print(rs);
     s << "\n\t\t" << tmp;
   }
   s << "\n\tNumber of known local runtime non-nvm values: " << not_local_nvm_.size();
-  for (Value *v : not_local_nvm_) {
+  for (const Value *v : not_local_nvm_) {
     std::string tmp;
     llvm::raw_string_ostream rs(tmp);
     v->print(rs);
@@ -364,7 +423,7 @@ uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci,
   if (!ci->getNextNode()) errs() << *ci << "\n";
   NvmContextDesc calledCtx(andersen,
                            key.function,
-                           key.initialState,
+                           key.valueState,
                            hasCoreWeight);
   auto sharedCtx = std::make_shared<NvmContextDesc>(calledCtx);
 
@@ -427,8 +486,8 @@ bool NvmContextDesc::isaAuxInst(Instruction *i) const {
 
 uint64_t NvmContextDesc::computeAuxInstWeight(Instruction *i) {
   if (isa<ReturnInst>(i)) {
-    // return returnHasWeight ? 1lu : 0lu;
-    return 1lu;
+    return returnHasWeight ? 1lu : 0lu;
+    // return 1lu;
   } else if (auto *ci = dyn_cast<CallInst>(i)) {
     return constructCalledContext(ci);
   }
@@ -488,7 +547,7 @@ std::list<Instruction*> NvmContextDesc::setCoreWeights(void) {
   for (BasicBlock &bb : *function) {
     for (Instruction &i : bb) {
       if (isaCoreInst(&i)) {
-        weights[&i] = 1lu;
+        weights[&i] = 3lu;
         hasCoreWeight = true;
       } else if (isaAuxInst(&i)) {
         auxInsts.push_back(&i);
@@ -526,11 +585,27 @@ NvmContextDesc::Shared NvmContextDesc::tryGetNextContext(KInstruction *pc,
 }
 
 NvmContextDesc::Shared NvmContextDesc::tryUpdateContext(Value *v, bool isValNvm) {
+  TimerStatIncrementer timer2(stats::nvmGetSharedTime);
   NvmValueDesc::Shared newDesc = valueState->updateState(v, isValNvm);
-  if (valueState->isNvm(v) != newDesc->isNvm(v)) {
+
+  if (valueState != newDesc) {
+    
+    // First, check the cache.
+    ContextCacheKey cck(function, newDesc);
+    if (contextCache.count(cck)) {
+      return contextCache.at(cck);
+    }
+    // Else, update and add to the cache.
     auto updated = dup();
+
     updated->valueState = newDesc;
-    updated->setPriorities();
+    auto auxInsts = updated->setCoreWeights();
+    if (updated->weights != weights) {
+      updated->setAuxWeights(std::move(auxInsts));
+      updated->setPriorities();
+    }
+
+    contextCache[cck] = updated;
     return updated;
   }
 
@@ -628,8 +703,16 @@ void NvmStaticHeuristic::computePriority(void) {
         possibleFns.insert(f);
       } else if (Function *f = ci->getCalledFunction()) {
         possibleFns.insert(f);
+      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(ci->getCalledValue())) {
+        Function *f = dyn_cast<Function>(ga->getAliasee());
+        assert(f && "bad assumption about aliases!");
+        possibleFns.insert(f);
       } else {
-        if (!ci->isIndirectCall()) errs() << *ci << "\n";
+        if (!ci->isIndirectCall()) {
+          errs() << *ci << "\n";
+          errs() << ci->getCalledValue() << "\n";
+          if (ci->getCalledValue()) errs() << *ci->getCalledValue() << "\n";
+        }
         assert(ci->isIndirectCall());
 
         for (Function &f : *curr_->getModule()) {
@@ -787,6 +870,10 @@ void NvmStaticHeuristic::computePriority(void) {
         possibleFns.insert(f);
       } else if (Function *f = ci->getCalledFunction()) {
         possibleFns.insert(f);
+      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(ci->getCalledValue())) {
+        Function *f = dyn_cast<Function>(ga->getAliasee());
+        assert(f && "bad assumption about aliases!");
+        possibleFns.insert(f);
       } else {
         if (!ci->isIndirectCall()) errs() << *ci << "\n";
         assert(ci->isIndirectCall());
@@ -848,168 +935,43 @@ void NvmStaticHeuristic::dump(void) const {
 
 /* #endregion */
 
-/* #region NvmInsensitiveDynamicHeuristic */
+/* #region NvmDynamicHeuristic */
 
-bool NvmInsensitiveDynamicHeuristic::needsRecomputation() const { 
-  for (Function &f : *module_) {
-    for (BasicBlock &b : f) {
-      for (Instruction &i : b) {
-        if (mayHaveWeight(&i)) {
-          if ((*weights_)[&i] != computeInstWeight(&i)) {
-            return true;
-          }
-        }
-      }
-    }
-  }
-
-  return false;
-}
-
-// bool NvmInsensitiveDynamicHeuristic::modifiesNvm(Instruction *i) const {
-//   if (isa<StoreInst>(i) || utils::isFlush(i)) {
-//     Value *v = dyn_cast<Value>(i);
-//     if (utils::isFlush(i)) {
-//       assert(isa<CallInst>(i));
-//       v = dyn_cast<CallInst>(i)->getArgOperand(0);
-//     }
-//     std::vector<const Value*> ptsSet;
-
-//     TimerStatIncrementer timer(stats::nvmAndersenTime);
-//     bool ret = analysis_->getResult().getPointsToSet(v, ptsSet);
-
-//     if (!ret) {
-//       if (getCurrentNvmSites().count(v)) {
-//         return true;
-//       } else if (AllocaInst *ai = dyn_cast<AllocaInst>(i)) {
-//         if (ai->getType()->isFunctionTy()) return 0u;
-//       } else if (StoreInst *si = dyn_cast<StoreInst>(i)) {
-//         if (isa<GlobalValue>(si->getPointerOperand()->stripPointerCasts())) return 0u;
-
-//         assert(analysis_->getResult().getPointsToSet(si->getPointerOperand(), ptsSet));
-//       } else {
-//         errs() << *i << "\n";
-//         assert(false && "could not get points-to!");
-//       }
-//     }
-    
-//     bool pointsToNvm = false;
-//     for (const Value *ptsTo : ptsSet) {
-//       if (getCurrentNvmSites().count(ptsTo)) {
-//         pointsToNvm = true;
-//         break;
-//       }
-//     }
-
-//     if (!pointsToNvm) return false;
-
-//     ValueSet truePtsSet(ptsSet.begin(), ptsSet.end());
-
-//     for (const Value *vol : knownVolatiles_) {
-//       std::vector<const Value*> volPtsSet;
-//       assert(analysis_->getResult().getPointsToSet(vol, volPtsSet));
-//       ValueSet trueVolSet(volPtsSet.begin(), volPtsSet.end());
-
-//       if (truePtsSet == trueVolSet) return false;
-//     }
-
-//     return true;
-//   }
-
-//   return false;
-// }
-
-void NvmInsensitiveDynamicHeuristic::updateCurrentState(ExecutionState *es, 
-                                                        KInstruction *pc, 
-                                                        bool isNvm) {
-  TimerStatIncrementer timer(stats::nvmHeuristicTime);
-
-  bool modified = false;
-  if (nvmSites_.count(pc->inst)) {
-    if (isNvm) {
-      activeNvmSites_.insert(pc->inst);
-    } else {
-      activeNvmSites_.erase(pc->inst);
-    }
-    modified = true;
-  } else {
-    Value *v = nullptr;
-    if (LoadInst *li = dyn_cast<LoadInst>(pc->inst)) {
-      v = li->getPointerOperand();
-    } else if (StoreInst *si = dyn_cast<StoreInst>(pc->inst)) {
-      v = si->getPointerOperand();
-    }
-
-    if (v) {
-      // We only want to add a known volatile to something that points to NVM
-      std::vector<const Value*> volPtsSet;
-      assert(analysis_->getResult().getPointsToSet(v, volPtsSet));
-
-      if (nvmSites_.count(v)) {
-        if (isNvm) {
-          knownVolatiles_.erase(pc->inst);
-        } else {
-          knownVolatiles_.insert(pc->inst);
-        }
-        modified = true;
-      }
-    }
-  }
-  
-  // I like lazy eval
-  if (modified && needsRecomputation()) {
-    computePriority();
-    dump();
-  } 
-}
-
-void NvmInsensitiveDynamicHeuristic::dump(void) const {
-  uint64_t nonZeroWeights = 0, nonZeroPriorities = 0;
-
-  for (const auto &p : *weights_) nonZeroWeights += (p.second > 0);
-  for (const auto &p : *priorities_) nonZeroPriorities += (p.second > 0);
-
-  double pWeights = 100.0 * ((double)nonZeroWeights / (double)weights_->size());
-  double pPriorities = 100.0 * ((double)nonZeroPriorities / (double)priorities_->size());
-
-  for (auto *v : utils::getNvmAllocationSites(executor_->kmodule->module.get(), analysis_)) {
-    errs() << *v << "\n";
-  }
-
-  fprintf(stderr, "NvmInsensitiveDynamicHeuristic:\n"
-                  "\tNVM allocation sites: %lu/%lu\n"
-                  "\t%% instructions with weight: %f%%\n"
-                  "\t%% instructions with priority: %f%%\n",
-                  activeNvmSites_.size(), nvmSites_.size(), 
-                  pWeights, pPriorities);
-}
-
-/* #endregion */
-
-/* #region NvmContextDynamicHeuristic */
-
-NvmContextDynamicHeuristic::NvmContextDynamicHeuristic(Executor *executor,
-                                                       KFunction *mainFn)
+NvmDynamicHeuristic::NvmDynamicHeuristic(Executor *executor,
+                                         KFunction *mainFn)
   : contextDesc(std::make_shared<NvmContextDesc>(utils::createAndersen(*executor->kmodule->module), 
                                                  executor->kmodule->module.get(),
                                                  mainFn->function)),
     curr(mainFn->getKInstruction(mainFn->function->getEntryBlock().getFirstNonPHIOrDbg())) {}
 
-void NvmContextDynamicHeuristic::updateCurrentState(ExecutionState *es, 
-                                                    KInstruction *pc, 
-                                                    bool isNvm) {
+void NvmDynamicHeuristic::updateCurrentState(ExecutionState *es, 
+                                             KInstruction *pc, 
+                                             bool isNvm) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
 
-  auto newDesc = contextDesc->tryUpdateContext(pc->inst, isNvm);
+  // Get the value we actually want to update.
+  Value *memVal = pc->inst;
+  if (LoadInst *li = dyn_cast<LoadInst>(pc->inst)) {
+    memVal = li->getPointerOperand();
+  } else if (StoreInst *si = dyn_cast<StoreInst>(pc->inst)) {
+    memVal = si->getPointerOperand();
+  } else if (CallInst *ci = dyn_cast<CallInst>(pc->inst)) {
+    memVal = ci;
+  } else {
+    errs() << *pc->inst << "\n";
+    assert(false && "we didn't capture all memory operations!");
+  }
+
+  auto newDesc = contextDesc->tryUpdateContext(memVal, isNvm);
   if (newDesc != contextDesc) {
     contextDesc = newDesc;
-    dump();
+    // dump();
   }
 }
 
-void NvmContextDynamicHeuristic::stepState(ExecutionState *es, 
-                                           KInstruction *pc, 
-                                           KInstruction *nextPC) {
+void NvmDynamicHeuristic::stepState(ExecutionState *es, 
+                                    KInstruction *pc, 
+                                    KInstruction *nextPC) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
 
   if (auto *ci = dyn_cast<CallInst>(pc->inst)) {
@@ -1026,22 +988,26 @@ void NvmContextDynamicHeuristic::stepState(ExecutionState *es,
     if (childCtx->function != contextDesc->function || 
         nextPC->inst == contextDesc->function->getEntryBlock().getFirstNonPHI()) {
       contextStack.push_back(contextDesc);
+      callInstStack.push_back(ci);
       contextDesc = childCtx;
     }
 
   } else if (auto *ri = dyn_cast<ReturnInst>(pc->inst)) {
+    // errs() << __func__ << " returning " << *ri << " @ " << ri->getFunction()->getName() << "\n";
     auto parentCtx = contextStack.back();
     contextStack.pop_back();
+    auto retValDest = callInstStack.back();
+    callInstStack.pop_back();
     parentCtx->valueState = contextDesc->valueState->doReturn(parentCtx->valueState, 
                                                               ri,
-                                                              nextPC->inst);
+                                                              retValDest);
     parentCtx->setPriorities();
     contextDesc = parentCtx;
   }
 
   if (contextDesc->function != nextPC->inst->getFunction()) {
-    errs() << *pc->inst << "\n";
-    errs() << *nextPC->inst << "\n";
+    errs() << *pc->inst << " @ " << pc->inst->getFunction()->getName() << "\n";
+    errs() << *nextPC->inst << " @ " << nextPC->inst->getFunction()->getName() << "\n";
     if (contextDesc->function) {
       errs() << "CD: " << contextDesc->function->getName() << "\n";
     } else errs() << "CD NULL\n";
@@ -1057,17 +1023,12 @@ void NvmContextDynamicHeuristic::stepState(ExecutionState *es,
 
 /* #region NvmHeuristicBuilder */
 
-const char *NvmHeuristicBuilder::typeNames[] = {
-  "none", "static", "insensitive-dynamic", "context-dynamic"
-};
+const char *NvmHeuristicBuilder::typeNames[] = { "none", "static", "dynamic" };
 
 const char *NvmHeuristicBuilder::typeDesc[] = {
   "None: uses a no-op heuristic (disables the features)",
   "Static: this only uses the points-to information from Andersen's analysis",
-  "Insensitive-Dynamic: this updates Andersen's analysis as runtime "
-    "variables are resolved",
-  "Context-Dynamic: this updates Andersen's analysis while being context"
-    " (call-site) sensitive",
+  "Dynamic: this updates Andersen's analysis based on runtime information.",
 };
 
 std::shared_ptr<NvmHeuristicInfo> 
@@ -1082,11 +1043,8 @@ NvmHeuristicBuilder::create(Type t, Executor *executor, KFunction *main) {
     case Static:
       ptr = new NvmStaticHeuristic(executor, main);
       break;
-    case InsensitiveDynamic:
-      ptr = new NvmInsensitiveDynamicHeuristic(executor, main);
-      break;
-    case ContextDynamic:
-      ptr = new NvmContextDynamicHeuristic(executor, main);
+    case Dynamic:
+      ptr = new NvmDynamicHeuristic(executor, main);
       break;
     default:
       assert(false && "unsupported!");
@@ -1115,12 +1073,8 @@ NvmHeuristicBuilder::copy(const std::shared_ptr<NvmHeuristicInfo> &info) {
     return info;
   }
 
-  if (auto iptr = dynamic_cast<const NvmInsensitiveDynamicHeuristic*>(info.get())) {
-    ptr = new NvmInsensitiveDynamicHeuristic(*iptr);
-  }
-
-  if (auto cptr = dynamic_cast<const NvmContextDynamicHeuristic*>(info.get())) {
-    ptr = new NvmContextDynamicHeuristic(*cptr);
+  if (auto cptr = dynamic_cast<const NvmDynamicHeuristic*>(info.get())) {
+    ptr = new NvmDynamicHeuristic(*cptr);
   }
 
   assert(ptr && "null!");

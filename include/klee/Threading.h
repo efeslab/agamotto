@@ -38,6 +38,9 @@
 #include "klee/Internal/Module/KModule.h"
 
 #include "llvm/Support/raw_ostream.h"
+
+#include "../../lib/Core/NvmHeuristics.h"
+
 namespace klee {
 
 class CallPathNode;
@@ -110,22 +113,20 @@ private:
   /// processes, so the pid is always be 0 for now.
   thread_uid_t tuid;
 
-  /// When IgnorePOSIXPath is set, isInPOSIX will be true if the latest frame
-  ///   in current call stack is a function from POSIX runtime and UserMain
-  //    func is already on the stack (we are not initializing).
-  /// isInPOSIX will be clear to false when frames of POSIX runtime function
-  ///   are poped out. It will also be false if we haven't called UserMain yet.
-  /// When IgnorePOSIXPath is not set, isInPOSIX will be always false even if
-  ///   POSIX runtime function is on the stack.
-  /// It influences whether we should record/replay path trace
-  /// It is designed to filter out all recording happened inside POSIX runtime
-  bool isInPOSIX;
-  unsigned POSIXDepth;
-  bool isInLIBC;
-  unsigned LIBCDepth;
+  /// @brief (iangneal): Information about the current state of NVM and the predicted state
+  std::shared_ptr<NvmHeuristicInfo> nvmInfo;
+
+  void validateAndInit(KFunction *start_function);
 
 public:
-  Thread(thread_id_t tid, process_id_t pid, KFunction *start_function);
+  Thread(thread_id_t tid, process_id_t pid, Executor *e, KFunction *start_function);
+  Thread(thread_id_t tid, process_id_t pid, 
+         std::shared_ptr<NvmHeuristicInfo> &&info, KFunction *start_function);
+  
+  // (iangneal): we need a custom copy constructor so that the nvmInfo is properly
+  // separated.
+  Thread(const Thread &thread);
+
   thread_id_t getTid() const { return tuid.first; }
   process_id_t getPid() const { return tuid.second; }
 

@@ -640,15 +640,19 @@ void ObjectState::print() const {
 
 uint64_t PersistentState::MaxSize = 4lu * (4096lu);
 
-PersistentState::PersistentState(ExecutionState &state, const ObjectState *os)
+PersistentState::PersistentState(TimingSolver *solver, 
+                                 ExecutionState &state, 
+                                 const ObjectState *os)
   : ObjectState(*os),
+    solver(solver),
     cacheLineUpdates(nullptr, nullptr),
     pendingCacheLineUpdates(nullptr, nullptr),
     rootCauseWrites(nullptr, nullptr),
     pendingRootCauseWrites(nullptr, nullptr),
     rootCauseFlushes(nullptr, nullptr),
     pendingRootCauseFlushes(nullptr, nullptr),
-    rootCauseWidth(Expr::Int64) {
+    rootCauseWidth(Expr::Int64),
+    rootCauseMgr(state.rootCauseMgr) {
 
   // Set up all the symbolic Arrays we need.
   ArrayCache *arrayCache = getArrayCache();
@@ -703,6 +707,8 @@ PersistentState::PersistentState(ExecutionState &state, const ObjectState *os)
 PersistentState::PersistentState(const PersistentState &ps)
   : ObjectState(ps),
 
+    solver(ps.solver),
+
     cacheLineUpdates(ps.cacheLineUpdates),
     pendingCacheLineUpdates(ps.pendingCacheLineUpdates),
 
@@ -715,7 +721,7 @@ PersistentState::PersistentState(const PersistentState &ps)
     pendingRootCauseFlushes(ps.pendingRootCauseFlushes),
 
     rootCauseWidth(ps.rootCauseWidth),
-    rootCauses(ps.rootCauses) {}
+    rootCauseMgr(ps.rootCauseMgr) {}
 
 ObjectState *PersistentState::clone() const {
   return new PersistentState(*this);
@@ -741,7 +747,8 @@ void PersistentState::write8(const ExecutionState &state,
 
 /* Used to avoid pushing duplicates onto update lists */
 static bool isUpdateListHeadEqualTo(const UpdateList &updates,
-                                    ref<Expr> index, ref<Expr> value) {
+                                    ref<Expr> index, 
+                                    ref<Expr> value) {
   if (!updates.head)
     return false;
   if (updates.head->index.compare(index))
@@ -758,9 +765,6 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
 
 void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
                                              ref<Expr> offset) {
-  /* llvm::errs() << getObject()->name << ":\n"; */
-  /* ExprPPrinter::printOne(llvm::errs(), "dirtyCacheLineAtOffset", offset); */
-
   // Apply the dirty to the authoritative update list as well as the pending one
   // (so that we can properly identify unpersisted lines in the middle of an epoch).
   ref<Expr> cacheLine = getCacheLine(offset);
@@ -768,11 +772,22 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
 
   if (isUpdateListHeadEqualTo(cacheLineUpdates, cacheLine, falseExpr)) return;
 
+  /**
+   * We also want to see if this cache line is currently dirty. If so, we have
+   * to create an extended root cause.
+   */
+  auto idx = getAnyOffsetExpr();
+  auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
+
+  state.constraints.addConstraint(inBoundsConstraint);
+  auto prevWrites = getRootCause(state, rootCauseWrites, offset);
+  state.constraints.removeConstraint(inBoundsConstraint);
+
   cacheLineUpdates.extend(cacheLine, falseExpr);
   pendingCacheLineUpdates.extend(cacheLine, falseExpr);
 
   // Now update root cause.
-  ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, PM_Unpersisted);
+  ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, PM_Unpersisted, prevWrites);
   rootCauseWrites.extend(cacheLine, rootCauseExpr);
   pendingRootCauseWrites.extend(cacheLine, rootCauseExpr);
 }
@@ -828,42 +843,59 @@ void PersistentState::clearRootCauses() {
  * Get the last flush to the location at a given offset. Helps get
  * the root cause for unnecessary flushes.
  */
-std::unordered_set<std::string> 
-PersistentState::getLastFlush(TimingSolver *solver, 
-                              ExecutionState &state,
-                              ref<Expr> offset) const {
-  auto errs = getRootCause(solver, state, rootCauseFlushes, getCacheLine(offset));
+uint64_t 
+PersistentState::markFlushAsBug(ExecutionState &state, 
+                                ref<Expr> offset) const {
+  auto errs = getRootCause(state, rootCauseFlushes, getCacheLine(offset)); 
+  uint64_t id; 
   if (errs.empty()) {
-    RootCauseLocation uninit(state, getObject()->allocSite, 
-                             nullptr, PM_FlushOnUnmodified);
-    errs.insert(uninit.str());
+    id = rootCauseMgr->getRootCauseLocationID(state, 
+                                              getObject()->allocSite,
+                                              state.prevPC(),
+                                              PM_FlushOnUnmodified);
+    
+  } else {
+    id = rootCauseMgr->getRootCauseLocationID(state, 
+                                              getObject()->allocSite,
+                                              state.prevPC(),
+                                              PM_UnnecessaryFlush,
+                                              errs);
   }
+ 
+  rootCauseMgr->markAsBug(id);
 
-  return errs;
+  return id;
 }
 
 /**
  * Get all the unflushed writes remaining.
  */
-std::unordered_set<std::string> 
-PersistentState::getReasonsNotPersisted(TimingSolver *solver, 
-                                        ExecutionState &state) const {
-  return getRootCauses(solver, state, rootCauseWrites);
+std::unordered_set<uint64_t> 
+PersistentState::markNonPersistedWritesAsBugs(ExecutionState &state) const {
+  auto errs = getRootCauses(state, rootCauseWrites);
+  assert(errs.size() && 
+         "we called mark as bugs for writes without there being any bugs!");
+
+  for (auto id : errs) {
+    rootCauseMgr->markAsBug(id);
+  }
+
+  return errs;
 }
 
-std::unordered_set<std::string>
-PersistentState::getRootCauses(TimingSolver *solver,
-                               ExecutionState &state,
+std::unordered_set<uint64_t>
+PersistentState::getRootCauses(ExecutionState &state,
                                const UpdateList &ul) const {
-  std::unordered_set<std::string> causes;
-  if (ul.head == nullptr) return causes;
+  std::unordered_set<uint64_t> causes;
+  if (ul.head == nullptr) {
+    return causes;
+  }
 
   auto idx = getAnyOffsetExpr();
   auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
-  // auto idx = getObject()->getBoundsCheckOffset(getAnyOffsetExpr());
 
   state.constraints.addConstraint(inBoundsConstraint);
-  causes = getRootCause(solver, state, ul, getCacheLine(idx));
+  causes = getRootCause(state, ul, getCacheLine(idx));
   state.constraints.removeConstraint(inBoundsConstraint);
   
   return causes;
@@ -882,32 +914,30 @@ ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine,
 
   // If no updates, then trivially persisted
   if (updateList.head == nullptr) {
-     //return getPersistedExpr(); 
+    // Bool is actually required here.
     return ConstantExpr::create(1, Expr::Bool);
   }
-
+  
   ref<Expr> result = ReadExpr::create(updateList,
                                       ZExtExpr::create(cacheLine, Expr::Int32));
   return EqExpr::create(result, getPersistedExpr());
 }
 
-std::unordered_set<std::string> 
-PersistentState::getRootCause(TimingSolver *solver, 
-                              ExecutionState &state,
+std::unordered_set<uint64_t> 
+PersistentState::getRootCause(const ExecutionState &state,
                               const UpdateList &ul,
                               unsigned cacheLine) const {
-  return getRootCause(solver, state, ul, ConstantExpr::create(cacheLine, Expr::Int32));
+  auto cacheLineExpr = ConstantExpr::create(cacheLine, Expr::Int32);
+  return getRootCause(state, ul, cacheLineExpr);
 }
 
-std::unordered_set<std::string>
-PersistentState::getRootCause(TimingSolver *solver,
-                              ExecutionState &state,
+std::unordered_set<uint64_t>
+PersistentState::getRootCause(const ExecutionState &state,
                               const UpdateList &ul,
                               ref<Expr> cacheLine) const {
   ref<Expr> result = ReadExpr::create(ul, ZExtExpr::create(cacheLine, Expr::Int32));
   
   std::unordered_set<uint64_t> possibleCauses;
-  std::unordered_set<std::string> causes;
 
   for (uint64_t cl = 0; cl < numCacheLines(); ++cl) {
     ref<Expr> clVal = ReadExpr::create(ul, ConstantExpr::create(cl, Expr::Int32));
@@ -943,9 +973,7 @@ PersistentState::getRootCause(TimingSolver *solver,
     }
   }
 
-  causes = rootCauses.getUniqueRootCauseStrings(possibleCauses);
-
-  return causes;
+  return possibleCauses;
 }
 
 ref<Expr> PersistentState::getCacheLine(ref<Expr> offset) const {
@@ -988,10 +1016,24 @@ ref<ConstantExpr>
 PersistentState::createRootCauseIdExpr(const ExecutionState &state, 
                                        RootCauseReason reason) {
 
-  uint64_t id = rootCauses.getRootCauseLocationID(state, 
-                                                  getObject()->allocSite, 
-                                                  state.prevPC(),
-                                                  reason);
+  uint64_t id = rootCauseMgr->getRootCauseLocationID(state, 
+                                                     getObject()->allocSite, 
+                                                     state.prevPC(),
+                                                     reason);
+
+  return ConstantExpr::create(id, rootCauseWidth);                               
+}
+
+ref<ConstantExpr> 
+PersistentState::createRootCauseIdExpr(const ExecutionState &state, 
+                                       RootCauseReason reason,
+                                       std::unordered_set<uint64_t> prev) {
+
+  uint64_t id = rootCauseMgr->getRootCauseLocationID(state, 
+                                                     getObject()->allocSite, 
+                                                     state.prevPC(),
+                                                     reason,
+                                                     prev);
 
   return ConstantExpr::create(id, rootCauseWidth);                               
 }
@@ -1010,7 +1052,7 @@ void PersistentState::flushAll() {
   pendingRootCauseWrites = UpdateList(pendingRootCauseWrites.root, nullptr);
   cacheLineUpdates = UpdateList(cacheLineUpdates.root, nullptr);
   pendingRootCauseWrites = UpdateList(pendingRootCauseWrites.root, nullptr);
-  rootCauses.clear();
+  rootCauseMgr->clear();
 }
 
 /* #endregion */

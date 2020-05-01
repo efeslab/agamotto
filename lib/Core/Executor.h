@@ -77,6 +77,7 @@ namespace klee {
   class MergeHandler;
   class MergingSearcher;
   template<class T> class ref;
+  class RootCauseManager;
 
 
 
@@ -96,10 +97,11 @@ class Executor : public Interpreter {
   friend class NvmPathSearcher;
   friend class NvmHeuristicInfo;
   friend class NvmStaticHeuristic;
-  friend class NvmInsensitiveDynamicHeuristic;
-  friend class NvmContextDynamicHeuristic;
+  friend class NvmDynamicHeuristic;
   friend class NvmHeuristicBuilder;
   friend class NvmInstructionDesc;
+
+  friend class ExecutionState;
 
 public:
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
@@ -127,6 +129,9 @@ private:
   std::unique_ptr<KModule> kmodule;
   InterpreterHandler *interpreterHandler;
   Searcher *searcher;
+
+  /// @brief (iangneal): Root cause tracking for NVM bugs. Could be extended
+  std::shared_ptr<RootCauseManager> rootCauseMgr;
 
   ExternalDispatcher *externalDispatcher;
   TimingSolver *solver;
@@ -493,6 +498,9 @@ private:
   /// Only for debug purposes; enable via debugger or klee-control
   void dumpStates();
   void dumpPTree();
+
+  /// @brief (iangneal): dump all the bugs in one place
+  void dumpRootCauses();
 
   /* Multi-threading related function */
   // Pthread Create needs to specify a new StackFrame instead of just using the

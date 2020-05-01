@@ -40,6 +40,7 @@ class MemoryObject;
 class PTreeNode;
 struct InstructionInfo;
 class Executor;
+class RootCauseManager;
 
 llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const MemoryMap &mm);
 
@@ -70,14 +71,14 @@ public:
 
   // Overall state of the state - Data specific
 
-  /// @brief (iangneal): Information about the current state of NVM and the predicted state
-  std::shared_ptr<NvmHeuristicInfo> nvmInfo;
+  /// @brief (iangneal): Root cause tracking for NVM bugs. Could be extended
+  std::shared_ptr<RootCauseManager> rootCauseMgr;
 
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;
 
   /// @brief Constraints collected so far
-  ConstraintManager constraints;
+  mutable ConstraintManager constraints;
 
   /// Statistics and information
 
@@ -129,6 +130,9 @@ public:
   std::uint64_t steppedInstructions;
 
 private:
+  /// @brief (iangneal): Makes it easier to create new threads
+  Executor *executor_;
+
   ExecutionState() : ptreeNode(0) {}
 
 public:
@@ -190,8 +194,8 @@ public:
   const KInstIterator &prevPC() const { return crtThread().prevPC; }
   stack_ty &stack() { return crtThread().stack; }
   const stack_ty &stack() const { return crtThread().stack; }
-  bool isInPOSIX() const { return crtThread().isInPOSIX; }
-  bool isInLIBC() const { return crtThread().isInLIBC; }
+  NvmHeuristicInfo::Shared &nvmInfo() { return crtThread().nvmInfo; }
+  const NvmHeuristicInfo::Shared &nvmInfo() const { return crtThread().nvmInfo; }
   unsigned &incomingBBIndex() { return crtThread().incomingBBIndex; }
   unsigned incomingBBIndex() const { return crtThread().incomingBBIndex; }
 

@@ -143,6 +143,10 @@ int ftruncate(int fd, off_t length) {
   return __fd_ftruncate(fd, length);
 }
 
+int posix_fallocate(int fd, off_t offset, off_t len) {
+  return __fd_ftruncate(fd, offset + len);
+}
+
 int statfs(const char *path, struct statfs *buf32) {
 #if 0
     struct statfs64 buf;

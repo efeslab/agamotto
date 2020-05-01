@@ -446,6 +446,7 @@ const char *Executor::TerminateReasonNames[] = {
 Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
                    InterpreterHandler *ih)
     : Interpreter(opts), interpreterHandler(ih), searcher(0),
+      rootCauseMgr(new RootCauseManager()),
       externalDispatcher(new ExternalDispatcher(ctx)), statsTracker(0),
       pathWriter(0), symPathWriter(0), specialFunctionHandler(0), timers{time::Span(TimerInterval)},
       replayKTest(0), replayPath(0), usingSeeds(0),
@@ -1739,7 +1740,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           bindLocal(kcaller, state, result);
 
           // (iangneal): update NVM allocation sites
-          if (state.nvmInfo && 
+          if (state.nvmInfo() && 
               result->getWidth() == Context::get().getPointerWidth() &&
               utils::isNvmAllocationSite(kmodule->module.get(), kcaller->inst)) {
             
@@ -2007,8 +2008,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     InlineAsm *ia = nullptr;
 
     // (iangneal): It helps NVM heuristics to resolve function pointers.
-    if (state.nvmInfo) {
-      state.nvmInfo->resolveFunctionCall(ki, f);
+    if (state.nvmInfo()) {
+      state.nvmInfo()->resolveFunctionCall(ki, f);
     }
 
     if ((ia = dyn_cast<InlineAsm>(fp))) {
@@ -2869,14 +2870,14 @@ void Executor::updateStates(ExecutionState *current) {
    * (iangneal): Update the heuristic first, so that the priorities are up
    * to date for the NvmPathSearcher.
    */ 
-  if (current && current->nvmInfo) {
+  if (current && current->nvmInfo()) {
     std::vector<ExecutionState*> toUpdate;
     toUpdate.push_back(current);
     toUpdate.insert(toUpdate.end(), addedStates.begin(), addedStates.end());
 
     for (ExecutionState *s : toUpdate) {
-      assert(s && s->nvmInfo);
-      s->nvmInfo->stepState(s, s->prevPC(), s->pc());
+      assert(s && s->nvmInfo());
+      s->nvmInfo()->stepState(s, s->prevPC(), s->pc());
     }
   }
   
@@ -3025,6 +3026,15 @@ void Executor::doDumpStates() {
   updateStates(nullptr);
 }
 
+void Executor::dumpRootCauses() {
+  auto streamPtr = interpreterHandler->openOutputFile("all.pmem.err");
+  assert(streamPtr && "could not open file!");
+  auto &stream = *streamPtr;
+  
+  interpreterHandler->getInfoStream() << rootCauseMgr->getSummary();
+  stream << rootCauseMgr->str();
+}
+
 void Executor::run(ExecutionState &initialState) {
   bindModuleConstants();
 
@@ -3046,6 +3056,7 @@ void Executor::run(ExecutionState &initialState) {
     while (!seedMap.empty()) {
       if (haltExecution) {
         doDumpStates();
+        dumpRootCauses();
         return;
       }
 
@@ -3139,6 +3150,7 @@ void Executor::run(ExecutionState &initialState) {
   searcher = nullptr;
 
   doDumpStates();
+  dumpRootCauses();
 }
 
 std::string Executor::getAddressInfo(ExecutionState &state,
@@ -3884,6 +3896,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     // bound can be 0 on failure or overlapped
     if (bound) {
+      executeUpdateNvmInfo(state, state.prevPC(), os);
       // Actually do the read or write
       doOperation(*bound, mo, os, mo->getOffsetExpr(address));
     }
@@ -3927,7 +3940,7 @@ void Executor::executeMarkPersistent(ExecutionState &state,
   assert(os && "Cannot mark unbound MemoryObject persistent");
 
   // Construct a persistent ObjectState and bind it to the memory object.
-  state.addressSpace.bindObject(mo, new PersistentState(state, os));
+  state.addressSpace.bindObject(mo, new PersistentState(solver, state, os));
 
   /* std::string name; */
   /* mo->getAllocInfo(name); */
@@ -3952,8 +3965,19 @@ bool Executor::isPersistentMemory(ExecutionState &state, const MemoryObject *mo)
 void Executor::executeUpdateNvmInfo(ExecutionState &state, 
                                     KInstruction *loc, 
                                     const ObjectState *cos) {
-  if (state.nvmInfo && loc && cos) {
-    state.nvmInfo->updateCurrentState(&state, loc, isa<PersistentState>(cos));
+  if (state.nvmInfo() && loc && cos) {
+    assert(cos->getObject() && "I don't know what to do!");
+    if (!cos->getObject()->allocSite) {
+      // errs() << __func__ << " object: " << cos->getObject()->name << "\n";
+      // errs() << __func__ << " usage: " << *loc->inst << " @ " << loc->inst->getFunction()->getName() << "\n";
+      return;
+    }
+    assert(cos->getObject()->allocSite && "What do we do if alloc site is null???");
+    if (isa<AllocaInst>(cos->getObject()->allocSite)) {
+      return;
+    }
+    if (isa<LoadInst>(loc->inst)) return;
+    state.nvmInfo()->updateCurrentState(&state, loc, isa<PersistentState>(cos));
   }
 }
 
@@ -3971,7 +3995,11 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
   // Warn if already flushed, otherwise process normally.
   if (isAlreadyPersisted) {
     /* klee_warning("Unnecessary Flush"); */
-    emitPmemError(state, ps->getLastFlush(solver, state, offset));
+    // avoid masking later bugs; emit error, but continue
+    std::unordered_set<std::string> errStrs;
+    errStrs.insert(rootCauseMgr->getRootCauseString(ps->markFlushAsBug(state, offset)));
+
+    emitPmemError(state, errStrs);
   } else {
     /* klee_warning("Good Flush"); */
     ps->persistCacheLineAtOffset(state, offset);
@@ -4098,7 +4126,7 @@ bool Executor::getPersistenceErrors(ExecutionState &state,
   auto inBoundsConstraint = mo->getBoundsCheckOffset(anyOffset);
   state.constraints.addConstraint(inBoundsConstraint);
 
-  bool isPersisted;
+  bool isPersisted = true;
   bool success = solver->mustBeTrue(state, ps->getIsOffsetPersistedExpr(anyOffset),
                                     isPersisted);
   assert(success && "FIXME: Unhandled solver failure");
@@ -4106,8 +4134,10 @@ bool Executor::getPersistenceErrors(ExecutionState &state,
   state.constraints.removeConstraint(inBoundsConstraint);
 
   if (!isPersisted) {
-    auto rootCauses = ps->getReasonsNotPersisted(solver, state);
-    errors.insert(rootCauses.begin(), rootCauses.end());
+    auto rootCauses = ps->markNonPersistedWritesAsBugs(state);
+    for (auto id : rootCauses) {
+      errors.insert(rootCauseMgr->getRootCauseString(id));
+    }
   }
 
   return !isPersisted;
@@ -4201,7 +4231,18 @@ void Executor::executeThreadExit(ExecutionState &state) {
   thrIt->second.enabled = false;                                                 
                                                                                   
   if (!schedule(state, false))                                                   
-    return;                                                                      
+    return;
+
+  /**
+   * Currently, thread scheduling only occurs at synchronization points.
+   * It makes sense to me that if a thread has unpersisted writes between
+   * synchronization points, something may be wrong.
+   */
+  std::unordered_set<std::string> errors;
+  if (getAllPersistenceErrors(state, errors)) {
+    emitPmemError(state, errors);
+  }
+                                                             
   state.terminateThread(thrIt);                                                  
 }   
 

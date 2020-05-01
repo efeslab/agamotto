@@ -208,16 +208,16 @@ removeMultipleSymbols(llvm::Module *Dest, std::unique_ptr<llvm::Module> Src) {
 
     if (isa<ArrayType>(gvDest->getValueType())) {
       // These guys have special linkage.
-      klee_warning("Symbol '%s' needs appending linkage (%d => %d).", 
-                   symb.c_str(), gvDest->getLinkage(),
-                   llvm::GlobalValue::LinkageTypes::AppendingLinkage);
+      // klee_warning("Symbol '%s' needs appending linkage (%d => %d).", 
+      //              symb.c_str(), gvDest->getLinkage(),
+      //              llvm::GlobalValue::LinkageTypes::AppendingLinkage);
       gvDest->setLinkage(llvm::GlobalValue::LinkageTypes::AppendingLinkage);
       continue;
     } else if (gvSrc->getLinkage() < llvm::GlobalValue::LinkageTypes::LinkOnceODRLinkage) {
-      klee_warning("Symbol '%s' is multiply defined (modules %s and %s)."
-                 " Deleting one copy from module %s (%d).", symb.c_str(),
-                 Dest->getName().str().c_str(), Src->getName().str().c_str(),
-                 Dest->getName().str().c_str(), gvDest->getLinkage());
+      // klee_warning("Symbol '%s' is multiply defined (modules %s and %s)."
+      //            " Deleting one copy from module %s (%d).", symb.c_str(),
+      //            Dest->getName().str().c_str(), Src->getName().str().c_str(),
+      //            Dest->getName().str().c_str(), gvDest->getLinkage());
       /**
        * Priorities existing symbols (already linked in the destination module)
        * over symbols from new libraries.

@@ -66,7 +66,7 @@ namespace klee {
    */
   class Executor;
   class ExecutionState;
-  class NvmContextDynamicHeuristic;
+  class NvmDynamicHeuristic;
   class NvmHeuristicBuilder; // Defined at the end
 
   typedef std::shared_ptr<AndersenAAWrapperPass> SharedAndersen;
@@ -90,7 +90,7 @@ namespace klee {
     public:
       typedef std::shared_ptr<NvmValueDesc> Shared;
       typedef std::unordered_map<const llvm::Value*, 
-                                 std::vector<const llvm::Value*> > AndersenCache;
+                                 std::unordered_set<const llvm::Value*> > AndersenCache;
       typedef std::shared_ptr<AndersenCache> SharedAndersenCache;
     private:
       /**
@@ -116,15 +116,34 @@ namespace klee {
        * We count do global and local to avoid propagating unnecessary local 
        * variables when we go to the next context.
        */
-      std::unordered_set<llvm::Value*> not_local_nvm_, not_global_nvm_;
+      std::unordered_set<const llvm::Value*> not_local_nvm_, not_global_nvm_;
 
+      /**
+       * Each value has a points-to set given by the Andersen alias analysis.
+       * This is a helper method to get that set, as it passes through the 
+       * cache first.
+       * 
+       * We also filter down the set to only values which can return NVM.
+       */
       bool getPointsToSet(const llvm::Value *v, 
-                          std::vector<const llvm::Value *> &ptsSet) const;
+                          std::unordered_set<const llvm::Value *> &ptsSet) const;
 
+      /**
+       * Returns true if A may point to B. A may point to B if their points-to
+       * sets overlap.
+       */
       bool mayPointTo(const llvm::Value *a, const llvm::Value *b) const;
 
+      /**
+       * Returns true if the points-to set of A is equivalent to the points-to
+       * set of B.
+       */
       bool pointsToIsEq(const llvm::Value *a, const llvm::Value *b) const;
 
+      /**
+       * Returns true if posNvm (possible NVM value) matches a value that we 
+       * know to be a volatile value.
+       */
       bool matchesKnownVolatile(const llvm::Value *posNvm) const;
 
       /**
@@ -139,7 +158,7 @@ namespace klee {
       NvmValueDesc(SharedAndersen apa, 
                    SharedAndersenCache cache,
                    std::unordered_set<const llvm::Value*> mmap,
-                   std::unordered_set<llvm::Value*> globals) 
+                   std::unordered_set<const llvm::Value*> globals) 
                    : andersen_(apa),
                      anders_cache_(cache),
                      nvm_allocs_(mmap), 
@@ -171,8 +190,11 @@ namespace klee {
       /**
        * Directly create a new description. This is generally for when we actually
        * execute and want to update our assumptions.
+       * 
+       * If the state is updated, returns a new shared pointer. Else, returns
+       * shared_from_this.
        */
-      NvmValueDesc::Shared updateState(llvm::Value *val, bool nvm) const;
+      NvmValueDesc::Shared updateState(llvm::Value *val, bool nvm);
 
       /**
        * When we do an indirect function call, we can't propagate local nvm variables
@@ -248,7 +270,7 @@ namespace klee {
     public: 
       typedef std::shared_ptr<NvmContextDesc> Shared;
     private:
-      friend class NvmContextDynamicHeuristic;
+      friend class NvmDynamicHeuristic;
       SharedAndersen andersen;
 
       /**
@@ -256,25 +278,28 @@ namespace klee {
        */
       llvm::Function *function;
       NvmValueDesc::Shared valueState;
-      bool __attribute__((unused)) returnHasWeight; 
+      bool returnHasWeight; 
 
       /**
-       * Many function contexts will be the same.
+       * Many function contexts will be the same. Particularly, when we do 
+       * updates, we don't want to recompute the priority every time, as they
+       * will likely have common themes. So, we will cache more than just the
+       * initial state.
        */
       struct ContextCacheKey {
         llvm::Function *function;
-        NvmValueDesc::Shared initialState;
+        NvmValueDesc::Shared valueState;
 
-        ContextCacheKey(llvm::Function *f, NvmValueDesc::Shared init) 
-          : function(f), initialState(init) {}
+        ContextCacheKey(llvm::Function *f, NvmValueDesc::Shared vals) 
+          : function(f), valueState(vals) {}
 
         bool operator==(const ContextCacheKey &rhs) const {
-          return function == rhs.function && *initialState == *rhs.initialState;
+          return function == rhs.function && *valueState == *rhs.valueState;
         }
 
         struct Hash {
           uint64_t operator()(const ContextCacheKey &cck) const {
-            return std::hash<void*>{}(cck.function) ^ cck.initialState->hash();
+            return std::hash<void*>{}(cck.function) ^ cck.valueState->hash();
           }
         };
       };
@@ -405,6 +430,8 @@ namespace klee {
       virtual bool needsRecomputation() const = 0;
 
     public:
+
+      typedef std::shared_ptr<NvmHeuristicInfo> Shared;
     
       virtual ~NvmHeuristicInfo() = 0;
 
@@ -548,63 +575,18 @@ namespace klee {
 
   /* #endregion */
 
-  /* #region NvmInsensitiveDynamicHeuristic */
-
-  /**
-   * TODO: resolve function pointers
-   */
-  class NvmInsensitiveDynamicHeuristic : public NvmStaticHeuristic {
-    friend class NvmHeuristicBuilder;
-    protected:
-      
-      ValueSet activeNvmSites_;
-      ValueSet knownVolatiles_;
-
-      NvmInsensitiveDynamicHeuristic(Executor *executor, KFunction *mainFn) 
-        : NvmStaticHeuristic(executor, mainFn) {}
-
-      virtual const ValueSet &getCurrentNvmSites() const override { 
-        return activeNvmSites_;
-      }
-
-      /**
-       * Since we track volatiles, we know something modifies NVM if:
-       * - It can point to an active NVM allocation.
-       * - There is no known volatile that has the same points-to set.
-       */
-      // virtual bool modifiesNvm(llvm::Instruction *i) const override;
-
-      virtual bool needsRecomputation() const override;
-
-    public:
-
-      NvmInsensitiveDynamicHeuristic(const NvmInsensitiveDynamicHeuristic &other) = default;
-
-      virtual ~NvmInsensitiveDynamicHeuristic() {}
-
-      /**
-       * May change one of the current states, or could not.
-       */
-      virtual void updateCurrentState(ExecutionState *es, 
-                                      KInstruction *pc, 
-                                      bool isNvm) override;
-
-      virtual void dump(void) const override;
-  };
-
-  /* #endregion */
-
-  /* #region NvmContextDynamicHeuristic */
+  /* #region NvmDynamicHeuristic */
 
   /**
    * We keep call stack information with our values, but not flow information.
    * We forgo a flow-sensitive analysis as it is extremely costly.
    */
-  class NvmContextDynamicHeuristic : public NvmHeuristicInfo {
+  class NvmDynamicHeuristic : public NvmHeuristicInfo {
     friend class NvmHeuristicBuilder;
     protected:
       
       std::list<NvmContextDesc::Shared> contextStack;
+      std::list<llvm::CallInst*> callInstStack; 
       NvmContextDesc::Shared contextDesc;
       KInstruction *curr;
 
@@ -613,7 +595,7 @@ namespace klee {
        * re-computing priority fairly efficient.
        */
 
-      NvmContextDynamicHeuristic(Executor *executor, KFunction *mainFn);
+      NvmDynamicHeuristic(Executor *executor, KFunction *mainFn);
 
       virtual void computePriority() override {
         contextDesc->setAuxWeights(contextDesc->setCoreWeights());
@@ -624,9 +606,9 @@ namespace klee {
 
     public:
 
-      NvmContextDynamicHeuristic(const NvmContextDynamicHeuristic &other) = default;
+      NvmDynamicHeuristic(const NvmDynamicHeuristic &other) = default;
 
-      virtual ~NvmContextDynamicHeuristic() {}
+      virtual ~NvmDynamicHeuristic() {}
 
       virtual uint64_t getCurrentPriority(void) const override {
         return contextDesc->getPriority(curr);
@@ -675,8 +657,7 @@ namespace klee {
       enum Type {
         None = 0,
         Static,
-        InsensitiveDynamic,
-        ContextDynamic,
+        Dynamic,
         Invalid
       };
 
