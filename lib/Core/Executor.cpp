@@ -3996,12 +3996,10 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
   if (isAlreadyPersisted) {
     /* klee_warning("Unnecessary Flush"); */
     // avoid masking later bugs; emit error, but continue
-    auto errIds = ps->markLastFlushAsBug(*errState, offset);
     std::unordered_set<std::string> errStrs;
-    for (auto id : errIds) {
-      errStrs.insert(rootCauseMgr->getRootCauseString(id));
-    }
-    emitPmemError(*errState, errStrs);
+    errStrs.insert(rootCauseMgr->getRootCauseString(ps->markFlushAsBug(state, offset)));
+
+    emitPmemError(state, errStrs);
   } else {
     /* klee_warning("Good Flush"); */
     ps->persistCacheLineAtOffset(state, offset);
@@ -4074,7 +4072,6 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
 
       ref<Expr> offset = mo->getOffsetExpr(address);
 
-<<<<<<< HEAD
       // If offset >= size, flush the last offset
       check = UgeExpr::create(offset, mo->getSizeExpr());
       result = fork(*remaining, check, true);
@@ -4083,13 +4080,6 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
       if (greater) {
         ref<Expr> lastByte = ConstantExpr::create(mo->size - 1, Expr::Int32);
         executePersistentMemoryFlush(*greater, mo, ps, lastByte);
-=======
-        // avoid masking later bugs; emit error, but continue
-        auto id = ps->markFlushAsBug(*errState, offset);
-        std::unordered_set<std::string> errStrs;
-        errStrs.insert(rootCauseMgr->getRootCauseString(id));
-        emitPmemError(*errState, errStrs);
->>>>>>> Extend root causes
       }
 
       // Definitely not in bounds?
@@ -4136,7 +4126,7 @@ bool Executor::getPersistenceErrors(ExecutionState &state,
   auto inBoundsConstraint = mo->getBoundsCheckOffset(anyOffset);
   state.constraints.addConstraint(inBoundsConstraint);
 
-  bool isPersisted;
+  bool isPersisted = true;
   bool success = solver->mustBeTrue(state, ps->getIsOffsetPersistedExpr(anyOffset),
                                     isPersisted);
   assert(success && "FIXME: Unhandled solver failure");
@@ -4251,7 +4241,8 @@ void Executor::executeThreadExit(ExecutionState &state) {
   std::unordered_set<std::string> errors;
   if (getAllPersistenceErrors(state, errors)) {
     emitPmemError(state, errors);
-  }                                                                   
+  }
+                                                             
   state.terminateThread(thrIt);                                                  
 }   
 

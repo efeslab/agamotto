@@ -886,18 +886,13 @@ PersistentState::markNonPersistedWritesAsBugs(ExecutionState &state) const {
 std::unordered_set<uint64_t>
 PersistentState::getRootCauses(ExecutionState &state,
                                const UpdateList &ul) const {
-<<<<<<< HEAD
-  std::unordered_set<std::string> causes;
-  if (ul.head == nullptr) return causes;
-=======
   std::unordered_set<uint64_t> causes;
-  // I checked, this is constant time.
-  if (!ul.getSize()) return causes;
->>>>>>> Extend root causes
+  if (ul.head == nullptr) {
+    return causes;
+  }
 
   auto idx = getAnyOffsetExpr();
   auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
-  // auto idx = getObject()->getBoundsCheckOffset(getAnyOffsetExpr());
 
   state.constraints.addConstraint(inBoundsConstraint);
   causes = getRootCause(state, ul, getCacheLine(idx));
@@ -918,9 +913,11 @@ ref<Expr> PersistentState::isCacheLinePersisted(ref<Expr> cacheLine,
   auto &updateList = pending ? pendingCacheLineUpdates : cacheLineUpdates;
 
   // If no updates, then trivially persisted
-  if (updateList.head == nullptr)
-    return getPersistedExpr();
-
+  if (updateList.head == nullptr) {
+    // Bool is actually required here.
+    return ConstantExpr::create(1, Expr::Bool);
+  }
+  
   ref<Expr> result = ReadExpr::create(updateList,
                                       ZExtExpr::create(cacheLine, Expr::Int32));
   return EqExpr::create(result, getPersistedExpr());
