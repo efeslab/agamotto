@@ -3027,12 +3027,13 @@ void Executor::doDumpStates() {
 }
 
 void Executor::dumpRootCauses() {
-  auto streamPtr = interpreterHandler->openOutputFile("all.pmem.err");
-  assert(streamPtr && "could not open file!");
-  auto &stream = *streamPtr;
+  auto textPtr = interpreterHandler->openOutputFile("all.pmem.err");
+  auto csvPtr = interpreterHandler->openOutputFile("all_pmem_errs.csv");
+  assert(textPtr && csvPtr && "could not open files!");
   
   interpreterHandler->getInfoStream() << rootCauseMgr->getSummary();
-  stream << rootCauseMgr->str();
+  rootCauseMgr->dumpText(*textPtr);
+  rootCauseMgr->dumpCSV(*csvPtr);
 }
 
 void Executor::run(ExecutionState &initialState) {

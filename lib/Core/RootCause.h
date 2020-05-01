@@ -42,65 +42,61 @@ namespace klee {
     PM_FlushOnUnmodified
   };
 
-  class RootCauseLocation {
-    public:
-      struct Hash {
-        uint64_t operator()(const RootCauseLocation &) const;
-      };
+  struct RootCauseLocation {
+    struct Hash {
+      uint64_t operator()(const RootCauseLocation &) const;
+    };
 
-    private:
+    struct RootCauseStackFrame {
+      KInstIterator caller;
+      KFunction *kf;
 
-      struct RootCauseStackFrame {
-        KInstIterator caller;
-        KFunction *kf;
+      RootCauseStackFrame(const KInstIterator &c, KFunction *f)
+        : caller(c), kf(f) {}
+      
+      bool operator==(const RootCauseStackFrame &other) const {
+        return caller == other.caller && kf == other.kf;
+      }
+    };
 
-        RootCauseStackFrame(const KInstIterator &c, KFunction *f)
-          : caller(c), kf(f) {}
-        
-        bool operator==(const RootCauseStackFrame &other) const {
-          return caller == other.caller && kf == other.kf;
-        }
-      };
-  
-      const llvm::Value *allocSite;
-      const KInstruction *inst;
-      std::list<RootCauseStackFrame> stack;
-      RootCauseReason reason;
+    const llvm::Value *allocSite;
+    const KInstruction *inst;
+    std::list<RootCauseStackFrame> stack;
+    RootCauseReason reason;
 
-      /**
-       * We maintain our own stack to check the absolute location,
-       * but the stack description from ExecutionState contains argument values
-       * which can be helpful for debugging.
-       */
-      std::string stackStr;
+    /**
+     * We maintain our own stack to check the absolute location,
+     * but the stack description from ExecutionState contains argument values
+     * which can be helpful for debugging.
+     */
+    std::string stackStr;
 
-      /**
-       * Sometimes, one error may mask another. We want to record the chain
-       * of root causes that may be the original error.
-       */
-      std::unordered_set<uint64_t> maskedRoots;
+    /**
+     * Sometimes, one error may mask another. We want to record the chain
+     * of root causes that may be the original error.
+     */
+    std::unordered_set<uint64_t> maskedRoots;
 
-    public:
 
-      RootCauseLocation(const ExecutionState &state, 
-                        const llvm::Value *allocationSite, 
-                        const KInstruction *pc,
-                        RootCauseReason r);
+    RootCauseLocation(const ExecutionState &state, 
+                      const llvm::Value *allocationSite, 
+                      const KInstruction *pc,
+                      RootCauseReason r);
 
-      void addMaskedError(uint64_t id);
+    void addMaskedError(uint64_t id);
 
-      const std::unordered_set<uint64_t> &getMaskedSet() { return maskedRoots; }
+    const std::unordered_set<uint64_t> &getMaskedSet() { return maskedRoots; }
 
-      std::string str(void) const;
+    std::string str(void) const;
 
-      std::string fullString(const RootCauseManager &mgr) const;
+    std::string fullString(const RootCauseManager &mgr) const;
 
-      const char *reasonString(void) const;
+    const char *reasonString(void) const;
 
-      RootCauseReason getReason(void) const { return reason; }
+    RootCauseReason getReason(void) const { return reason; }
 
-      friend bool operator==(const RootCauseLocation &lhs, 
-                             const RootCauseLocation &rhs);
+    friend bool operator==(const RootCauseLocation &lhs, 
+                            const RootCauseLocation &rhs);
   };
 
   /**
@@ -124,6 +120,8 @@ namespace klee {
       uint64_t totalOccurences = 0;
       std::unordered_set<uint64_t> buggyIds;
 
+      size_t largestStack = 0;
+
     public:
       RootCauseManager() {}
 
@@ -146,7 +144,8 @@ namespace klee {
         return idToRoot.at(id)->rootCause;
       }
 
-      std::string str(void) const;
+      void dumpCSV(llvm::raw_ostream &out) const;
+      void dumpText(llvm::raw_ostream &out) const;
 
       void clear();
 

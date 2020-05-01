@@ -1080,7 +1080,6 @@ void SpecialFunctionHandler::doAllocContiguous(ExecutionState &state,
     objNum++;
     mo->setName(ss.str());
 
-    errs() << mo->name << "\n";
     if (make_symbolic) {
       executor.executeMakeSymbolic(state, mo, mo->name);
     } else {
