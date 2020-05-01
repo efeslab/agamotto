@@ -192,7 +192,7 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
 
   void* ret = (void*)syscall(__NR_mmap, start, actual_size, prot, flags, actual_fd, offset);
   posix_debug_msg("real mmap path! (start=%p, length=%lu/%lu, prot=%d, "
-                      "flags=%d, fd=%d, offset=%ld) => %p (%lu)",
+                      "flags=%d, fd=%d, offset=%ld) => %p (%lu)\n",
                   start, length, actual_size, prot, flags, fd, offset, ret, 
                   (unsigned long)ret);
 
@@ -275,7 +275,7 @@ int munmap(void *start, size_t length) {
     }
   }
 
-  posix_debug_msg("munmap(start=%p, length=%lu)", start, actual_size);
+  posix_debug_msg("munmap(start=%p, length=%lu)\n", start, actual_size);
 
   size_t pgsz = (size_t)getpagesize();
   start = __concretize_ptr(start);
@@ -293,7 +293,7 @@ int munmap(void *start, size_t length) {
     klee_undefine_fixed_object(addr);
   }
 
-  klee_warning("munmap done.\n");
+  posix_debug_msg("munmap done.\n");
 
   return syscall(__NR_munmap, start, actual_size);
 }

@@ -246,8 +246,11 @@ MemoryManager::allocateContiguous(uint64_t individualSz, size_t nObj,
   for (uint64_t objNo = 0; objNo < nObj; ++objNo) {
     uint64_t objAddr = address + (objNo * individualSz);
     ++stats::allocations;
+    // This way, markFreed will only free the underlying memory for the first
+    // object.
+    bool is_fixed = objNo > 0;
     MemoryObject *res = new MemoryObject(objAddr, individualSz, isLocal, isGlobal, 
-                                         false, allocSite, this);
+                                         is_fixed, allocSite, this);
     objects.insert(res);
     objs.push_back(res);
   }

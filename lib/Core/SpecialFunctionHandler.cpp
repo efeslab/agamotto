@@ -31,6 +31,8 @@
 #include <errno.h>
 #include <sys/mman.h>
 #include <sstream>
+#include <cmath>
+#include <algorithm>
 
 using namespace llvm;
 using namespace klee;
@@ -50,6 +52,14 @@ cl::opt<bool>
                               "condition given to klee_assume() rather than "
                               "emitting an error (default=false)"),
                      cl::cat(TerminationCat));
+
+cl::opt<unsigned>
+    CallocMaxSize("calloc-max-unit-size", cl::init(0),
+                  cl::desc("Max size for memory objects in calloc. If the "
+                           "overall size is larger, will allocate multiple, "
+                           "contiguous MemoryObjects instead (default=0, "
+                           "with 0 disabling this feature)."),
+                  cl::cat(SolvingCat));
 } // namespace
 
 /// \todo Almost all of the demands in this file should be replaced
@@ -693,10 +703,55 @@ void SpecialFunctionHandler::handleCalloc(ExecutionState &state,
   // XXX should type check args
   assert(arguments.size()==2 &&
          "invalid number of arguments to calloc");
+  
+  ref<Expr> nObjExpr = arguments[0];
+  ref<Expr> objSzExpr = arguments[1];
 
-  ref<Expr> size = MulExpr::create(arguments[0],
-                                   arguments[1]);
-  executor.executeAlloc(state, size, false, target, true);
+  ref<Expr> size = MulExpr::create(nObjExpr, objSzExpr);
+  if (CallocMaxSize == 0) {
+    executor.executeAlloc(state, size, false, target, true);
+    return;
+  }
+
+  size_t realSize;
+  ref<ConstantExpr> ce = dyn_cast<ConstantExpr>(size);
+  if (!ce.isNull()) {
+    realSize = ce->getZExtValue();
+  } else {
+    size = executor.optimizer.optimizeExpr(size, true);
+
+    std::pair<ref<Expr>, ref<Expr> > 
+        range = executor.solver->getRange(state, size);
+
+    ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
+    ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);  
+    assert(!lo.isNull() && !hi.isNull() && "FIXME: unhandled solver failure");
+
+    uint64_t loVal = lo->getZExtValue();
+    uint64_t hiVal = hi->getZExtValue();
+
+    if (loVal <= CallocMaxSize) {
+      realSize = std::min((size_t)CallocMaxSize, hiVal);
+    } else {
+      realSize = loVal;
+    }
+  }
+
+  if (realSize <= CallocMaxSize) {
+    executor.executeAlloc(state, size, false, target, true);
+    return;
+  }
+  
+  // Here's the part where we actually do the allocateContiguous thing
+  size_t nObjs = (size_t)std::ceil(realSize / (double)CallocMaxSize);
+  size_t objSz = CallocMaxSize;
+
+  assert(nObjs * objSz >= realSize && "can't do math!");
+
+  klee_warning("Rather than allocating %lu bytes, allocating %lu objects "
+               "of size %lu", realSize, nObjs, objSz);
+
+  doAllocContiguous(state, target, nObjs, objSz, "calloc");
 }
 
 void SpecialFunctionHandler::handleRealloc(ExecutionState &state,
@@ -1007,6 +1062,43 @@ void SpecialFunctionHandler::handleDivRemOverflow(ExecutionState &state,
                                  Executor::Overflow);
 }
 
+void SpecialFunctionHandler::doAllocContiguous(ExecutionState &state, 
+                                               KInstruction *target,
+                                               size_t nObj, 
+                                               size_t unitSz,
+                                               std::string baseName,
+                                               bool make_symbolic,
+                                               bool make_persistent) {
+  auto mos = executor.memory->allocateContiguous(
+                            unitSz, nObj, false, true, state.prevPC()->inst);
+  int objNum = 0;
+  for (auto *mo : mos) {
+    assert(mo);
+    std::string moName;
+    llvm::raw_string_ostream ss(moName);
+    ss << baseName << "_" << objNum;
+    objNum++;
+    mo->setName(ss.str());
+
+    errs() << mo->name << "\n";
+    if (make_symbolic) {
+      executor.executeMakeSymbolic(state, mo, mo->name);
+    } else {
+      auto *os = executor.bindObjectInState(state, mo, false);
+      assert(os && "could not bind object!!");
+    }
+    
+    if (make_persistent) executor.executeMarkPersistent(state, mo);
+  }
+
+  if (!mos.size()) {
+    static ref<Expr> nullptrExpr = ConstantExpr::alloc(0, Context::get().getPointerWidth());
+    executor.bindLocal(target, state, nullptrExpr);
+  } else {
+    executor.bindLocal(target, state, mos.front()->getBaseExpr());
+  }
+}
+
 void SpecialFunctionHandler::handleAllocPmem(ExecutionState &state,
                                             KInstruction *target,
                                             std::vector<ref<Expr>> &arguments) {
@@ -1048,39 +1140,11 @@ void SpecialFunctionHandler::handleAllocPmem(ExecutionState &state,
   // Should be concrete for the case we care about--pmem file.
   uint64_t unitSz = PersistentState::MaxSize;
 
-  uint64_t mmap_size = (realSize % unitSz) ? ((realSize / unitSz) + 1) * unitSz : realSize;
+  uint64_t totalSize = (realSize % unitSz) ? ((realSize / unitSz) + 1) * unitSz : realSize;
 
-  // We'll treat it like a fixed object and just call mmap internally.
-  // TODO: reclaim, fix hack
-  void *base_addr = mmap(nullptr, mmap_size, PROT_READ | PROT_WRITE, 
-                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (MAP_FAILED == base_addr) {
-    klee_error("Could not map!");
-  }
-
-  MemoryObject *baseObj = nullptr;
-  for (uint64_t offset = 0; offset < realSize; offset += unitSz) {
-    MemoryObject *mo = executor.memory->allocateFixed(
-              (uint64_t)base_addr + offset, unitSz, state.prevPC()->inst);
-    assert(mo);
-    std::string moName;
-    llvm::raw_string_ostream ss(moName);
-    ss << name << "_" << (offset / unitSz);
-    mo->setName(ss.str());
-
-    executor.executeMakeSymbolic(state, mo, name);
-    executor.executeMarkPersistent(state, mo);
-
-    if (!baseObj) baseObj = mo;
-  }
-
-  if (!baseObj) {
-    static ref<Expr> nullptrExpr = ConstantExpr::alloc(0, Context::get().getPointerWidth());
-    executor.bindLocal(target, state, nullptrExpr);
-  } else {
-    executor.bindLocal(target, state, baseObj->getBaseExpr());
-  }
+  size_t nObj = totalSize / unitSz;
   
+  doAllocContiguous(state, target, nObj, unitSz, name, true, true);
 }
 
 void SpecialFunctionHandler::handleMarkPersistent(ExecutionState &state,

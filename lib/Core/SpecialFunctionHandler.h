@@ -95,6 +95,11 @@ namespace klee {
 
     std::string readStringAtAddress(ExecutionState &state, ref<Expr> address);
     
+    void doAllocContiguous(ExecutionState &state, KInstruction *target,
+                           size_t nObj, size_t objSz, std::string baseName,
+                           bool make_symbolic = false, 
+                           bool make_persistent = false);
+
     /* Handlers */
 
 #define HANDLER(name) void name(ExecutionState &state, \
