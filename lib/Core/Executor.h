@@ -356,6 +356,10 @@ private:
   /// Check persistence of all memory objects. Return ALL errors.
   bool getAllPersistenceErrors(ExecutionState &state, std::unordered_set<std::string> &errors);
   bool getPersistenceErrors(ExecutionState &state, const MemoryObject *mo, std::unordered_set<std::string> &errors);
+  
+  std::unordered_set<uint64_t> markPersistenceErrors(ExecutionState &state, 
+                                                     const MemoryObject *mo, 
+                                                     const PersistentState *ps);
 
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included

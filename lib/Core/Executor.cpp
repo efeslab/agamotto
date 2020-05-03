@@ -4111,16 +4111,10 @@ void Executor::executePersistentMemoryFence(ExecutionState &state) {
   }
 }
 
-
-bool Executor::getPersistenceErrors(ExecutionState &state,
-                                    const MemoryObject *mo,
-                                    std::unordered_set<std::string> &errors) {
-
-  const ObjectState *os = state.addressSpace.findObject(mo);
-  assert(os);
-  const PersistentState *ps = dyn_cast<PersistentState>(os);
-  assert(ps);
-
+std::unordered_set<uint64_t> 
+Executor::markPersistenceErrors(ExecutionState &state, 
+                                const MemoryObject *mo,
+                                const PersistentState *ps) {
   // Get a symbolic offset into the object and constrain it to be within
   // the object's bounds.
   auto anyOffset = ps->getAnyOffsetExpr();
@@ -4135,13 +4129,30 @@ bool Executor::getPersistenceErrors(ExecutionState &state,
   state.constraints.removeConstraint(inBoundsConstraint);
 
   if (!isPersisted) {
-    auto rootCauses = ps->markNonPersistedWritesAsBugs(state);
-    for (auto id : rootCauses) {
-      errors.insert(rootCauseMgr->getRootCauseString(id));
-    }
+    return ps->markNonPersistedWritesAsBugs(state);
   }
 
-  return !isPersisted;
+  return std::unordered_set<uint64_t>();
+}
+
+bool Executor::getPersistenceErrors(ExecutionState &state,
+                                    const MemoryObject *mo,
+                                    std::unordered_set<std::string> &errors) {
+
+  const ObjectState *os = state.addressSpace.findObject(mo);
+  assert(os);
+  const PersistentState *ps = dyn_cast<PersistentState>(os);
+  assert(ps);
+
+  auto rootCauses = markPersistenceErrors(state, mo, ps);
+
+  if (rootCauses.empty()) return false;
+
+  for (auto id : rootCauses) {
+    errors.insert(rootCauseMgr->getRootCauseString(id));
+  }
+
+  return true;
 }
 
 bool Executor::getAllPersistenceErrors(ExecutionState &state,
