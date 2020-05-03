@@ -641,9 +641,12 @@ int _open_symbolic(disk_file_t *dfile, int flags, mode_t mode) {
     errno = EACCES;
     return -1;
   } else {
-    dfile->stat->st_mode =
-        ((dfile->stat->st_mode & ~0777) | (mode & ~__exe_env.umask));
-    /*    clear existing file mode   |  requested mode - umask */
+    // (iangneal) this doesn't make sense to me.
+    if (dfile->pmem_type != PMEM_FROM_CONCRETE) {
+      dfile->stat->st_mode =
+          ((dfile->stat->st_mode & ~0777) | (mode & ~__exe_env.umask));
+      /*    clear existing file mode   |  requested mode - umask */
+    }
   }
 
   // Now we can allocate a FD

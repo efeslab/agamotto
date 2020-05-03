@@ -252,7 +252,7 @@ static void _init_pmem_from_real(disk_file_t *dfile, const char *origpath,
                                  size_t size, const char *symname) {
 
   block_buffer_t *buff = &dfile->bbuf;
-  _block_init(buff, size);
+  _block_init_pmem(buff, size, symname);
   buff->size = size;
   // since it calls klee_pmem_alloc_pmem, should already be symbolic
   klee_make_shared(buff->contents, size);
