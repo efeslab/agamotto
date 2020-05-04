@@ -674,7 +674,7 @@ void NvmStaticHeuristic::computePriority(void) {
    */
   resetWeights();
 
-  std::unordered_set<llvm::CallInst*> call_insts;
+  std::unordered_set<llvm::CallBase*> call_insts;
 
   for (Function &f : *module_) {
     for (BasicBlock &b : f) {
@@ -683,8 +683,12 @@ void NvmStaticHeuristic::computePriority(void) {
         (*priorities_)[&i] = 0lu;
         if (mayHaveWeight(&i)) {
           (*weights_)[&i] = computeInstWeight(&i);
-        } else if (CallInst *ci = dyn_cast<CallInst>(&i)) {
-          if (!ci->isInlineAsm()) call_insts.insert(ci);
+        } else if (CallBase *cb = dyn_cast<CallBase>(&i)) {
+          if (auto *ci = dyn_cast<CallInst>(cb)) {
+            if (ci->isInlineAsm()) continue;
+          } 
+          
+          call_insts.insert(cb);
         }
       }
     }
@@ -697,26 +701,26 @@ void NvmStaticHeuristic::computePriority(void) {
   bool c = false;
   do {
     c = false;
-    for (CallInst *ci : call_insts) {
+    for (CallBase *cb : call_insts) {
       std::unordered_set<Function*> possibleFns;
-      if (Function *f = utils::getCallInstFunction(ci)) {
+      if (Function *f = utils::getCallInstFunction(cb)) {
         possibleFns.insert(f);
-      } else if (Function *f = ci->getCalledFunction()) {
+      } else if (Function *f = cb->getCalledFunction()) {
         possibleFns.insert(f);
-      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(ci->getCalledValue())) {
+      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(cb->getCalledValue())) {
         Function *f = dyn_cast<Function>(ga->getAliasee());
         assert(f && "bad assumption about aliases!");
         possibleFns.insert(f);
       } else {
-        if (!ci->isIndirectCall()) {
-          errs() << *ci << "\n";
-          errs() << ci->getCalledValue() << "\n";
-          if (ci->getCalledValue()) errs() << *ci->getCalledValue() << "\n";
+        if (!cb->isIndirectCall()) {
+          errs() << *cb << "\n";
+          errs() << cb->getCalledValue() << "\n";
+          if (cb->getCalledValue()) errs() << *cb->getCalledValue() << "\n";
         }
-        assert(ci->isIndirectCall());
+        assert(cb->isIndirectCall());
 
         for (Function &f : *curr_->getModule()) {
-          for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
+          for (unsigned i = 0; i < (unsigned)cb->getNumArgOperands(); ++i) {
             if (f.arg_size() <= i) {
               if (f.isVarArg()) {
                 possibleFns.insert(&f);
@@ -725,10 +729,10 @@ void NvmStaticHeuristic::computePriority(void) {
             }
 
             Argument *arg = f.arg_begin() + i;
-            Value *val = ci->getArgOperand(i);
+            Value *val = cb->getArgOperand(i);
 
             if (arg->getType() != val->getType()) break;
-            else if (i + 1 == ci->getNumArgOperands()) possibleFns.insert(&f);
+            else if (i + 1 == cb->getNumArgOperands()) possibleFns.insert(&f);
           }
         }
       }
@@ -736,9 +740,9 @@ void NvmStaticHeuristic::computePriority(void) {
       for (Function *f : possibleFns) {
         for (BasicBlock &bb : *f) {
           for (Instruction &i : bb) {
-            if ((*weights_)[&i] && !(*weights_)[dyn_cast<Instruction>(ci)]) {
+            if ((*weights_)[&i] && !(*weights_)[dyn_cast<Instruction>(cb)]) {
               c = true;
-              (*weights_)[dyn_cast<Instruction>(ci)] = 1u;
+              (*weights_)[dyn_cast<Instruction>(cb)] = 1u;
               goto done;
             }
           }
@@ -842,9 +846,18 @@ void NvmStaticHeuristic::computePriority(void) {
       for (Use &u : f.uses()) {
         User *usr = u.getUser();
         // errs() << "usr:" << *usr << "\n";
-        if (Instruction *i = dyn_cast<Instruction>(usr)) {
+        if (auto *cb = dyn_cast<CallBase>(usr)) {
           // errs() << "\t=> " << (*priorities_)[i] << "\n";
-          Instruction *retLoc = i->getNextNode();
+          Instruction *retLoc = nullptr;
+          if (CallInst *ci = dyn_cast<CallInst>(cb)) {
+            retLoc = ci->getNextNode();
+          } else if (InvokeInst *ii = dyn_cast<InvokeInst>(cb)) {
+            retLoc = ii->getNormalDest()->getFirstNonPHI();
+          } else {
+            errs() << "ERR: " << *cb << "\n";
+            klee_error("unknown function user type!\n");
+            assert(false);
+          }
           assert(retLoc);
           // errs() << "\t=> " << (*priorities_)[retLoc] << "\n";
           if ((*priorities_)[retLoc]) {
@@ -861,25 +874,36 @@ void NvmStaticHeuristic::computePriority(void) {
       }
     }
 
-    for (CallInst *ci : call_insts) {
-      Instruction *retLoc = ci->getNextNode();
+    for (CallBase *cb : call_insts) {
+
+      Instruction *retLoc = nullptr;
+      if (CallInst *ci = dyn_cast<CallInst>(cb)) {
+        retLoc = ci->getNextNode();
+      } else if (InvokeInst *ii = dyn_cast<InvokeInst>(cb)) {
+        retLoc = ii->getNormalDest()->getFirstNonPHI();
+      } else {
+        errs() << "ERR: " << *cb << "\n";
+        klee_error("unknown CallBase type!\n");
+        assert(false);
+      }
+      
       assert(retLoc);
 
       std::unordered_set<Function*> possibleFns;
-      if (Function *f = utils::getCallInstFunction(ci)) {
+      if (Function *f = utils::getCallInstFunction(cb)) {
         possibleFns.insert(f);
-      } else if (Function *f = ci->getCalledFunction()) {
+      } else if (Function *f = cb->getCalledFunction()) {
         possibleFns.insert(f);
-      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(ci->getCalledValue())) {
+      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(cb->getCalledValue())) {
         Function *f = dyn_cast<Function>(ga->getAliasee());
         assert(f && "bad assumption about aliases!");
         possibleFns.insert(f);
       } else {
-        if (!ci->isIndirectCall()) errs() << *ci << "\n";
-        assert(ci->isIndirectCall());
+        if (!cb->isIndirectCall()) errs() << *cb << "\n";
+        assert(cb->isIndirectCall());
 
         for (Function &f : *curr_->getModule()) {
-          for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
+          for (unsigned i = 0; i < (unsigned)cb->getNumArgOperands(); ++i) {
             if (f.arg_size() <= i) {
               if (f.isVarArg()) {
                 possibleFns.insert(&f);
@@ -888,10 +912,10 @@ void NvmStaticHeuristic::computePriority(void) {
             }
 
             Argument *arg = f.arg_begin() + i;
-            Value *val = ci->getArgOperand(i);
+            Value *val = cb->getArgOperand(i);
 
             if (arg->getType() != val->getType()) break;
-            else if (i + 1 == ci->getNumArgOperands()) possibleFns.insert(&f);
+            else if (i + 1 == cb->getNumArgOperands()) possibleFns.insert(&f);
           }
         }
       }
