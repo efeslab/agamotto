@@ -33,6 +33,13 @@
 #include <sstream>
 #include <cmath>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 using namespace llvm;
 using namespace klee;
@@ -1067,11 +1074,21 @@ void SpecialFunctionHandler::doAllocContiguous(ExecutionState &state,
                                                size_t nObj, 
                                                size_t unitSz,
                                                std::string baseName,
-                                               bool make_symbolic,
-                                               bool make_persistent) {
+                                               bool make_persistent,
+                                               bool init_zero,
+                                               std::string file_name) {
   auto mos = executor.memory->allocateContiguous(
                             unitSz, nObj, false, true, state.prevPC()->inst);
   int objNum = 0;
+
+  int fd = -1;
+  if (!file_name.empty()) {
+    fd = open(file_name.c_str(), O_RDONLY);
+    if (fd < 0) {
+      klee_error("could not open %s, %s", file_name.c_str(), strerror(errno));
+    }
+  }
+
   for (auto *mo : mos) {
     assert(mo);
     std::string moName;
@@ -1079,15 +1096,59 @@ void SpecialFunctionHandler::doAllocContiguous(ExecutionState &state,
     ss << baseName << "_" << objNum;
     objNum++;
     mo->setName(ss.str());
+    
+    if (make_persistent) {
+      ObjectState *os = nullptr;
+      if (init_zero && !file_name.empty()) {
+        klee_error("can only set init_zero or file-based init!");
+      }
 
-    if (make_symbolic) {
-      executor.executeMakeSymbolic(state, mo, mo->name);
+      if (init_zero) {
+        // We will bind this object to a concrete array first.
+        std::vector<ref<ConstantExpr> > Init(mo->size);
+        Init.assign(mo->size, ConstantExpr::create(0, Expr::Int8));
+        auto *arrayCache = mo->parent->getArrayCache();
+        const Array *zeroInitMem = arrayCache->CreateArray(mo->name, mo->size,
+                                                          &Init[0], &Init[0] + mo->size,
+                                                          Expr::Int32 /* domain */,
+                                                          Expr::Int8 /* range */);
+        assert(state.arrayNames.insert(mo->name).second && "array names not unique!");
+        os = executor.bindObjectInState(state, mo, false, zeroInitMem);
+        assert(os && "could not bind object!");
+      } else if (!file_name.empty()) {
+        // We will bind this object to a concrete array first, based on file contents
+        std::vector<ref<ConstantExpr> > Init(mo->size);
+        
+        assert(fd >= 0);
+
+        char *buffer = (char*)malloc(mo->size);
+        assert(buffer);
+        ssize_t r = read(fd, buffer, mo->size);
+        assert(r == mo->size && "did not read all!");
+
+        for (unsigned i = 0; i < mo->size; ++i) {
+          Init[i] = ConstantExpr::create((uint8_t)buffer[i], Expr::Int8);
+        }
+
+        auto *arrayCache = mo->parent->getArrayCache();
+        const Array *fileInitMem = arrayCache->CreateArray(mo->name, mo->size,
+                                                          &Init[0], &Init[0] + mo->size,
+                                                          Expr::Int32 /* domain */,
+                                                          Expr::Int8 /* range */);
+        assert(state.arrayNames.insert(mo->name).second && "array names not unique!");
+        os = executor.bindObjectInState(state, mo, false, fileInitMem);
+        assert(os && "could not bind object!");
+      } else {
+        os = executor.bindObjectInState(state, mo, false);
+        assert(os && "could not bind object!");
+        executor.executeMakeSymbolic(state, mo, mo->name);
+      }
+      
+      executor.executeMarkPersistent(state, mo);
     } else {
       auto *os = executor.bindObjectInState(state, mo, false);
       assert(os && "could not bind object!!");
     }
-    
-    if (make_persistent) executor.executeMarkPersistent(state, mo);
   }
 
   if (!mos.size()) {
@@ -1098,16 +1159,51 @@ void SpecialFunctionHandler::doAllocContiguous(ExecutionState &state,
   }
 }
 
+/* Persistent Memory */
+
+std::list<ObjectPair> 
+SpecialFunctionHandler::getPmemObjsInRange(ExecutionState &state,
+                                           ref<Expr> addr,
+                                           uint64_t realSize) {
+  std::list<ObjectPair> pmemObjs;
+  for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
+    ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
+    ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
+    
+    ObjectPair res;
+    bool success;
+    assert(state.addressSpace.resolveOne(state, executor.solver, ptrExpr, res, success));
+    assert(success && "could not resolve one! (isPmem)");
+    assert(isa<PersistentState>(res.second) && "volatile object in range!");
+    pmemObjs.push_back(res);
+  }
+
+  return pmemObjs;
+}
+
 void SpecialFunctionHandler::handleAllocPmem(ExecutionState &state,
                                             KInstruction *target,
                                             std::vector<ref<Expr>> &arguments) {
-  if (arguments.size() != 2) {
+  if (arguments.size() != 4) {
     executor.terminateStateOnError(state,
       "Incorrect number of arguments to "
-      "klee_pmem_alloc_pmem(size_t size, char *name)",
+      "klee_pmem_alloc_pmem(size_t size, char *name, bool init_zero, const char *fname)",
       Executor::User);
     return;
   }
+
+  bool init_zero = false;
+  if (ConstantExpr *initZero = dyn_cast<ConstantExpr>(arguments[2])) {
+    init_zero = (bool)initZero->getZExtValue(Expr::Bool);
+  } else {
+    executor.terminateStateOnError(state,
+      "klee_pmem_alloc_pmem(size_t size, char *name, bool init_zero) :"
+      "init_zero must be concrete!",
+      Executor::User);
+  }
+
+  std::string fname;
+  fname = arguments[3]->isZero() ? "" : readStringAtAddress(state, arguments[3]);
 
   std::string name;
   name = arguments[1]->isZero() ? "" : readStringAtAddress(state, arguments[1]);
@@ -1143,7 +1239,7 @@ void SpecialFunctionHandler::handleAllocPmem(ExecutionState &state,
 
   size_t nObj = totalSize / unitSz;
   
-  doAllocContiguous(state, target, nObj, unitSz, name, true, true);
+  doAllocContiguous(state, target, nObj, unitSz, name, true, init_zero, fname);
 }
 
 void SpecialFunctionHandler::handleMarkPersistent(ExecutionState &state,
@@ -1225,25 +1321,18 @@ void SpecialFunctionHandler::handleIsPmem(ExecutionState &state,
     klee_error("Not sure how to handle symbolic size argument yet!");
   }
 
-  std::list<ObjectPair> pmemObjs;
-  for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
-    ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
-    ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
-    
-    ObjectPair res;
-    bool success;
-    assert(state.addressSpace.resolveOne(state, executor.solver, ptrExpr, res, success));
-    assert(success && "could not resolve one! (isPmem)");
-    pmemObjs.push_back(res);
-  }
+  std::list<ObjectPair> pmemObjs = getPmemObjsInRange(state, addr, realSize);
   
+  ref<Expr> allIsPmem = ConstantExpr::create(1, Expr::Bool);
   for (ObjectPair &op : pmemObjs) {
     const ObjectState *os = op.second;
 
     ref<Expr> isPmem = ConstantExpr::create(isa<PersistentState>(os), Expr::Bool);
     assert(!isPmem.isNull() && "null boolean expr from klee_pmem_is_pmem!");
-    executor.bindLocal(target, state, isPmem);  
+    allIsPmem = AndExpr::create(allIsPmem, isPmem);
   }
+
+  executor.bindLocal(target, state, allIsPmem); 
 }
 
 void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,

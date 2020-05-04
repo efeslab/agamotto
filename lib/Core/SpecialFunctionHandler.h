@@ -11,9 +11,11 @@
 #define KLEE_SPECIALFUNCTIONHANDLER_H
 
 #include <iterator>
+#include <list>
 #include <map>
 #include <vector>
 #include <string>
+#include "AddressSpace.h"
 
 namespace llvm {
   class Function;
@@ -97,8 +99,13 @@ namespace klee {
     
     void doAllocContiguous(ExecutionState &state, KInstruction *target,
                            size_t nObj, size_t objSz, std::string baseName,
-                           bool make_symbolic = false, 
-                           bool make_persistent = false);
+                           bool make_persistent = false,
+                           bool init_zero = false,
+                           std::string file_name = "");
+
+    std::list<ObjectPair> getPmemObjsInRange(ExecutionState &state,
+                                             ref<Expr> addr,
+                                             uint64_t realSize);
 
     /* Handlers */
 

@@ -70,8 +70,6 @@ static int find_index(void *start, void *end) {
     mmap_entry_t *e = mmap_entries + i;
     if (e->start <= start && e->end >= end) {
       return i;
-    } else if (e->start < end && e->end > start) {
-      klee_error("the desired unmap range partially overlaps!");
     }
   }
 

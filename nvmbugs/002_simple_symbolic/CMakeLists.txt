@@ -17,3 +17,8 @@ klee_add_test_object(
   SOURCES symbolic_two_object.c
   EXTRA_OPTIONS -mclwb
 ) 
+
+klee_add_test_object(
+  TARGET 002_SymbolicPmem
+  SOURCES symbolic_pmem.c
+)

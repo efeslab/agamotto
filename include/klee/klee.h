@@ -199,7 +199,8 @@ extern "C" {
    * 
    * \return The persistent pointer. Treated as an allocation site.
    */
-  void *klee_pmem_alloc_pmem(size_t size, const char *name);
+  void *klee_pmem_alloc_pmem(size_t size, const char *name, 
+                             bool init_zero, const char *fname);
 
   /* Assert that the entire memory range [addr, addr+size) is guaranteed
    * to be persisted to main memory at the time of calling.
