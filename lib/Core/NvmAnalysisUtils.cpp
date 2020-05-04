@@ -192,6 +192,16 @@ Function *utils::getCallInstFunction(CallBase *cb) {
   return nullptr;
 }
 
+Instruction *utils::getReturnLocation(CallBase *cb) {
+  if (CallInst *ci = dyn_cast<CallInst>(cb)) {
+    return ci->getNextNode();
+  } else if (InvokeInst *ii = dyn_cast<InvokeInst>(cb)) {
+    return ii->getNormalDest()->getFirstNonPHI();
+  } 
+  
+  return nullptr;
+}
+
 CallInst* utils::getNestedFunctionCallInst(Instruction* i) {
   CallInst *ci = dyn_cast<CallInst>(i);
   if (ci && utils::getCallInstFunction(ci)) {

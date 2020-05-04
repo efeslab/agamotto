@@ -116,6 +116,8 @@ namespace utils {
    */
   llvm::Function *getCallInstFunction(llvm::CallBase *cb);
 
+  llvm::Instruction *getReturnLocation(llvm::CallBase *cb);
+
   /**
    * Returns a pointer to the CallInst if the given Instruction is a non-intrinsic
    * which we can examine. Otherwise, returns nullptr.
