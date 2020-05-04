@@ -301,20 +301,15 @@ SpecialFunctionHandler::readStringAtAddress(ExecutionState &state,
         Executor::TerminateReason::User);
     return "";
   }
-  bool res __attribute__ ((unused));
-  assert(executor.solver->mustBeTrue(state, 
-                                     EqExpr::create(address, 
-                                                    op.first->getBaseExpr()),
-                                     res) &&
-         res &&
-         "XXX interior pointer unhandled");
   const MemoryObject *mo = op.first;
   const ObjectState *os = op.second;
 
   char *buf = new char[mo->size];
+  unsigned offset = cast<ConstantExpr>(mo->getOffsetExpr(address))->getZExtValue();
+  assert(offset >= 0 && offset < mo->size && "bad pointer into MemoryObject");
 
   unsigned i;
-  for (i = 0; i < mo->size - 1; i++) {
+  for (i = offset; i < mo->size - 1; i++) {
     ref<Expr> cur = os->read8(i);
     cur = executor.toUnique(state, cur);
     assert(isa<ConstantExpr>(cur) && 
@@ -323,7 +318,7 @@ SpecialFunctionHandler::readStringAtAddress(ExecutionState &state,
   }
   buf[i] = 0;
   
-  std::string result(buf);
+  std::string result(buf + offset);
   delete[] buf;
   return result;
 }
