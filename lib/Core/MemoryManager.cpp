@@ -199,12 +199,6 @@ MemoryManager::allocateContiguous(uint64_t individualSz, size_t nObj,
 
   size_t totalSize = individualSz * nObj;
 
-  if (totalSize > 10 * 1024 * 1024) {
-    klee_warning_once(0, "Large alloc: %" PRIu64
-                         " bytes.  KLEE may run out of memory.",
-                      totalSize);
-  }
-
   // Return NULL if size is zero, this is equal to error during allocation
   if (NullOnZeroMalloc && totalSize == 0) {
     return objs;
