@@ -1104,21 +1104,15 @@ void SpecialFunctionHandler::doAllocContiguous(ExecutionState &state,
       }
 
       if (init_zero) {
-        // We will bind this object to a concrete array first.
-        std::vector<ref<ConstantExpr> > Init(mo->size);
-        Init.assign(mo->size, ConstantExpr::create(0, Expr::Int8));
-        auto *arrayCache = mo->parent->getArrayCache();
-        const Array *zeroInitMem = arrayCache->CreateArray(mo->name, mo->size,
-                                                          &Init[0], &Init[0] + mo->size,
-                                                          Expr::Int32 /* domain */,
-                                                          Expr::Int8 /* range */);
-        assert(state.arrayNames.insert(mo->name).second && "array names not unique!");
-        os = executor.bindObjectInState(state, mo, false, zeroInitMem);
+        os = executor.bindObjectInState(state, mo, false);
+        os->initializeToZero();
         assert(os && "could not bind object!");
       } else if (!file_name.empty()) {
-        // We will bind this object to a concrete array first, based on file contents
-        std::vector<ref<ConstantExpr> > Init(mo->size);
-        
+        os = executor.bindObjectInState(state, mo, false);
+        os->initializeToZero();
+
+        assert(os && "could not bind object!");
+
         assert(fd >= 0);
 
         char *buffer = (char*)malloc(mo->size);
@@ -1127,17 +1121,10 @@ void SpecialFunctionHandler::doAllocContiguous(ExecutionState &state,
         assert(r == mo->size && "did not read all!");
 
         for (unsigned i = 0; i < mo->size; ++i) {
-          Init[i] = ConstantExpr::create((uint8_t)buffer[i], Expr::Int8);
+          os->write8(state, i, (uint8_t)buffer[i]); 
         }
 
-        auto *arrayCache = mo->parent->getArrayCache();
-        const Array *fileInitMem = arrayCache->CreateArray(mo->name, mo->size,
-                                                          &Init[0], &Init[0] + mo->size,
-                                                          Expr::Int32 /* domain */,
-                                                          Expr::Int8 /* range */);
-        assert(state.arrayNames.insert(mo->name).second && "array names not unique!");
-        os = executor.bindObjectInState(state, mo, false, fileInitMem);
-        assert(os && "could not bind object!");
+        free(buffer);
       } else {
         os = executor.bindObjectInState(state, mo, false);
         assert(os && "could not bind object!");

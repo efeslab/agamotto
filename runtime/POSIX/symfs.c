@@ -269,6 +269,7 @@ static void _init_pmem_from_real(disk_file_t *dfile, const char *origpath,
   _block_init_pmem_from_file(buff, size, symname, origpath);
   buff->size = size;
   klee_make_shared(buff->contents, size);
+  posix_debug_msg("finished pmem file init\n");
 }
 
 // NOTE: the SYMBOLIC file has the same file name as the given file (origname)

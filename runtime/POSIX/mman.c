@@ -199,7 +199,7 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
     size_t pgsz = (size_t)getpagesize();
     void *addr;
     for (addr = ret; addr < ret + actual_size; addr += pgsz) {
-      klee_define_fixed_object_from_existing(addr, pgsz);
+      klee_define_fixed_object(addr, pgsz);
     }
   }
 
