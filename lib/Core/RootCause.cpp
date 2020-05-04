@@ -203,9 +203,6 @@ void RootCauseManager::markAsBug(uint64_t id) {
   std::unordered_set<uint64_t> allIds(idToRoot.at(id)->rootCause.getMaskedSet());
   allIds.insert(id);
 
-  // We use this for the number of rows later
-  largestStack = std::max(largestStack, idToRoot.at(id)->rootCause.stack.size());
-
   /**
    * We want to mark all of the masked root cause locations as occurences as 
    * well. This may result in some overcounting (i.e., some of the unpersisted
@@ -218,6 +215,8 @@ void RootCauseManager::markAsBug(uint64_t id) {
     ++totalOccurences;
     buggyIds.insert(i);
     assert(totalOccurences > 0 && "overflow!");
+    // We use this for the number of rows later
+    largestStack = std::max(largestStack, idToRoot[i]->rootCause.stack.size());
   }
 }
 
