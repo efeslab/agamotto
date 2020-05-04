@@ -281,7 +281,7 @@ static disk_file_t *_create_dual_file(disk_file_t *dfile, const char *origpath,
   const char *basename = strrchr(origpath, '/');
   const char *symname;
   if (basename) {
-    symname = basename;
+    symname = basename + 1;
   } else {
     symname = origpath;
   }
@@ -374,10 +374,11 @@ static disk_file_t *_create_pmem_file_from_real(disk_file_t *dfile,
   struct stat64 s;
   int res = CALL_UNDERLYING(stat, orig_path, &s);
   assert(res == 0 && "Could not get the stat of the original file.");
+  posix_debug_msg("res = %i, s.st_size = %lu\n", res, s.st_size);
   const char *basename = strrchr(orig_path, '/');
   const char *symname;
   if (basename) {
-    symname = basename;
+    symname = basename + 1;
   } else {
     symname = orig_path;
   }
