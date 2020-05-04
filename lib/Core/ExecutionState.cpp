@@ -26,6 +26,7 @@
 
 #include "../Core/UserSearcher.h"
 #include "Executor.h"
+#include "RootCause.h"
 
 #include <cassert>
 #include <iomanip>
@@ -44,16 +45,12 @@ cl::opt<bool> DebugLogStateMerge(
     cl::cat(MergeCat));
 }
 
-namespace klee {
-  extern cl::opt<NvmHeuristicBuilder::Type> NvmCheck;
-}
-
 /***/
 
 void ExecutionState::setupMain(KFunction *kf) {
   // single process, make its id always be 0
   // the first thread, set its id to be 1
-  Thread mainThread = Thread(1, 0, kf);
+  Thread mainThread = Thread(1, 0, executor_, kf);
   threads.insert(std::make_pair(mainThread.tuid, mainThread));
   crtThreadIt = threads.begin();
 }
@@ -64,12 +61,14 @@ void ExecutionState::setupTime() {
 
 ExecutionState::ExecutionState(Executor *executor, KFunction *kf) :
     wlistCounter(1),
+    rootCauseMgr(executor->rootCauseMgr),
     depth(0),
     instsSinceCovNew(0),
     coveredNew(false),
     forkDisabled(false),
     ptreeNode(0),
-    steppedInstructions(0) {
+    steppedInstructions(0),
+    executor_(executor) {
   setupMain(kf);
   setupTime();
 }
@@ -104,6 +103,9 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     waitingLists(state.waitingLists),
     wlistCounter(state.wlistCounter),
     stateTime(state.stateTime),
+
+    rootCauseMgr(state.rootCauseMgr),
+
     addressSpace(state.addressSpace),
     constraints(state.constraints),
 
@@ -120,7 +122,8 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     symbolics(state.symbolics),
     arrayNames(state.arrayNames),
     openMergeStack(state.openMergeStack),
-    steppedInstructions(state.steppedInstructions)
+    steppedInstructions(state.steppedInstructions),
+    executor_(state.executor_)
 {
   for (unsigned int i=0; i<symbolics.size(); i++)
     symbolics[i].first->refCount++;
@@ -330,8 +333,19 @@ void ExecutionState::popFrame(Thread &t) {
   StackFrame &sf = t.stack.back();
   for (std::vector<const MemoryObject*>::iterator it = sf.allocas.begin(), 
          ie = sf.allocas.end(); it != ie; ++it) {
-    // TODO: persistent state
-    addressSpace.unbindObject(*it);
+    const MemoryObject *mo = *it;
+    const ObjectState *os = addressSpace.findObject(mo);
+    assert(os && "trying to unbind null!");
+    const PersistentState *ps = dyn_cast<PersistentState>(os);
+    if (ps) {
+      auto rootCauses = executor_->markPersistenceErrors(*this, mo, ps);
+      if (rootCauses.size()) {
+        klee_warning("ERROR: alloca pmem error");
+      }
+
+      persistentObjects.erase(mo);
+    }
+    addressSpace.unbindObject(mo);
   }
   
   t.stack.pop_back();
@@ -340,7 +354,7 @@ void ExecutionState::popFrame(Thread &t) {
 /* Multithreading related function  */
 Thread &ExecutionState::createThread(thread_id_t tid, KFunction *kf) {
   // we currently assume there is only one process and its id is 0
-  Thread newThread = Thread(tid, 0, kf);
+  Thread newThread = Thread(tid, 0, NvmHeuristicBuilder::copy(nvmInfo()), kf);
   
   std::pair<threads_ty::iterator, bool> res =
       threads.insert(std::make_pair(newThread.tuid, newThread));

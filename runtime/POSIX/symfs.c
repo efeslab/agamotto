@@ -185,11 +185,14 @@ static void _init_file_name(disk_file_t *dfile, const char *symname) {
 static size_t _read_file_contents(const char *file_path, size_t size, char *orig_contents) {
   int orig_fd = CALL_UNDERLYING(open, file_path, O_RDONLY);
   assert(orig_fd >= 0 && "Could not open original file.");
+  posix_debug_msg("%s: fd=%d, path=%s, size=%lu\n", __func__, orig_fd,
+                  file_path, size);
 
   size_t current_size = 0;
   ssize_t bytes_read = 0;
   while ((bytes_read = CALL_UNDERLYING(
       read, orig_fd, orig_contents + current_size, size - current_size))) {
+    posix_debug_msg("read %ld bytes\n", bytes_read);
     if (bytes_read < 0) {
       klee_warning("Error while reading original file.");
       break;
@@ -242,21 +245,31 @@ static void _init_pmem_pure_symbolic_buffer(disk_file_t *dfile,
                                             const char *symname) {
   // Initializing the buffer contents...
   block_buffer_t *buff = &dfile->bbuf;
-  _block_init_pmem(buff, maxsize, symname);
+  _block_init_pmem(buff, maxsize, symname, false);
   buff->size = maxsize;
   // since it calls klee_pmem_alloc_pmem, should already be symbolic
   klee_make_shared(buff->contents, maxsize);
 }
 
+static void _init_pmem_zeroed_symbolic_buffer(disk_file_t *dfile, 
+                                               size_t maxsize,
+                                               const char *symname) {
+  // Initializing the buffer contents...
+  block_buffer_t *buff = &dfile->bbuf;
+  _block_init_pmem(buff, maxsize, symname, true);
+  buff->size = maxsize;
+  klee_make_shared(buff->contents, maxsize);
+}
+
 static void _init_pmem_from_real(disk_file_t *dfile, const char *origpath,
                                  size_t size, const char *symname) {
-
+  posix_debug_msg("init pmem file %s from %s with size %lu\n", 
+                  symname, origpath, size);
   block_buffer_t *buff = &dfile->bbuf;
-  _block_init(buff, size);
+  _block_init_pmem_from_file(buff, size, symname, origpath);
   buff->size = size;
-  // since it calls klee_pmem_alloc_pmem, should already be symbolic
   klee_make_shared(buff->contents, size);
-  _read_file_contents(origpath, size, buff->contents);
+  posix_debug_msg("finished pmem file init\n");
 }
 
 // NOTE: the SYMBOLIC file has the same file name as the given file (origname)
@@ -334,6 +347,28 @@ static disk_file_t *_create_pmem_symbolic_file(disk_file_t *dfile,
   return dfile;
 }
 
+static disk_file_t *_create_pmem_zeroed_symbolic_file(disk_file_t *dfile,
+                                                      size_t maxsize,
+                                                      const char *symname,
+                                                      const struct stat64 *defstats) {
+  _init_file_name(dfile, symname);
+  _init_pmem_zeroed_symbolic_buffer(dfile, maxsize, symname); 
+  // I don't want symbolic stats.
+  _init_stats(dfile, symname, defstats, 0);
+
+  // Update the stat size
+  block_buffer_t *buff = &dfile->bbuf;
+  dfile->stat->st_size = buff->size;
+
+  // Register the operations
+  memset(&dfile->ops, 0, sizeof(dfile->ops));
+  dfile->ops.read = _read_symbolic;
+  dfile->ops.write = _write_symbolic;
+  dfile->ops.truncate = _truncate_symbolic;
+
+  return dfile;
+}
+
 static disk_file_t *_create_pmem_file_from_real(disk_file_t *dfile,
                                                 const char *orig_path) {
   struct stat64 s;
@@ -368,15 +403,15 @@ static disk_file_t *_create_pmem_file_from_real(disk_file_t *dfile,
 static disk_file_t *_create_pmem_file(disk_file_t *dfile,
                                       sym_file_descriptor_t *sfd,
                                       const struct stat64 *default_stats) {
+  dfile->pmem_type = sfd->pmem_type;
+  
   switch(sfd->pmem_type) {
     case PMEM_SYMBOLIC:
       _create_pmem_symbolic_file(dfile, sfd->file_size, sfd->file_path, default_stats);
       break;
     case PMEM_SYM_ZERO:
     case PMEM_DELAY_CREATE:
-      _create_pmem_symbolic_file(dfile, sfd->file_size, sfd->file_path, default_stats);
-      // Infinitely faster than memset
-      klee_init_concrete_zero(dfile->bbuf.contents, dfile->bbuf.max_size);
+      _create_pmem_zeroed_symbolic_file(dfile, sfd->file_size, sfd->file_path, default_stats);
       break;
     case PMEM_FROM_CONCRETE:
       _create_pmem_file_from_real(dfile, sfd->file_path);

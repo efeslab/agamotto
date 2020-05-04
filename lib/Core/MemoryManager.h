@@ -13,6 +13,7 @@
 #include "klee/Expr/Expr.h"
 
 #include <cstddef>
+#include <list>
 #include <set>
 #include <cstdint>
 
@@ -51,6 +52,14 @@ public:
                          const llvm::Value *allocSite, size_t alignment);
   MemoryObject *allocateFixed(uint64_t address, uint64_t size,
                               const llvm::Value *allocSite);
+  /**
+   * (iangneal): Allocate multiple memory objects such that they have contiguous
+   * addresses. Will be page aligned.
+   */
+  std::list<MemoryObject *> 
+  allocateContiguous(uint64_t individualSz, size_t nObj, bool isLocal, 
+                     bool isGlobal, const llvm::Value *allocSite);
+        
   void deallocate(const MemoryObject *mo);
   void markFreed(MemoryObject *mo);
   ArrayCache *getArrayCache() const { return arrayCache; }

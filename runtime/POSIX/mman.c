@@ -70,8 +70,6 @@ static int find_index(void *start, void *end) {
     mmap_entry_t *e = mmap_entries + i;
     if (e->start <= start && e->end >= end) {
       return i;
-    } else if (e->start < end && e->end > start) {
-      klee_error("the desired unmap range partially overlaps!");
     }
   }
 
@@ -164,9 +162,6 @@ void *mmap_sym(disk_file_t* df, size_t length, off_t offset) {
 
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) __attribute__((weak));
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) {
-  //FIXME: ref count
-  char msg[4096];
-
   int actual_fd = fd;
   size_t actual_size = __concretize_size(length);
 
@@ -194,18 +189,17 @@ void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset
   }
 
   void* ret = (void*)syscall(__NR_mmap, start, actual_size, prot, flags, actual_fd, offset);
-  snprintf(msg, 4096, "real mmap path! (start=%p, length=%lu/%lu, prot=%d, "
-                      "flags=%d, fd=%d, offset=%ld) => %p (%lu)",
-           start, length, actual_size, prot, flags, fd, offset, ret, 
-           (unsigned long)ret);
-  klee_warning(msg);
+  posix_debug_msg("real mmap path! (start=%p, length=%lu/%lu, prot=%d, "
+                      "flags=%d, fd=%d, offset=%ld) => %p (%lu)\n",
+                  start, length, actual_size, prot, flags, fd, offset, ret, 
+                  (unsigned long)ret);
 
   if (ret != MAP_FAILED) {
     // Do this in page sizes to make unmap easier
     size_t pgsz = (size_t)getpagesize();
     void *addr;
     for (addr = ret; addr < ret + actual_size; addr += pgsz) {
-      klee_define_fixed_object_from_existing(addr, pgsz);
+      klee_define_fixed_object(addr, pgsz);
     }
   }
 
@@ -279,9 +273,7 @@ int munmap(void *start, size_t length) {
     }
   }
 
-  char msg[4096];
-  snprintf(msg, 4096, "munmap(start=%p, length=%lu)", start, actual_size);
-  klee_warning(msg);
+  posix_debug_msg("munmap(start=%p, length=%lu)\n", start, actual_size);
 
   size_t pgsz = (size_t)getpagesize();
   start = __concretize_ptr(start);
@@ -299,7 +291,7 @@ int munmap(void *start, size_t length) {
     klee_undefine_fixed_object(addr);
   }
 
-  klee_warning("munmap done.\n");
+  posix_debug_msg("munmap done.\n");
 
   return syscall(__NR_munmap, start, actual_size);
 }

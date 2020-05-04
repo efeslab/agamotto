@@ -173,18 +173,32 @@ void utils::getModifiers(const Value* ptr, unordered_set<const Value*> &s) {
     }
 }
 
-Function *utils::getCallInstFunction(CallInst *ci) {
-  if (ci && !ci->isInlineAsm()) {
-    Function *cfn = ci->getCalledFunction();
-    if (!cfn) {
-      cfn = dyn_cast<Function>(ci->getCalledValue()->stripPointerCasts());
-    }
+Function *utils::getCallInstFunction(CallBase *cb) {
+  if (!cb) return nullptr;
 
-    if (cfn && !cfn->isIntrinsic()) {
-      return cfn;
-    }
+  if (CallInst *ci = dyn_cast<CallInst>(cb)) {
+    if (ci->isInlineAsm()) return nullptr;
   }
 
+  Function *cfn = cb->getCalledFunction();
+  if (!cfn) {
+    cfn = dyn_cast<Function>(cb->getCalledValue()->stripPointerCasts());
+  }
+
+  if (cfn && !cfn->isIntrinsic()) {
+    return cfn;
+  }
+
+  return nullptr;
+}
+
+Instruction *utils::getReturnLocation(CallBase *cb) {
+  if (CallInst *ci = dyn_cast<CallInst>(cb)) {
+    return ci->getNextNode();
+  } else if (InvokeInst *ii = dyn_cast<InvokeInst>(cb)) {
+    return ii->getNormalDest()->getFirstNonPHI();
+  } 
+  
   return nullptr;
 }
 

@@ -352,7 +352,7 @@ size_t NvmPathSearcher::calculateGeneration(ExecutionState *current, ExecutionSt
    * then it stays on the same generation. If the added state has the same 
    * priority, we add it to a different generation.
    */
-  if (added->nvmInfo->getCurrentPriority() != current->nvmInfo->getCurrentPriority()) {
+  if (added->nvmInfo()->getCurrentPriority() != current->nvmInfo()->getCurrentPriority()) {
     return currentGen;
   }
   
@@ -363,16 +363,19 @@ bool NvmPathSearcher::addOrKillState(ExecutionState *current,
                                      ExecutionState *execState) {
   size_t gen = calculateGeneration(current, execState);
 
-  size_t priority = execState->nvmInfo->getCurrentPriority();
-  if (!priority) {
-    stats::nvmStatesKilledEndTrace++;
-    executor.terminateStateEarlyPmem(*execState);
-  } else {
-    states.emplace(execState, gen, priority);
-    return true;
-  }
+  size_t priority = execState->nvmInfo()->getCurrentPriority();
+  // if (!priority) {
+  //   stats::nvmStatesKilledEndTrace++;
+  //   executor.terminateStateEarlyPmem(*execState);
+  // } else {
+  //   states.emplace(execState, gen, priority);
+  //   return true;
+  // }
 
-  return false;
+  states.emplace(execState, gen, priority);
+  return true;
+
+  // return false;
 }
 
 void

@@ -20,6 +20,8 @@
 
 #include <inttypes.h>
 #include <sys/mman.h>
+#include <unistd.h>
+#include <errno.h>
 
 using namespace klee;
 
@@ -161,7 +163,8 @@ MemoryObject *MemoryManager::allocate(uint64_t size, bool isLocal,
 
 MemoryObject *MemoryManager::allocateFixed(uint64_t address, uint64_t size,
                                            const llvm::Value *allocSite) {
-#ifndef NDEBUG
+#if 0
+// #ifndef NDEBUG
   for (objects_ty::iterator it = objects.begin(), ie = objects.end(); it != ie;
        ++it) {
     MemoryObject *mo = *it;
@@ -176,6 +179,80 @@ MemoryObject *MemoryManager::allocateFixed(uint64_t address, uint64_t size,
   objects.insert(res);
   return res;
 }
+
+std::list<MemoryObject *> 
+MemoryManager::allocateContiguous(uint64_t individualSz, size_t nObj, 
+                                  bool isLocal, bool isGlobal, 
+                                  const llvm::Value *allocSite) {
+  std::list<MemoryObject *> objs;
+
+  if (!nObj) {
+    klee_error("Cannot allocate 0 objects!");
+    return objs;
+  }
+
+  if (!individualSz) {
+    klee_error("Doesn't make sense to allocate contiguous objects of size 0!");
+    return objs;
+  }
+
+  size_t alignment = getpagesize();
+
+  size_t totalSize = individualSz * nObj;
+
+  // Return NULL if size is zero, this is equal to error during allocation
+  if (NullOnZeroMalloc && totalSize == 0) {
+    return objs;
+  }
+
+  uint64_t address = 0;
+  if (DeterministicAllocation) {
+#if LLVM_VERSION_CODE >= LLVM_VERSION(3, 9)
+    address = llvm::alignTo((uint64_t)nextFreeSlot + alignment - 1, alignment);
+#else
+    address = llvm::RoundUpToAlignment((uint64_t)nextFreeSlot + alignment - 1,
+                                       alignment);
+#endif
+
+    size_t alloc_size = size_t(ceil((double)totalSize / (double)alignment) * alignment);
+    assert(alloc_size >= totalSize && "I can't do math");
+
+    if ((char *)address + alloc_size < deterministicSpace + spaceSize) {
+      nextFreeSlot = (char *)address + alloc_size + RedzoneSize;
+    } else {
+      klee_warning_once(0, "Couldn't allocate %" PRIu64
+                           " bytes. Not enough deterministic space left.",
+                        totalSize);
+      address = 0;
+    }
+  } else {
+    int res = posix_memalign((void **)&address, alignment, totalSize);
+    if (res < 0) {
+      klee_warning("Allocating aligned memory failed (ret %d, %s).", 
+                   res, strerror(errno));
+      address = 0;
+    }
+  }
+
+  if (!address) {
+    return objs;
+  }
+
+  for (uint64_t objNo = 0; objNo < nObj; ++objNo) {
+    uint64_t objAddr = address + (objNo * individualSz);
+    ++stats::allocations;
+    // This way, markFreed will only free the underlying memory for the first
+    // object.
+    bool is_fixed = objNo > 0;
+    MemoryObject *res = new MemoryObject(objAddr, individualSz, isLocal, isGlobal, 
+                                         is_fixed, allocSite, this);
+    objects.insert(res);
+    objs.push_back(res);
+  }
+  
+  return objs;
+}
+
 
 void MemoryManager::deallocate(const MemoryObject *mo) { assert(0); }
 

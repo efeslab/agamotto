@@ -74,6 +74,7 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b, Module &M) {
         break;
 
         // Safely ignorable.
+      case Intrinsic::x86_sse2_pause:
       case Intrinsic::prefetch:
         ii->eraseFromParent();
         break;

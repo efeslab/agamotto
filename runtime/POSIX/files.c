@@ -641,9 +641,14 @@ int _open_symbolic(disk_file_t *dfile, int flags, mode_t mode) {
     errno = EACCES;
     return -1;
   } else {
-    dfile->stat->st_mode =
-        ((dfile->stat->st_mode & ~0777) | (mode & ~__exe_env.umask));
-    /*    clear existing file mode   |  requested mode - umask */
+    /*
+     * (iangneal) this doesn't make sense to me.
+     */
+    if (mode) {
+      dfile->stat->st_mode =
+          ((dfile->stat->st_mode & ~0777) | (mode & ~__exe_env.umask));
+      /*    clear existing file mode   |  requested mode - umask */
+    }
   }
 
   // Now we can allocate a FD
@@ -1162,6 +1167,31 @@ int unlinkat(int dirfd, const char *pathname, int flags) {
   return -1;
 }
 
+int access(const char *pathname, int mode) {
+  disk_file_t *dfile = __get_sym_file(pathname);
+  posix_debug_msg("[access] Attempting access on %s, mode %o\n", pathname, mode);
+
+  if (dfile) {
+    if (dfile->pmem_type == PMEM_DELAY_CREATE) {
+      posix_debug_msg("[access] PMEM delay create, return ENOENT\n");
+      errno = ENOENT;
+      return -1;
+    } else if (!_can_open(mode, dfile->stat)) {
+      posix_debug_msg("[access] lack of permissions, return EPERM\n");
+      errno = EPERM;
+      return -1;
+    }
+
+    posix_debug_msg("[access] success\n");
+    return 0;
+  }
+
+  klee_warning("calling underlying access for non-symbolic file");
+  int ret = CALL_UNDERLYING(access, pathname, mode);
+  if (ret == -1) errno = klee_get_errno();
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 #define _WRAP_FILE_SYSCALL_ERROR(call, ...)                                    \
@@ -1278,8 +1308,4 @@ DEFINE_MODEL(int, statfs, const char *pathname, struct statfs *buf) {
 
 DEFINE_MODEL(int, truncate, const char *pathname, off_t length) {
   _WRAP_FILE_SYSCALL_ERROR(truncate, length);
-}
-
-DEFINE_MODEL(int, access, const char *pathname, int mode) {
-  _WRAP_FILE_SYSCALL_IGNORE(access, mode);
 }

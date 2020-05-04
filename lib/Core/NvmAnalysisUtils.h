@@ -114,7 +114,9 @@ namespace utils {
   /**
    * Returns a pointer to the nested function.
    */
-  llvm::Function *getCallInstFunction(llvm::CallInst *ci);
+  llvm::Function *getCallInstFunction(llvm::CallBase *cb);
+
+  llvm::Instruction *getReturnLocation(llvm::CallBase *cb);
 
   /**
    * Returns a pointer to the CallInst if the given Instruction is a non-intrinsic

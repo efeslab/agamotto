@@ -460,14 +460,25 @@ int pthread_rwlock_init(pthread_rwlock_t *rwlock, const pthread_rwlockattr_t *at
 
   _rwlock_init(rwlock, attr);
 
+  posix_debug_msg("create pthread rwlock %p (data %p)\n", rwlock, _get_rwlock_data(rwlock));
+
   return 0;
 }
 
 int pthread_rwlock_destroy(pthread_rwlock_t *rwlock) {
   rwlock_data_t *rwdata = _get_rwlock_data(rwlock);
 
+  posix_debug_msg("destroying pthread rwlock %p (data %p)\n", rwlock, rwdata);
+
   free(rwdata);
   *((rwlock_data_t**)rwlock) = STATIC_RWLOCK_VALUE;
+
+  /**
+   * PMDK seems to destroy a lock twice. According to the man page, we're allowed
+   * to set the lock to an invalid value after destroying it. So we will.
+   * Free on NULL is safe.
+   */
+  *((rwlock_data_t**)rwlock) = NULL;
 
   return 0;
 }
