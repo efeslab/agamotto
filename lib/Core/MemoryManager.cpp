@@ -163,7 +163,8 @@ MemoryObject *MemoryManager::allocate(uint64_t size, bool isLocal,
 
 MemoryObject *MemoryManager::allocateFixed(uint64_t address, uint64_t size,
                                            const llvm::Value *allocSite) {
-#ifndef NDEBUG
+#if 0
+// #ifndef NDEBUG
   for (objects_ty::iterator it = objects.begin(), ie = objects.end(); it != ie;
        ++it) {
     MemoryObject *mo = *it;
