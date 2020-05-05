@@ -840,6 +840,7 @@ static const char *modelledExternals[] = {
   "llvm.x86.clwb",
   "llvm.x86.sse2.clflush",
   "llvm.x86.sse2.mfence",
+  "llvm.x86.sse2.pause",
   "llvm.x86.sse.sfence",
   "llvm.va_start",
   "llvm.va_end",

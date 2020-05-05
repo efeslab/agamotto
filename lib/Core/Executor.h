@@ -324,6 +324,10 @@ private:
                    KInstruction *ki,
                    llvm::Function *f,
                    std::vector< ref<Expr> > &arguments);
+
+  /* emulate certain inline assembly instructions */
+  void executeCpuid(ExecutionState &state, KInstruction *ki);
+  void executeRdtsc(ExecutionState &state, KInstruction *ki, llvm::InlineAsm *ia);
                    
   // do address resolution / object binding / out of bounds checking
   // and perform the operation
