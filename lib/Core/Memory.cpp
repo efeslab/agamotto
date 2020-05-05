@@ -770,7 +770,7 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
   ref<Expr> cacheLine = getCacheLine(offset);
   ref<Expr> falseExpr = getDirtyExpr();
 
-  if (isUpdateListHeadEqualTo(cacheLineUpdates, cacheLine, falseExpr)) return;
+  if (isUpdateListHeadEqualTo(pendingCacheLineUpdates, cacheLine, falseExpr)) return;
 
   /**
    * We also want to see if this cache line is currently dirty. If so, we have
@@ -858,8 +858,7 @@ PersistentState::markFlushAsBug(ExecutionState &state,
     id = rootCauseMgr->getRootCauseLocationID(state, 
                                               getObject()->allocSite,
                                               state.prevPC(),
-                                              PM_UnnecessaryFlush,
-                                              errs);
+                                              PM_UnnecessaryFlush);
   }
  
   rootCauseMgr->markAsBug(id);

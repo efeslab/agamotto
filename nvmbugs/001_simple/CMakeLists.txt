@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.1)
 
 
 include_directories(${PMDK_INCLUDE_DIR})
+link_directories(${PMDK_LIB_DIR})
 # link_directories("include/")
 
 # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0 -Xclang -disable-llvm-passes")
@@ -59,3 +60,6 @@ klee_add_test_object(TARGET 001_NontemporalNoErr SOURCES
 klee_add_test_object(TARGET 001_SimpleLoop SOURCES
   simple_loop.c
 ) 
+
+klee_add_test_object(TARGET 001_DoublePmemPersist 
+                     SOURCES double_pmem_persist.c)
