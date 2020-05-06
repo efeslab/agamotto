@@ -76,6 +76,7 @@ namespace klee {
      * of root causes that may be the original error.
      */
     std::unordered_set<uint64_t> maskedRoots;
+    std::unordered_set<uint64_t> maskingRoots;
 
 
     RootCauseLocation(const ExecutionState &state, 
@@ -84,6 +85,7 @@ namespace klee {
                       RootCauseReason r);
 
     void addMaskedError(uint64_t id);
+    void addMaskingError(uint64_t id);
 
     const std::unordered_set<uint64_t> &getMaskedSet() { return maskedRoots; }
 

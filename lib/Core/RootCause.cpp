@@ -46,6 +46,10 @@ void RootCauseLocation::addMaskedError(uint64_t id) {
   maskedRoots.insert(id);
 }
 
+void RootCauseLocation::addMaskingError(uint64_t id) {
+  maskingRoots.insert(id);
+}
+
 std::string RootCauseLocation::str(void) const {
   std::string infoStr;
   llvm::raw_string_ostream info(infoStr);
@@ -88,7 +92,7 @@ RootCauseLocation::fullString(const RootCauseManager &mgr) const {
   info << str() << "\n";
 
   if (maskedRoots.size()) {
-    info << "Possible Masked:\n";
+    info << "May be masking:\n";
 
     for (auto id : maskedRoots) {
       info << "\tID #" << id << "\n";
@@ -99,9 +103,17 @@ RootCauseLocation::fullString(const RootCauseManager &mgr) const {
       }
     }
   } else {
-    info << "<no masked bugs>\n";
+    info << "<no masking anything>\n";
   }
   
+  if (maskingRoots.size()) {
+    info << "May be masked by:\n";
+    for (auto id: maskingRoots) {
+      info << "\tID #" << id << "\n";
+    }
+  } else {
+    info << "<not masked by anything>\n";
+  }
 
   return info.str();
 }
@@ -169,16 +181,21 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
    * we shouldn't have to do anything recursively here.
    */
 
+  uint64_t newId = nextId++;
+  assert(nextId > 0 && "ID overflow!");
+
   for (auto id : ids) {
     if (!idToRoot.count(id)) {
       llvm::errs() << id << "\n" << getSummary();
     }
     assert(idToRoot.count(id) && "we messed something up with our id tracking");
     rcl.addMaskedError(id);
+    idToRoot.at(id)->rootCause.addMaskingError(newId);
 
     for (auto subId : idToRoot.at(id)->rootCause.getMaskedSet()) {
       assert(idToRoot.count(subId) && "we messed something up with our id tracking");
       rcl.addMaskedError(subId);
+      idToRoot.at(subId)->rootCause.addMaskingError(newId);
     }
   }
 
@@ -186,13 +203,12 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
     return rootToId.at(rcl);
   }
 
-  uint64_t id = nextId++;
-  assert(nextId > 0 && "ID overflow!");
+  
 
-  rootToId[rcl] = id;
-  idToRoot[id] = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
+  rootToId[rcl] = newId;
+  idToRoot[newId] = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
 
-  return id;
+  return newId;
 }
 
 void RootCauseManager::markAsBug(uint64_t id) {

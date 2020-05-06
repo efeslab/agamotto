@@ -780,7 +780,10 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
   auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
 
   state.constraints.addConstraint(inBoundsConstraint);
-  auto prevWrites = getRootCause(state, rootCauseWrites, offset);
+  // We actually want this to be pending, because sandwiching a flush between
+  // two stores to the same offset technically flushes it
+  // Also, this takes a cache line...
+  auto prevWrites = getRootCause(state, pendingRootCauseWrites, cacheLine);
   state.constraints.removeConstraint(inBoundsConstraint);
 
   cacheLineUpdates.extend(cacheLine, falseExpr);
