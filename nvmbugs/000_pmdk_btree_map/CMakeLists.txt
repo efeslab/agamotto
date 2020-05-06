@@ -34,6 +34,7 @@ add_dependencies(LINK_CLEAN EXTRACT_CLEAN)
 
 klee_add_test_executable(TARGET 000_Buggy SOURCES ${BUGGY_SRC} EXTRA_LIBS pmemobj pmem)
 klee_add_test_executable(TARGET 000_Performance_Fixed SOURCES ${PERF_SRC} EXTRA_LIBS pmemobj pmem)
+klee_add_test_executable(TARGET 000_Tiny SOURCES tiny_driver.c btree_map_clean.c btree_map.h EXTRA_LIBS pmemobj pmem)
 # target_link_libraries(000_Buggy pmemobj pmem)
 
 set(TEST_SRC

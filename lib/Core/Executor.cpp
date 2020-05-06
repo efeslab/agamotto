@@ -12,6 +12,7 @@
 #include "../Expr/ArrayExprOptimizer.h"
 #include "Context.h"
 #include "CoreStats.h"
+#include "CustomCheckerHandler.h"
 #include "ExternalDispatcher.h"
 #include "ImpliedValue.h"
 #include "Memory.h"
@@ -95,6 +96,9 @@ cl::OptionCategory DebugCat("Debugging options",
 cl::OptionCategory ExtCallsCat("External call policy options",
                                "These options impact external calls.");
 
+cl::OptionCategory CheckerCat("Bug checker options",
+                              "These options impact what kind of checkers run.");
+
 cl::OptionCategory SeedingCat(
     "Seeding options",
     "These options are related to the use of seeds to start exploration.");
@@ -118,7 +122,13 @@ cl::opt<bool>
     DebugScheduling("debug-schedule", cl::init(false),                                                                                                                                                                                                                                                                                                                                   
                     cl::desc("Print debug info related to scheduling, context "  
                               "switch, etc. (default=false)"),                    
-                    cl::cat(DebugCat));      
+                    cl::cat(DebugCat)); 
+
+cl::opt<bool>
+    EnableCustomCheckers("custom-checkers", cl::init(true),
+                         cl::desc("Enable use of custom checkers (e.g., PMDK "
+                                  "logging checkers, etc). (default=true)"),
+                         cl::cat(CheckerCat));
 } // namespace klee
 
 namespace {
@@ -447,6 +457,7 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
                    InterpreterHandler *ih)
     : Interpreter(opts), interpreterHandler(ih), searcher(0),
       rootCauseMgr(new RootCauseManager()),
+      customCheckerHandler(nullptr),
       externalDispatcher(new ExternalDispatcher(ctx)), statsTracker(0),
       pathWriter(0), symPathWriter(0), specialFunctionHandler(0), timers{time::Span(TimerInterval)},
       replayKTest(0), replayPath(0), usingSeeds(0),
@@ -2125,8 +2136,12 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     std::vector< ref<Expr> > arguments;
     arguments.reserve(numArgs);
 
-    for (unsigned j=0; j<numArgs; ++j)
+    for (unsigned j=0; j<numArgs; ++j) {
+      // if (f && f->getName() == "pmemobj_tx_add_common")
+      //   errs() << "Call arg " << *eval(ki, j+1, state).value << "\n";
       arguments.push_back(eval(ki, j+1, state).value);
+    }
+      
 
     if (f) {
       const FunctionType *fType =
@@ -3127,6 +3142,10 @@ void Executor::run(ExecutionState &initialState) {
       stepInstruction(state);
 
       executeInstruction(state, ki);
+      if (EnableCustomCheckers) {
+        assert(customCheckerHandler);
+        customCheckerHandler->handle(state);
+      }
       timers.invoke();
       if (::dumpStates) dumpStates();
       if (::dumpPTree) dumpPTree();
@@ -3191,6 +3210,11 @@ void Executor::run(ExecutionState &initialState) {
       stepInstruction(state);
 
       executeInstruction(state, ki);
+      if (EnableCustomCheckers) {
+        assert(customCheckerHandler);
+        customCheckerHandler->handle(state);
+      }
+
       timers.invoke();
       if (::dumpStates) dumpStates();
       if (::dumpPTree) dumpPTree();
@@ -4481,6 +4505,10 @@ void Executor::runFunctionAsMain(Function *f,
   }
 
   initializeGlobals(*state);
+
+  if (EnableCustomCheckers) {
+    customCheckerHandler.reset(new CustomCheckerHandler(*this));
+  }
 
   processTree = std::make_unique<PTree>(state);
   run(*state);
