@@ -103,7 +103,7 @@ RootCauseLocation::fullString(const RootCauseManager &mgr) const {
       }
     }
   } else {
-    info << "<no masking anything>\n";
+    info << "<not masking anything>\n";
   }
   
   if (maskingRoots.size()) {
