@@ -460,12 +460,12 @@ void StatsTracker::writeStatsHeader() {
              << "NvmHeuristicTime INTEGER, "
              << "NvmGetSharedTime INTEGER, "
              << "NvmAndersenTime INTEGER, "
-             << "NvmNumBlocksTotal INTEGER,"
-             << "NvmNumBlocksCovered INTEGER,"
-             << "NvmNumBlocksUnique INTEGER,"
-             << "NvmCoverage REAL,"
-             << "NvmHeuristicStatesKilled INTEGER,"
-             << "NvmHeuristicStatesDeferred INTEGER"   
+             << "NvmBugsTotalUniq INTEGER,"
+             << "NvmBugsTotalOcc INTEGER,"
+             << "NvmBugsPerfUniq INTEGER,"
+             << "NvmBugsPerfOcc INTEGER,"
+             << "NvmBugsCrtUniq INTEGER,"
+             << "NvmBugsCrtOcc INTEGER" 
              << ")";
   char *zErrMsg = nullptr;
   if(sqlite3_exec(statsFile, create.str().c_str(), nullptr, nullptr, &zErrMsg)) {
@@ -506,12 +506,12 @@ void StatsTracker::writeStatsHeader() {
              << "NvmHeuristicTime ,"
              << "NvmGetSharedTime ,"
              << "NvmAndersenTime ,"
-             << "NvmNumBlocksTotal ,"
-             << "NvmNumBlocksCovered ,"
-             << "NvmNumBlocksUnique ,"
-             << "NvmCoverage ,"
-             << "NvmHeuristicStatesKilled ,"
-             << "NvmHeuristicStatesDeferred "      
+             << "NvmBugsTotalUniq ,"
+             << "NvmBugsTotalOcc ,"
+             << "NvmBugsPerfUniq ,"
+             << "NvmBugsPerfOcc ,"
+             << "NvmBugsCrtUniq ,"
+             << "NvmBugsCrtOcc "      
              << ") VALUES ( "
              << "?, "
              << "?, "
@@ -581,12 +581,12 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, 21, stats::nvmHeuristicTime);
   sqlite3_bind_int64(insertStmt, 22, stats::nvmGetSharedTime);
   sqlite3_bind_int64(insertStmt, 23, stats::nvmAndersenTime);
-  sqlite3_bind_int64(insertStmt, 24, 0);
-  sqlite3_bind_int64(insertStmt, 25, 0);
-  sqlite3_bind_int64(insertStmt, 26, 0);
-  sqlite3_bind_int64(insertStmt, 27, 0);
-  sqlite3_bind_int64(insertStmt, 28, stats::nvmStatesKilledEndTrace + stats::nvmStatesKilledIrrelevant);
-  sqlite3_bind_int64(insertStmt, 29, stats::nvmStatesDeferred);
+  sqlite3_bind_int64(insertStmt, 24, stats::nvmBugsTotalUniq);
+  sqlite3_bind_int64(insertStmt, 25, stats::nvmBugsTotalOccurences);
+  sqlite3_bind_int64(insertStmt, 26, stats::nvmBugsPerfUniq);
+  sqlite3_bind_int64(insertStmt, 27, stats::nvmBugsPerfOccurences);
+  sqlite3_bind_int64(insertStmt, 28, stats::nvmBugsCrtUniq);
+  sqlite3_bind_int64(insertStmt, 29, stats::nvmBugsCrtOccurences);
 #ifdef KLEE_ARRAY_DEBUG
   sqlite3_bind_int64(insertStmt, 30, stats::arrayHashTime);
 #endif

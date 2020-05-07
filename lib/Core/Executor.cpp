@@ -4011,11 +4011,7 @@ void Executor::executeMarkPersistent(ExecutionState &state,
 
 void Executor::executeMarkPersistent(ExecutionState &state,
                                      const MemoryObject *mo) {
-  // klee_warning("Executor: Marking %p persistent!", (void*)mo->address);
   state.persistentObjects.insert(mo);
-  // for (const MemoryObject* m : state.persistentObjects) {
-  //   klee_warning("MemoryObject %p points to %p", m, (void*)m->address);
-  // }
 
   const ObjectState *os = state.addressSpace.findObject(mo);
   assert(os && "Cannot mark unbound MemoryObject persistent");

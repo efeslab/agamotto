@@ -15,6 +15,7 @@
 #include "RootCause.h"
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KInstruction.h"
+#include "CoreStats.h"
 
 using namespace klee;
 using namespace llvm;
@@ -227,6 +228,21 @@ void RootCauseManager::markAsBug(uint64_t id) {
    */
 
   for (auto i : allIds) {
+    stats::nvmBugsTotalOccurences++;
+    if (idToRoot[i]->rootCause.getReason() == PM_Unpersisted) {
+      stats::nvmBugsCrtOccurences++;
+      if (!idToRoot[i]->occurences) {
+        stats::nvmBugsTotalUniq++;
+        stats::nvmBugsCrtUniq++;
+      }
+    } else {
+      stats::nvmBugsPerfOccurences++;
+      if (!idToRoot[i]->occurences) {
+        stats::nvmBugsTotalUniq++;
+        stats::nvmBugsPerfUniq++;
+      }
+    }
+
     ++idToRoot[i]->occurences;
     ++totalOccurences;
     buggyIds.insert(i);

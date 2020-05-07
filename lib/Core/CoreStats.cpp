@@ -32,9 +32,15 @@ Statistic stats::nvmHeuristicTime("NvmHeuristicTime", "NvmHTime");
 Statistic stats::nvmGetSharedTime("NvmGetSharedTime", "NvmGSTime");
 Statistic stats::nvmAndersenTime("NvmAndersenTime", "NvmATime");
 
-Statistic stats::nvmStatesKilledEndTrace(
-    "NvmHeuristicStatesKilledEndTrace", "NvmKilledEnd");
-Statistic stats::nvmStatesKilledIrrelevant(
-    "NvmHeuristicStatesKilledIrrelevant", "NvmKilledIrrelevant");
-Statistic stats::nvmStatesDeferred(
-    "NvmHeuristicStatesDeferred", "NvmDeferred");
+Statistic stats::nvmBugsTotalUniq(
+    "NvmBugsTotalUnique", "NvmBugsTotalUniq");
+Statistic stats::nvmBugsTotalOccurences(
+    "NvmBugsTotalOccurences", "NvmBugsTotalOcc");
+Statistic stats::nvmBugsPerfUniq(
+    "NvmBugsPerformanceUnique", "NvmBugsPerfUniq");
+Statistic stats::nvmBugsPerfOccurences(
+    "NvmBugsPerformanceOccurences", "NvmBugsPerfOcc");
+Statistic stats::nvmBugsCrtUniq(
+    "NvmBugsCorrectnessUnique", "NvmBugsCrtUniq");
+Statistic stats::nvmBugsCrtOccurences(
+    "NvmBugsCorrectnessOccurences", "NvmBugsCrtOcc");

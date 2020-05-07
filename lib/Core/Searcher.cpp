@@ -307,8 +307,15 @@ bool RandomPathSearcher::empty() {
 bool NvmPathSearcher::priority_less::operator()(const priority_tuple &lhs, const priority_tuple &rhs) {
   bool youngerState = std::get<0>(lhs)->steppedInstructions < std::get<0>(rhs)->steppedInstructions;
   bool higherGen = std::get<1>(lhs) > std::get<1>(rhs); 
+  bool equalGen = std::get<1>(lhs) == std::get<1>(rhs);
   bool lowerPriority = std::get<2>(lhs) < std::get<2>(rhs);
-  return lowerPriority || higherGen || youngerState;
+  bool equalPriority = std::get<2>(lhs) == std::get<2>(rhs);
+  
+  if (lowerPriority) return true;
+  else if (equalPriority && higherGen) return true;
+  else if (equalPriority && equalGen && youngerState) return true;
+  else return false;
+  // return lowerPriority || higherGen || youngerState;
 }
 
 NvmPathSearcher::NvmPathSearcher(Executor &_executor) 

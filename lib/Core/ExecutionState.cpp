@@ -343,7 +343,6 @@ void ExecutionState::popFrame(Thread &t) {
       if (rootCauses.size()) {
         klee_warning("ERROR: alloca pmem error");
       }
-
       persistentObjects.erase(mo);
     }
     addressSpace.unbindObject(mo);
