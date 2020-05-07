@@ -120,6 +120,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     coveredLines(state.coveredLines),
     ptreeNode(state.ptreeNode),
     symbolics(state.symbolics),
+    persistentObjects(state.persistentObjects),
     arrayNames(state.arrayNames),
     openMergeStack(state.openMergeStack),
     steppedInstructions(state.steppedInstructions),
