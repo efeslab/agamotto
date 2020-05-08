@@ -253,6 +253,7 @@ void RootCauseManager::markAsBug(uint64_t id) {
 }
 
 std::string RootCauseManager::getRootCauseString(uint64_t id) const {
+  assert(id > 0 && "we don't do <= 0");
   assert(idToRoot.count(id) && "unknown ID!!!");
   return idToRoot.at(id)->rootCause.str();
 }

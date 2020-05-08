@@ -941,8 +941,22 @@ PersistentState::getRootCause(const ExecutionState &state,
   
   std::unordered_set<uint64_t> possibleCauses;
 
+  // auto *CE = dyn_cast<ConstantExpr>(result);
+  // assert(CE);
+  // if (CE->getZExtValue() > 0) {
+  //   llvm::errs() << "RC: " << CE->getZExtValue() << " FROM CL " << *cacheLine << "\n";
+  //   possibleCauses.insert(CE->getZExtValue());
+  // }
+
   for (uint64_t cl = 0; cl < numCacheLines(); ++cl) {
-    ref<Expr> clVal = ReadExpr::create(ul, ConstantExpr::create(cl, Expr::Int32));
+    // Check if the incoming cache line could be this cache line
+    auto clExpr = ConstantExpr::create(cl, Expr::Int32);
+    auto clEq = EqExpr::create(clExpr, cacheLine);
+    bool couldntBe;
+    assert(solver->mustBeFalse(state, clEq, couldntBe));
+    if (couldntBe) continue;
+
+    ref<Expr> clVal = ReadExpr::create(ul, clExpr);
     std::pair<ref<Expr>, ref<Expr> > range = solver->getRange(state, clVal);
 
     ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
@@ -982,6 +996,8 @@ ref<Expr> PersistentState::getCacheLine(ref<Expr> offset) const {
   auto cacheLineSizeExpr = ConstantExpr::create(cacheLineSize(), offset->getWidth());
   auto cacheLineOffset = UDivExpr::create(offset, cacheLineSizeExpr);
   auto truncToIdxSz = ZExtExpr::create(cacheLineOffset, Expr::Int32);
+
+  // llvm::errs() << getObject()->address << ": " << *offset << "=>" << *truncToIdxSz << "\n";
 
   return truncToIdxSz;
 }
@@ -1053,7 +1069,7 @@ void PersistentState::flushAll() {
   rootCauseWrites = UpdateList(rootCauseWrites.root, nullptr);
   pendingRootCauseWrites = UpdateList(pendingRootCauseWrites.root, nullptr);
   cacheLineUpdates = UpdateList(cacheLineUpdates.root, nullptr);
-  pendingRootCauseWrites = UpdateList(pendingRootCauseWrites.root, nullptr);
+  // pendingRootCauseWrites = UpdateList(pendingRootCauseWrites.root, nullptr);
   rootCauseMgr->clear();
 }
 
