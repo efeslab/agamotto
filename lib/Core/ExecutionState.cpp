@@ -333,8 +333,19 @@ void ExecutionState::popFrame(Thread &t) {
   StackFrame &sf = t.stack.back();
   for (std::vector<const MemoryObject*>::iterator it = sf.allocas.begin(), 
          ie = sf.allocas.end(); it != ie; ++it) {
-    // TODO: persistent state
-    addressSpace.unbindObject(*it);
+    const MemoryObject *mo = *it;
+    const ObjectState *os = addressSpace.findObject(mo);
+    assert(os && "trying to unbind null!");
+    const PersistentState *ps = dyn_cast<PersistentState>(os);
+    if (ps) {
+      auto rootCauses = executor_->markPersistenceErrors(*this, mo, ps);
+      if (rootCauses.size()) {
+        klee_warning("ERROR: alloca pmem error");
+      }
+
+      persistentObjects.erase(mo);
+    }
+    addressSpace.unbindObject(mo);
   }
   
   t.stack.pop_back();

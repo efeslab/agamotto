@@ -31,6 +31,15 @@
 #include <errno.h>
 #include <sys/mman.h>
 #include <sstream>
+#include <cmath>
+#include <algorithm>
+#include <iostream>
+#include <fstream>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 using namespace llvm;
 using namespace klee;
@@ -50,6 +59,14 @@ cl::opt<bool>
                               "condition given to klee_assume() rather than "
                               "emitting an error (default=false)"),
                      cl::cat(TerminationCat));
+
+cl::opt<unsigned>
+    CallocMaxSize("calloc-max-unit-size", cl::init(0),
+                  cl::desc("Max size for memory objects in calloc. If the "
+                           "overall size is larger, will allocate multiple, "
+                           "contiguous MemoryObjects instead (default=0, "
+                           "with 0 disabling this feature)."),
+                  cl::cat(SolvingCat));
 } // namespace
 
 /// \todo Almost all of the demands in this file should be replaced
@@ -284,20 +301,15 @@ SpecialFunctionHandler::readStringAtAddress(ExecutionState &state,
         Executor::TerminateReason::User);
     return "";
   }
-  bool res __attribute__ ((unused));
-  assert(executor.solver->mustBeTrue(state, 
-                                     EqExpr::create(address, 
-                                                    op.first->getBaseExpr()),
-                                     res) &&
-         res &&
-         "XXX interior pointer unhandled");
   const MemoryObject *mo = op.first;
   const ObjectState *os = op.second;
 
   char *buf = new char[mo->size];
+  unsigned offset = cast<ConstantExpr>(mo->getOffsetExpr(address))->getZExtValue();
+  assert(offset >= 0 && offset < mo->size && "bad pointer into MemoryObject");
 
   unsigned i;
-  for (i = 0; i < mo->size - 1; i++) {
+  for (i = offset; i < mo->size - 1; i++) {
     ref<Expr> cur = os->read8(i);
     cur = executor.toUnique(state, cur);
     assert(isa<ConstantExpr>(cur) && 
@@ -306,7 +318,7 @@ SpecialFunctionHandler::readStringAtAddress(ExecutionState &state,
   }
   buf[i] = 0;
   
-  std::string result(buf);
+  std::string result(buf + offset);
   delete[] buf;
   return result;
 }
@@ -693,10 +705,55 @@ void SpecialFunctionHandler::handleCalloc(ExecutionState &state,
   // XXX should type check args
   assert(arguments.size()==2 &&
          "invalid number of arguments to calloc");
+  
+  ref<Expr> nObjExpr = arguments[0];
+  ref<Expr> objSzExpr = arguments[1];
 
-  ref<Expr> size = MulExpr::create(arguments[0],
-                                   arguments[1]);
-  executor.executeAlloc(state, size, false, target, true);
+  ref<Expr> size = MulExpr::create(nObjExpr, objSzExpr);
+  if (CallocMaxSize == 0) {
+    executor.executeAlloc(state, size, false, target, true);
+    return;
+  }
+
+  size_t realSize;
+  ref<ConstantExpr> ce = dyn_cast<ConstantExpr>(size);
+  if (!ce.isNull()) {
+    realSize = ce->getZExtValue();
+  } else {
+    size = executor.optimizer.optimizeExpr(size, true);
+
+    std::pair<ref<Expr>, ref<Expr> > 
+        range = executor.solver->getRange(state, size);
+
+    ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
+    ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);  
+    assert(!lo.isNull() && !hi.isNull() && "FIXME: unhandled solver failure");
+
+    uint64_t loVal = lo->getZExtValue();
+    uint64_t hiVal = hi->getZExtValue();
+
+    if (loVal <= CallocMaxSize) {
+      realSize = std::min((size_t)CallocMaxSize, hiVal);
+    } else {
+      realSize = loVal;
+    }
+  }
+
+  if (realSize <= CallocMaxSize) {
+    executor.executeAlloc(state, size, false, target, true);
+    return;
+  }
+  
+  // Here's the part where we actually do the allocateContiguous thing
+  size_t nObjs = (size_t)std::ceil(realSize / (double)CallocMaxSize);
+  size_t objSz = CallocMaxSize;
+
+  assert(nObjs * objSz >= realSize && "can't do math!");
+
+  klee_warning("Rather than allocating %lu bytes, allocating %lu objects "
+               "of size %lu", realSize, nObjs, objSz);
+
+  doAllocContiguous(state, target, nObjs, objSz, "calloc");
 }
 
 void SpecialFunctionHandler::handleRealloc(ExecutionState &state,
@@ -1007,16 +1064,128 @@ void SpecialFunctionHandler::handleDivRemOverflow(ExecutionState &state,
                                  Executor::Overflow);
 }
 
+void SpecialFunctionHandler::doAllocContiguous(ExecutionState &state, 
+                                               KInstruction *target,
+                                               size_t nObj, 
+                                               size_t unitSz,
+                                               std::string baseName,
+                                               bool make_persistent,
+                                               bool init_zero,
+                                               std::string file_name) {
+  auto mos = executor.memory->allocateContiguous(
+                            unitSz, nObj, false, true, state.prevPC()->inst);
+  int objNum = 0;
+
+  int fd = -1;
+  if (!file_name.empty()) {
+    fd = open(file_name.c_str(), O_RDONLY);
+    if (fd < 0) {
+      klee_error("could not open %s, %s", file_name.c_str(), strerror(errno));
+    }
+  }
+
+  for (auto *mo : mos) {
+    assert(mo);
+    std::string moName;
+    llvm::raw_string_ostream ss(moName);
+    ss << baseName << "_" << objNum;
+    objNum++;
+    mo->setName(ss.str());
+    
+    if (make_persistent) {
+      ObjectState *os = nullptr;
+      if (init_zero && !file_name.empty()) {
+        klee_error("can only set init_zero or file-based init!");
+      }
+
+      if (init_zero) {
+        os = executor.bindObjectInState(state, mo, false);
+        os->initializeToZero();
+        assert(os && "could not bind object!");
+      } else if (!file_name.empty()) {
+        os = executor.bindObjectInState(state, mo, false);
+        os->initializeToZero();
+
+        assert(os && "could not bind object!");
+
+        assert(fd >= 0);
+
+        char *buffer = (char*)malloc(mo->size);
+        assert(buffer);
+        ssize_t r = read(fd, buffer, mo->size);
+        assert(r == mo->size && "did not read all!");
+
+        for (unsigned i = 0; i < mo->size; ++i) {
+          os->write8(state, i, (uint8_t)buffer[i]); 
+        }
+
+        free(buffer);
+      } else {
+        os = executor.bindObjectInState(state, mo, false);
+        assert(os && "could not bind object!");
+        executor.executeMakeSymbolic(state, mo, mo->name);
+      }
+      
+      executor.executeMarkPersistent(state, mo);
+    } else {
+      auto *os = executor.bindObjectInState(state, mo, false);
+      assert(os && "could not bind object!!");
+    }
+  }
+
+  if (!mos.size()) {
+    static ref<Expr> nullptrExpr = ConstantExpr::alloc(0, Context::get().getPointerWidth());
+    executor.bindLocal(target, state, nullptrExpr);
+  } else {
+    executor.bindLocal(target, state, mos.front()->getBaseExpr());
+  }
+}
+
+/* Persistent Memory */
+
+std::list<ObjectPair> 
+SpecialFunctionHandler::getPmemObjsInRange(ExecutionState &state,
+                                           ref<Expr> addr,
+                                           uint64_t realSize) {
+  std::list<ObjectPair> pmemObjs;
+  for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
+    ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
+    ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
+    
+    ObjectPair res;
+    bool success;
+    assert(state.addressSpace.resolveOne(state, executor.solver, ptrExpr, res, success));
+    assert(success && "could not resolve one! (isPmem)");
+    assert(isa<PersistentState>(res.second) && "volatile object in range!");
+    pmemObjs.push_back(res);
+  }
+
+  return pmemObjs;
+}
+
 void SpecialFunctionHandler::handleAllocPmem(ExecutionState &state,
                                             KInstruction *target,
                                             std::vector<ref<Expr>> &arguments) {
-  if (arguments.size() != 2) {
+  if (arguments.size() != 4) {
     executor.terminateStateOnError(state,
       "Incorrect number of arguments to "
-      "klee_pmem_alloc_pmem(size_t size, char *name)",
+      "klee_pmem_alloc_pmem(size_t size, char *name, bool init_zero, const char *fname)",
       Executor::User);
     return;
   }
+
+  bool init_zero = false;
+  if (ConstantExpr *initZero = dyn_cast<ConstantExpr>(arguments[2])) {
+    init_zero = (bool)initZero->getZExtValue(Expr::Bool);
+  } else {
+    executor.terminateStateOnError(state,
+      "klee_pmem_alloc_pmem(size_t size, char *name, bool init_zero) :"
+      "init_zero must be concrete!",
+      Executor::User);
+  }
+
+  std::string fname;
+  fname = arguments[3]->isZero() ? "" : readStringAtAddress(state, arguments[3]);
 
   std::string name;
   name = arguments[1]->isZero() ? "" : readStringAtAddress(state, arguments[1]);
@@ -1048,39 +1217,11 @@ void SpecialFunctionHandler::handleAllocPmem(ExecutionState &state,
   // Should be concrete for the case we care about--pmem file.
   uint64_t unitSz = PersistentState::MaxSize;
 
-  uint64_t mmap_size = (realSize % unitSz) ? ((realSize / unitSz) + 1) * unitSz : realSize;
+  uint64_t totalSize = (realSize % unitSz) ? ((realSize / unitSz) + 1) * unitSz : realSize;
 
-  // We'll treat it like a fixed object and just call mmap internally.
-  // TODO: reclaim, fix hack
-  void *base_addr = mmap(nullptr, mmap_size, PROT_READ | PROT_WRITE, 
-                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (MAP_FAILED == base_addr) {
-    klee_error("Could not map!");
-  }
-
-  MemoryObject *baseObj = nullptr;
-  for (uint64_t offset = 0; offset < realSize; offset += unitSz) {
-    MemoryObject *mo = executor.memory->allocateFixed(
-              (uint64_t)base_addr + offset, unitSz, state.prevPC()->inst);
-    assert(mo);
-    std::string moName;
-    llvm::raw_string_ostream ss(moName);
-    ss << name << "_" << (offset / unitSz);
-    mo->setName(ss.str());
-
-    executor.executeMakeSymbolic(state, mo, name);
-    executor.executeMarkPersistent(state, mo);
-
-    if (!baseObj) baseObj = mo;
-  }
-
-  if (!baseObj) {
-    static ref<Expr> nullptrExpr = ConstantExpr::alloc(0, Context::get().getPointerWidth());
-    executor.bindLocal(target, state, nullptrExpr);
-  } else {
-    executor.bindLocal(target, state, baseObj->getBaseExpr());
-  }
+  size_t nObj = totalSize / unitSz;
   
+  doAllocContiguous(state, target, nObj, unitSz, name, true, init_zero, fname);
 }
 
 void SpecialFunctionHandler::handleMarkPersistent(ExecutionState &state,
@@ -1162,25 +1303,18 @@ void SpecialFunctionHandler::handleIsPmem(ExecutionState &state,
     klee_error("Not sure how to handle symbolic size argument yet!");
   }
 
-  std::list<ObjectPair> pmemObjs;
-  for (uint64_t offset = 0; offset < realSize; offset += PersistentState::MaxSize) {
-    ref<Expr> offsetExpr = ConstantExpr::create(offset, Expr::Int64);
-    ref<Expr> ptrExpr = AddExpr::create(addr, offsetExpr);
-    
-    ObjectPair res;
-    bool success;
-    assert(state.addressSpace.resolveOne(state, executor.solver, ptrExpr, res, success));
-    assert(success && "could not resolve one! (isPmem)");
-    pmemObjs.push_back(res);
-  }
+  std::list<ObjectPair> pmemObjs = getPmemObjsInRange(state, addr, realSize);
   
+  ref<Expr> allIsPmem = ConstantExpr::create(1, Expr::Bool);
   for (ObjectPair &op : pmemObjs) {
     const ObjectState *os = op.second;
 
     ref<Expr> isPmem = ConstantExpr::create(isa<PersistentState>(os), Expr::Bool);
     assert(!isPmem.isNull() && "null boolean expr from klee_pmem_is_pmem!");
-    executor.bindLocal(target, state, isPmem);  
+    allIsPmem = AndExpr::create(allIsPmem, isPmem);
   }
+
+  executor.bindLocal(target, state, allIsPmem); 
 }
 
 void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,

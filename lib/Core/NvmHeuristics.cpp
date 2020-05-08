@@ -72,18 +72,18 @@ bool NvmValueDesc::getPointsToSet(const Value *v,
   return ret;
 }
 
-NvmValueDesc::Shared NvmValueDesc::doCall(CallInst *ci, Function *f) const {
+NvmValueDesc::Shared NvmValueDesc::doCall(CallBase *cb, Function *f) const {
   NvmValueDesc newDesc(andersen_, anders_cache_, nvm_allocs_, not_global_nvm_);
 
   if (!f) {
-    f = utils::getCallInstFunction(ci);
+    f = utils::getCallInstFunction(cb);
     if (!f) {
       return std::make_shared<NvmValueDesc>(newDesc);
     }
   }
 
-  for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
-    Value *op = ci->getArgOperand(i);
+  for (unsigned i = 0; i < (unsigned)cb->getNumArgOperands(); ++i) {
+    Value *op = cb->getArgOperand(i);
     if (!op->getType()->isPtrOrPtrVectorTy()) continue;
     assert(op);
 
@@ -201,7 +201,7 @@ bool NvmValueDesc::matchesKnownVolatile(const Value *posNvm) const {
 
     for (const Value *vol : not_global_nvm_) {
       for (const User *u : vol->users()) {
-        if (isa<CallInst>(u)) continue;
+        if (isa<CallBase>(u)) continue;
         if (u == posNvm) return true;
       }
     }
@@ -212,7 +212,7 @@ bool NvmValueDesc::matchesKnownVolatile(const Value *posNvm) const {
 
     for (const Value *vol : not_local_nvm_) {
       for (const User *u : vol->users()) {
-        if (isa<CallInst>(u)) continue;
+        if (isa<CallBase>(u)) continue;
         if (u == posNvm) return true;
       }
     }
@@ -407,20 +407,20 @@ NvmContextDesc::NvmContextDesc(SharedAndersen anders,
     valueState(NvmValueDesc::staticState(anders, m)),
     returnHasWeight(false) {}
 
-uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci, 
+uint64_t NvmContextDesc::constructCalledContext(llvm::CallBase *cb, 
                                                 llvm::Function *f) {
-  assert(ci && f && "get out of here with your null parameters");
+  assert(cb && f && "get out of here with your null parameters");
 
   // First, we check the cache.
-  ContextCacheKey key(f, valueState->doCall(ci, f));
+  ContextCacheKey key(f, valueState->doCall(cb, f));
   if (contextCache.count(key)) {
-    contexts[ci] = contextCache[key];
+    contexts[cb] = contextCache[key];
     return contextCache[key]->getRootPriority();
   }
 
-  Instruction *retLoc = ci->getNextNode();
+  Instruction *retLoc = utils::getReturnLocation(cb);
   assert(retLoc && "could not get the return instruction");
-  if (!ci->getNextNode()) errs() << *ci << "\n";
+
   NvmContextDesc calledCtx(andersen,
                            key.function,
                            key.valueState,
@@ -430,7 +430,7 @@ uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci,
   auto auxInsts = sharedCtx->setCoreWeights();
 
   // We add it first to avoid infinite recursion.
-  contexts[ci] = sharedCtx;
+  contexts[cb] = sharedCtx;
   contextCache[key] = sharedCtx;
 
   // We can do this later as it mutates the object
@@ -440,9 +440,9 @@ uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci,
   return sharedCtx->getRootPriority();
 }
 
-uint64_t NvmContextDesc::constructCalledContext(llvm::CallInst *ci) {
-  if (Function *f = ci->getCalledFunction()) {
-    return constructCalledContext(ci, f);
+uint64_t NvmContextDesc::constructCalledContext(llvm::CallBase *cb) {
+  if (Function *f = cb->getCalledFunction()) {
+    return constructCalledContext(cb, f);
   } 
 
   // We will wait until runtime to resolve this function pointer.
@@ -453,9 +453,9 @@ bool NvmContextDesc::isaCoreInst(Instruction *i) const {
   if (utils::isFence(i)) return true;
 
   if (utils::isFlush(i)) {
-    CallInst *ci = dyn_cast<CallInst>(i);
-    assert(ci && "flushes should always be some kind of function call");
-    Value *v = ci->getArgOperand(0);
+    auto *cb = dyn_cast<CallInst>(i);
+    assert(cb && "flushes should always be some kind of function call");
+    Value *v = cb->getArgOperand(0);
     assert(v && "no arg0!");
 
     return valueState->isNvm(v);
@@ -469,8 +469,8 @@ bool NvmContextDesc::isaCoreInst(Instruction *i) const {
 }
 
 bool NvmContextDesc::isaAuxInst(Instruction *i) const {
-  if (auto *ci = dyn_cast<CallInst>(i)) {
-    if (auto *f = ci->getCalledFunction()) {
+  if (auto *cb = dyn_cast<CallBase>(i)) {
+    if (auto *f = cb->getCalledFunction()) {
       if (f->isDeclaration() || f->isIntrinsic()) return false;
 
       // Has function body
@@ -488,8 +488,8 @@ uint64_t NvmContextDesc::computeAuxInstWeight(Instruction *i) {
   if (isa<ReturnInst>(i)) {
     return returnHasWeight ? 1lu : 0lu;
     // return 1lu;
-  } else if (auto *ci = dyn_cast<CallInst>(i)) {
-    return constructCalledContext(ci);
+  } else if (auto *cb = dyn_cast<CallBase>(i)) {
+    return constructCalledContext(cb);
   }
 
   assert(false && "should never reach here!");
@@ -552,8 +552,6 @@ std::list<Instruction*> NvmContextDesc::setCoreWeights(void) {
       } else if (isaAuxInst(&i)) {
         auxInsts.push_back(&i);
       }
-
-      assert(!isa<InvokeInst>(&i) && "we don't handle this!");
     }
   }
 
@@ -570,14 +568,14 @@ NvmContextDesc::Shared NvmContextDesc::tryGetNextContext(KInstruction *pc,
                                                          KInstruction *nextPC) {
   assert(!isa<ReturnInst>(pc->inst) && "Need to handle returns elsewhere!");
 
-  if (auto *ci = dyn_cast<CallInst>(pc->inst)) {
+  if (auto *cb = dyn_cast<CallBase>(pc->inst)) {
     if (pc->inst->getNextNode() != nextPC->inst) {
-      if (!contexts.count(ci)) {
-        constructCalledContext(ci, nextPC->inst->getFunction());
+      if (!contexts.count(cb)) {
+        constructCalledContext(cb, nextPC->inst->getFunction());
         setPriorities();
-        return contexts.at(ci);
+        return contexts.at(cb);
       }
-      return contexts.at(ci);
+      return contexts.at(cb);
     }
   }
 
@@ -612,14 +610,14 @@ NvmContextDesc::Shared NvmContextDesc::tryUpdateContext(Value *v, bool isValNvm)
   return shared_from_this();
 }
 
-NvmContextDesc::Shared NvmContextDesc::tryResolveFnPtr(CallInst *ci, Function *f) {
-  if (contexts.count(ci) && contexts.at(ci)->function == f) {
+NvmContextDesc::Shared NvmContextDesc::tryResolveFnPtr(CallBase *cb, Function *f) {
+  if (contexts.count(cb) && contexts.at(cb)->function == f) {
     return shared_from_this(); 
   }
 
   auto copy = dup();
 
-  copy->constructCalledContext(ci, f);
+  copy->constructCalledContext(cb, f);
   copy->setPriorities();
   return copy;
 }
@@ -674,7 +672,7 @@ void NvmStaticHeuristic::computePriority(void) {
    */
   resetWeights();
 
-  std::unordered_set<llvm::CallInst*> call_insts;
+  std::unordered_set<llvm::CallBase*> call_insts;
 
   for (Function &f : *module_) {
     for (BasicBlock &b : f) {
@@ -683,8 +681,12 @@ void NvmStaticHeuristic::computePriority(void) {
         (*priorities_)[&i] = 0lu;
         if (mayHaveWeight(&i)) {
           (*weights_)[&i] = computeInstWeight(&i);
-        } else if (CallInst *ci = dyn_cast<CallInst>(&i)) {
-          if (!ci->isInlineAsm()) call_insts.insert(ci);
+        } else if (CallBase *cb = dyn_cast<CallBase>(&i)) {
+          if (auto *ci = dyn_cast<CallInst>(cb)) {
+            if (ci->isInlineAsm()) continue;
+          } 
+          
+          call_insts.insert(cb);
         }
       }
     }
@@ -697,26 +699,26 @@ void NvmStaticHeuristic::computePriority(void) {
   bool c = false;
   do {
     c = false;
-    for (CallInst *ci : call_insts) {
+    for (CallBase *cb : call_insts) {
       std::unordered_set<Function*> possibleFns;
-      if (Function *f = utils::getCallInstFunction(ci)) {
+      if (Function *f = utils::getCallInstFunction(cb)) {
         possibleFns.insert(f);
-      } else if (Function *f = ci->getCalledFunction()) {
+      } else if (Function *f = cb->getCalledFunction()) {
         possibleFns.insert(f);
-      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(ci->getCalledValue())) {
+      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(cb->getCalledValue())) {
         Function *f = dyn_cast<Function>(ga->getAliasee());
         assert(f && "bad assumption about aliases!");
         possibleFns.insert(f);
       } else {
-        if (!ci->isIndirectCall()) {
-          errs() << *ci << "\n";
-          errs() << ci->getCalledValue() << "\n";
-          if (ci->getCalledValue()) errs() << *ci->getCalledValue() << "\n";
+        if (!cb->isIndirectCall()) {
+          errs() << *cb << "\n";
+          errs() << cb->getCalledValue() << "\n";
+          if (cb->getCalledValue()) errs() << *cb->getCalledValue() << "\n";
         }
-        assert(ci->isIndirectCall());
+        assert(cb->isIndirectCall());
 
         for (Function &f : *curr_->getModule()) {
-          for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
+          for (unsigned i = 0; i < (unsigned)cb->getNumArgOperands(); ++i) {
             if (f.arg_size() <= i) {
               if (f.isVarArg()) {
                 possibleFns.insert(&f);
@@ -725,10 +727,10 @@ void NvmStaticHeuristic::computePriority(void) {
             }
 
             Argument *arg = f.arg_begin() + i;
-            Value *val = ci->getArgOperand(i);
+            Value *val = cb->getArgOperand(i);
 
             if (arg->getType() != val->getType()) break;
-            else if (i + 1 == ci->getNumArgOperands()) possibleFns.insert(&f);
+            else if (i + 1 == cb->getNumArgOperands()) possibleFns.insert(&f);
           }
         }
       }
@@ -736,9 +738,9 @@ void NvmStaticHeuristic::computePriority(void) {
       for (Function *f : possibleFns) {
         for (BasicBlock &bb : *f) {
           for (Instruction &i : bb) {
-            if ((*weights_)[&i] && !(*weights_)[dyn_cast<Instruction>(ci)]) {
+            if ((*weights_)[&i] && !(*weights_)[dyn_cast<Instruction>(cb)]) {
               c = true;
-              (*weights_)[dyn_cast<Instruction>(ci)] = 1u;
+              (*weights_)[dyn_cast<Instruction>(cb)] = 1u;
               goto done;
             }
           }
@@ -842,9 +844,9 @@ void NvmStaticHeuristic::computePriority(void) {
       for (Use &u : f.uses()) {
         User *usr = u.getUser();
         // errs() << "usr:" << *usr << "\n";
-        if (Instruction *i = dyn_cast<Instruction>(usr)) {
+        if (auto *cb = dyn_cast<CallBase>(usr)) {
           // errs() << "\t=> " << (*priorities_)[i] << "\n";
-          Instruction *retLoc = i->getNextNode();
+          Instruction *retLoc = utils::getReturnLocation(cb);
           assert(retLoc);
           // errs() << "\t=> " << (*priorities_)[retLoc] << "\n";
           if ((*priorities_)[retLoc]) {
@@ -861,25 +863,26 @@ void NvmStaticHeuristic::computePriority(void) {
       }
     }
 
-    for (CallInst *ci : call_insts) {
-      Instruction *retLoc = ci->getNextNode();
+    for (CallBase *cb : call_insts) {
+
+      Instruction *retLoc = utils::getReturnLocation(cb);
       assert(retLoc);
 
       std::unordered_set<Function*> possibleFns;
-      if (Function *f = utils::getCallInstFunction(ci)) {
+      if (Function *f = utils::getCallInstFunction(cb)) {
         possibleFns.insert(f);
-      } else if (Function *f = ci->getCalledFunction()) {
+      } else if (Function *f = cb->getCalledFunction()) {
         possibleFns.insert(f);
-      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(ci->getCalledValue())) {
+      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(cb->getCalledValue())) {
         Function *f = dyn_cast<Function>(ga->getAliasee());
         assert(f && "bad assumption about aliases!");
         possibleFns.insert(f);
       } else {
-        if (!ci->isIndirectCall()) errs() << *ci << "\n";
-        assert(ci->isIndirectCall());
+        if (!cb->isIndirectCall()) errs() << *cb << "\n";
+        assert(cb->isIndirectCall());
 
         for (Function &f : *curr_->getModule()) {
-          for (unsigned i = 0; i < (unsigned)ci->getNumArgOperands(); ++i) {
+          for (unsigned i = 0; i < (unsigned)cb->getNumArgOperands(); ++i) {
             if (f.arg_size() <= i) {
               if (f.isVarArg()) {
                 possibleFns.insert(&f);
@@ -888,10 +891,10 @@ void NvmStaticHeuristic::computePriority(void) {
             }
 
             Argument *arg = f.arg_begin() + i;
-            Value *val = ci->getArgOperand(i);
+            Value *val = cb->getArgOperand(i);
 
             if (arg->getType() != val->getType()) break;
-            else if (i + 1 == ci->getNumArgOperands()) possibleFns.insert(&f);
+            else if (i + 1 == cb->getNumArgOperands()) possibleFns.insert(&f);
           }
         }
       }
@@ -955,8 +958,8 @@ void NvmDynamicHeuristic::updateCurrentState(ExecutionState *es,
     memVal = li->getPointerOperand();
   } else if (StoreInst *si = dyn_cast<StoreInst>(pc->inst)) {
     memVal = si->getPointerOperand();
-  } else if (CallInst *ci = dyn_cast<CallInst>(pc->inst)) {
-    memVal = ci;
+  } else if (CallBase *cb = dyn_cast<CallBase>(pc->inst)) {
+    memVal = cb;
   } else {
     errs() << *pc->inst << "\n";
     assert(false && "we didn't capture all memory operations!");
@@ -974,9 +977,11 @@ void NvmDynamicHeuristic::stepState(ExecutionState *es,
                                     KInstruction *nextPC) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
 
-  if (auto *ci = dyn_cast<CallInst>(pc->inst)) {
+  if (nextPC->inst->getFunction()->getName() == "pthread_exit") return;
+
+  if (auto *cb = dyn_cast<CallBase>(pc->inst)) {
     if (pc->inst->getFunction() != nextPC->inst->getFunction()) {
-      contextDesc = contextDesc->tryResolveFnPtr(ci, nextPC->inst->getFunction());
+      contextDesc = contextDesc->tryResolveFnPtr(cb, nextPC->inst->getFunction());
     }
     auto childCtx = contextDesc->tryGetNextContext(pc, nextPC);
 
@@ -988,12 +993,14 @@ void NvmDynamicHeuristic::stepState(ExecutionState *es,
     if (childCtx->function != contextDesc->function || 
         nextPC->inst == contextDesc->function->getEntryBlock().getFirstNonPHI()) {
       contextStack.push_back(contextDesc);
-      callInstStack.push_back(ci);
+      callInstStack.push_back(cb);
       contextDesc = childCtx;
     }
 
   } else if (auto *ri = dyn_cast<ReturnInst>(pc->inst)) {
     // errs() << __func__ << " returning " << *ri << " @ " << ri->getFunction()->getName() << "\n";
+    // if (nextPC) errs() << __func__ << " next is: " << *nextPC->inst << " @ " << nextPC->inst->getFunction()->getName() << "\n";
+    // else errs() << __func__ << " next is NULL\n";
     auto parentCtx = contextStack.back();
     contextStack.pop_back();
     auto retValDest = callInstStack.back();
@@ -1013,6 +1020,17 @@ void NvmDynamicHeuristic::stepState(ExecutionState *es,
     } else errs() << "CD NULL\n";
 
     errs() << nextPC->inst->getFunction()->getName() << "\n";
+
+    if (contextDesc->function->getName() == "pthread_create") {
+      contextStack.clear();
+      callInstStack.clear();
+
+      SharedAndersen sa = contextDesc->andersen;
+      Module *m = nextPC->inst->getModule();
+      Function *threadMain = nextPC->inst->getFunction();
+      contextDesc.reset(new NvmContextDesc(sa, m, threadMain));
+      computePriority();
+    }
   }
   
   assert(contextDesc->function == nextPC->inst->getFunction() && "bad context!");

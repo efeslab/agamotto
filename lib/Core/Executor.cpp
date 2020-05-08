@@ -1619,6 +1619,103 @@ void Executor::executeCall(ExecutionState &state,
   }
 }
 
+// CPUID is treated as a call that returns an array which is then
+// extracted from.
+void Executor::executeCpuid(ExecutionState &state, KInstruction *ki) {
+  Instruction *i = ki->inst;
+  CallSite cs(i);
+  unsigned numArgs = cs.arg_size();
+
+  // Set up the output of the call.
+  Type *t = i->getType();
+  Expr::Width outWidth = getWidthForLLVMType(t);
+  // The concrete output of CPUID
+  unsigned regs[4];
+
+  if (numArgs == 1) {
+    klee_error("implement cpuid for one arg!");
+  } else if (numArgs == 2) {
+    ref<Expr> leafExpr = eval(ki, 1, state).value;
+    ref<Expr> subleafExpr = eval(ki, 2, state).value;
+    // Need to concretize.
+    unsigned leaf = cast<ConstantExpr>(leafExpr)->getZExtValue();
+    unsigned subleaf = cast<ConstantExpr>(subleafExpr)->getZExtValue();
+    __get_cpuid_count(leaf, subleaf, &regs[0], &regs[1], &regs[2], &regs[3]);
+    // klee_warning("cpuid(leaf=%u, subleaf=%u) returned {%u, %u, %u, %u}",
+    //   leaf, subleaf, regs[0], regs[1], regs[2], regs[3]);
+
+    // Now we remove the features we don't like, hehe.
+    // Regs are EAX=0, EBX=1, ECX=2, EDX=3
+    // AVX
+    if (leaf == 0x1) {
+      regs[2] = regs[2] & ~(bit_AVX);
+    }
+    if (leaf == 0x7) {
+      regs[1] = regs[1] & ~(bit_AVX512F);
+    }
+  } else {
+    terminateStateOnExecError(state, "unsupported number of arguments for cpuid");
+  }
+
+  llvm::APInt output = llvm::APInt(outWidth, 0); // initial value
+  // shift in the values
+  for (int i = 0; i < 4; i++) {
+    llvm::APInt field = llvm::APInt(outWidth, regs[i]);
+    field <<= (sizeof(unsigned) * CHAR_BIT) /* bits to shift */ * i /* pos */;
+    output |= field;
+  }
+  ref<Expr> result = ConstantExpr::alloc(output);
+  bindLocal(ki, state, result);
+}
+
+// RDTSC (read processor time stamp counter) is treated as a call
+// that returns an array which is then extracted from:
+//    { <hi 32 bits>, <lo 32 bits> }
+void Executor::executeRdtsc(ExecutionState &state,
+                            KInstruction *ki, InlineAsm *ia) {
+  Instruction *i = ki->inst;
+
+  // Set up the output of the call.
+  Type *t = i->getType();
+  Expr::Width outWidth = getWidthForLLVMType(t);
+  llvm::APInt output = llvm::APInt(outWidth, 0); // initial value
+
+  // The value we'll give to the program is the number
+  // of instructions we've interpreted so far.
+  uint64_t tsc = state.steppedInstructions;
+  uint64_t tsc_lo = tsc & UINT32_MAX;  // goes to EAX
+  uint64_t tsc_hi = tsc >> 32;                // goes to EDX
+
+  // Make sure we return the two halves in the order the caller expects.
+  // They could expect { lo, hi } or { hi, lo }.
+  // We can tell which based on the names given to the output
+  // parameters of the inline asm:
+  //    1) "={ax},={dx}" ==> { lo, hi }
+  //    2) "={dx},={ax}" ==> { hi, lo }
+  int order = -1;
+  if (ia->getConstraintString().compare(0, 11, "={ax},={dx}")) {
+    order = 1;
+  } else if (ia->getConstraintString().compare(0, 11, "={dx},={ax}")) {
+    order = 2;
+  } else {
+    terminateStateOnExecError(state, "bad arguments for rdtsc inline asm");
+    return;
+  }
+
+  if (order == 1) {
+    // { lo, hi }
+    output |= (tsc_lo << 32);
+    output |= tsc_hi;
+  } else {
+    // { hi, lo }
+    output |= (tsc_hi << 32);
+    output |= tsc_lo;
+  }
+
+  ref<Expr> result = ConstantExpr::alloc(output);
+  bindLocal(ki, state, result);
+}
+
 void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
                                     ExecutionState &state) {
   // Note that in general phi nodes can reuse phi values from the same
@@ -2012,59 +2109,18 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       state.nvmInfo()->resolveFunctionCall(ki, f);
     }
 
+    // (iangneal): there's some inline assembly we want to run!
     if ((ia = dyn_cast<InlineAsm>(fp))) {
-      // (iangneal): there's some inline assembly we want to run!
-      // CPUID is treated as a call that returns an array which is then
-      // extracted from.
       if (ia->getAsmString().find("cpuid") != std::string::npos) {
-
-        // Set up the output of the call.
-        Type *t = i->getType();
-        Expr::Width outWidth = getWidthForLLVMType(t);      
-        // The concrete output of CPUID
-        unsigned regs[4];
-
-        if (numArgs == 1) {
-          klee_error("implement cpuid for one arg!");
-        } else if (numArgs == 2) {
-          ref<Expr> leafExpr = eval(ki, 1, state).value;
-          ref<Expr> subleafExpr = eval(ki, 2, state).value;
-          // Need to concretize.
-          unsigned leaf = cast<ConstantExpr>(leafExpr)->getZExtValue();
-          unsigned subleaf = cast<ConstantExpr>(subleafExpr)->getZExtValue();
-          __get_cpuid_count(leaf, subleaf, &regs[0], &regs[1], &regs[2], &regs[3]);
-          // klee_warning("cpuid(leaf=%u, subleaf=%u) returned {%u, %u, %u, %u}",
-          //   leaf, subleaf, regs[0], regs[1], regs[2], regs[3]);
-
-          // Now we remove the features we don't like, hehe.
-          // Regs are EAX=0, EBX=1, ECX=2, EDX=3
-          // AVX
-          if (leaf == 0x1) {
-            regs[2] = regs[2] & ~(bit_AVX);
-          }
-          if (leaf == 0x7) {
-            regs[1] = regs[1] & ~(bit_AVX512F);
-          }
-        } else {
-          terminateStateOnExecError(state, "unsupported number of arguments for cpuid");
-        }
-
-
-        llvm::APInt output = llvm::APInt(outWidth, 0); // initial value
-        // shift in the values
-        for (int i = 0; i < 4; i++) {
-          llvm::APInt field = llvm::APInt(outWidth, regs[i]);
-          field <<= (sizeof(unsigned) * CHAR_BIT) /* bits to shift */ * i /* pos */;
-          output |= field;
-        }
-        ref<Expr> result = ConstantExpr::alloc(output);
-        bindLocal(ki, state, result);
-        break;
+        executeCpuid(state, ki);
+      } else if (ia->getAsmString() == "rdtsc") {
+        executeRdtsc(state, ki, ia);
+      } else {
+        terminateStateOnExecError(state, "inline assembly is unsupported");
       }
-
-      terminateStateOnExecError(state, "inline assembly is unsupported");
       break;
     }
+
     // evaluate arguments
     std::vector< ref<Expr> > arguments;
     arguments.reserve(numArgs);
@@ -3027,12 +3083,13 @@ void Executor::doDumpStates() {
 }
 
 void Executor::dumpRootCauses() {
-  auto streamPtr = interpreterHandler->openOutputFile("all.pmem.err");
-  assert(streamPtr && "could not open file!");
-  auto &stream = *streamPtr;
+  auto textPtr = interpreterHandler->openOutputFile("all.pmem.err");
+  auto csvPtr = interpreterHandler->openOutputFile("all_pmem_errs.csv");
+  assert(textPtr && csvPtr && "could not open files!");
   
   interpreterHandler->getInfoStream() << rootCauseMgr->getSummary();
-  stream << rootCauseMgr->str();
+  rootCauseMgr->dumpText(*textPtr);
+  rootCauseMgr->dumpCSV(*csvPtr);
 }
 
 void Executor::run(ExecutionState &initialState) {
@@ -4110,16 +4167,10 @@ void Executor::executePersistentMemoryFence(ExecutionState &state) {
   }
 }
 
-
-bool Executor::getPersistenceErrors(ExecutionState &state,
-                                    const MemoryObject *mo,
-                                    std::unordered_set<std::string> &errors) {
-
-  const ObjectState *os = state.addressSpace.findObject(mo);
-  assert(os);
-  const PersistentState *ps = dyn_cast<PersistentState>(os);
-  assert(ps);
-
+std::unordered_set<uint64_t> 
+Executor::markPersistenceErrors(ExecutionState &state, 
+                                const MemoryObject *mo,
+                                const PersistentState *ps) {
   // Get a symbolic offset into the object and constrain it to be within
   // the object's bounds.
   auto anyOffset = ps->getAnyOffsetExpr();
@@ -4134,13 +4185,30 @@ bool Executor::getPersistenceErrors(ExecutionState &state,
   state.constraints.removeConstraint(inBoundsConstraint);
 
   if (!isPersisted) {
-    auto rootCauses = ps->markNonPersistedWritesAsBugs(state);
-    for (auto id : rootCauses) {
-      errors.insert(rootCauseMgr->getRootCauseString(id));
-    }
+    return ps->markNonPersistedWritesAsBugs(state);
   }
 
-  return !isPersisted;
+  return std::unordered_set<uint64_t>();
+}
+
+bool Executor::getPersistenceErrors(ExecutionState &state,
+                                    const MemoryObject *mo,
+                                    std::unordered_set<std::string> &errors) {
+
+  const ObjectState *os = state.addressSpace.findObject(mo);
+  assert(os);
+  const PersistentState *ps = dyn_cast<PersistentState>(os);
+  assert(ps);
+
+  auto rootCauses = markPersistenceErrors(state, mo, ps);
+
+  if (rootCauses.empty()) return false;
+
+  for (auto id : rootCauses) {
+    errors.insert(rootCauseMgr->getRootCauseString(id));
+  }
+
+  return true;
 }
 
 bool Executor::getAllPersistenceErrors(ExecutionState &state,

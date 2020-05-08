@@ -31,7 +31,7 @@ main(int argc, char *argv[])
 	nontemporal_store(&pmemaddr[0], &number);
 	// no fence
 
-	klee_pmem_check_persisted(pmemaddr, BUF_LEN);
+	// klee_pmem_check_persisted(pmemaddr, BUF_LEN);
 
 	return 0;
 }

@@ -306,12 +306,23 @@ void _block_init(block_buffer_t *buff, size_t max_size) {
   buff->size = 0;
 }
 
-void _block_init_pmem(block_buffer_t *buff, size_t max_size, const char *bname) {
+void _block_init_pmem(block_buffer_t *buff, size_t max_size, const char *bname, bool init_zero) {
   if (max_size % getpagesize()) {
     klee_error("Adjusting size in _block_init_pmem to be page size aligned!");
   }
   memset(buff, 0, sizeof(block_buffer_t));
-  buff->contents = (char*)klee_pmem_alloc_pmem(max_size, bname);
+  buff->contents = (char*)klee_pmem_alloc_pmem(max_size, bname, init_zero, NULL);
+  buff->max_size = max_size;
+  buff->size = 0;
+  buff->page_refs = calloc(max_size / getpagesize(), sizeof(*buff->page_refs));
+}
+
+void _block_init_pmem_from_file(block_buffer_t *buff, size_t max_size, const char *bname, const char *fname) {
+  if (max_size % getpagesize()) {
+    klee_error("Adjusting size in _block_init_pmem to be page size aligned!");
+  }
+  memset(buff, 0, sizeof(block_buffer_t));
+  buff->contents = (char*)klee_pmem_alloc_pmem(max_size, bname, false, fname);
   buff->max_size = max_size;
   buff->size = 0;
   buff->page_refs = calloc(max_size / getpagesize(), sizeof(*buff->page_refs));

@@ -34,6 +34,7 @@
 #define BUFFERS_H_
 
 #include <unistd.h>
+#include <stdbool.h>
 #include <sys/uio.h>
 
 #include "common.h"
@@ -136,7 +137,8 @@ typedef struct {
 
 
 void _block_init(block_buffer_t *buff, size_t max_size);
-void _block_init_pmem(block_buffer_t *buff, size_t max_size, const char *bname);
+void _block_init_pmem(block_buffer_t *buff, size_t max_size, const char *bname, bool init_zero);
+void _block_init_pmem_from_file(block_buffer_t *buff, size_t max_size, const char *bname, const char *fname);
 void _block_finalize(block_buffer_t *buff);
 
 ssize_t _block_read(block_buffer_t *buff, char *dest, size_t count, size_t offset);

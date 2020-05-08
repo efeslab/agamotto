@@ -215,6 +215,8 @@ void RootCauseManager::markAsBug(uint64_t id) {
     ++totalOccurences;
     buggyIds.insert(i);
     assert(totalOccurences > 0 && "overflow!");
+    // We use this for the number of rows later
+    largestStack = std::max(largestStack, idToRoot[i]->rootCause.stack.size());
   }
 }
 
@@ -240,22 +242,69 @@ void RootCauseManager::clear() {
   }
 }
 
-std::string RootCauseManager::str(void) const {
+void RootCauseManager::dumpText(llvm::raw_ostream &out) const {
   uint64_t bugNo = 1;
 
-  std::string infoStr;
-  llvm::raw_string_ostream info(infoStr);
-
-  info << getSummary();
+  out << getSummary();
 
   for (const auto &id : buggyIds) {
-    info << "\n(" << bugNo << ") ID #" << id; 
-    info << " with " << idToRoot.at(id)->occurences << " occurences:\n";
-    info << idToRoot.at(id)->rootCause.fullString(*this);
+    out << "\n(" << bugNo << ") ID #" << id; 
+    out << " with " << idToRoot.at(id)->occurences << " occurences:\n";
+    out << idToRoot.at(id)->rootCause.fullString(*this);
     bugNo++;
   }
 
-  return info.str();
+  out.flush();
+}
+
+void RootCauseManager::dumpCSV(llvm::raw_ostream &out) const {
+  // Create header
+  out << "ID,Type,Occurences";
+  for (size_t stackframeNum = 0; stackframeNum < largestStack; ++stackframeNum) {
+    // This is the full description as a convenience
+    out << ",StackFrame" << stackframeNum << ",";
+    // This gives us the individual parts.
+    out << "StackFrame" << stackframeNum << "_Function,";
+    // -- These will be NULL for main
+    out << "StackFrame" << stackframeNum << "_File,";
+    out << "StackFrame" << stackframeNum << "_Line";
+  }
+  out << "\n";
+
+  // Now, the data entries
+  for (const auto &id : buggyIds) {
+    RootCauseLocation &rcl = idToRoot.at(id)->rootCause;
+    out << id << ","; // ID
+    out << rcl.reasonString() << ","; // Type
+    out << idToRoot.at(id)->occurences; // Occurences
+
+    const KInstruction *target = rcl.inst;
+    assert(largestStack >= rcl.stack.size() && "bad tracking!");
+    for (auto it = rcl.stack.rbegin(); it != rcl.stack.rend(); ++it) {
+      RootCauseLocation::RootCauseStackFrame &sf = *it;
+      Function *f = sf.kf->function;
+      const InstructionInfo &ii = *target->info;
+
+      out << ",";
+
+      // The "full" description
+      out << f->getName().str();
+      if (ii.file != "") {
+        out << " at " << ii.file << ":" << ii.line;
+      }
+      out << ",";
+
+      out << f->getName().str() << ","; // Function
+      out << ii.file << ",";
+      out << ii.line; // Next iteration writes the comma
+
+      target = sf.caller;
+    }    
+    
+    out << "\n"; // Entry complete
+  }
+
+  out.flush();
 }
 
 std::string RootCauseManager::getSummary(void) const {

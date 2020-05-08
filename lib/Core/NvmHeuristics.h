@@ -177,7 +177,7 @@ namespace klee {
        * We just return an instance with the global variables and the 
        * propagated state due to the function call arguments.
        */
-      NvmValueDesc::Shared doCall(llvm::CallInst *ci, llvm::Function *f) const;
+      NvmValueDesc::Shared doCall(llvm::CallBase *cb, llvm::Function *f) const;
 
       /** 
        * Set up the value state when doing a return.
@@ -202,8 +202,8 @@ namespace klee {
        */
       NvmValueDesc::Shared resolveFunctionPointer(llvm::Function *f);
 
-      bool isNvmAllocCall(const llvm::CallInst *ci) const {
-        return !!nvm_allocs_.count(ci);
+      bool isNvmAllocCall(const llvm::CallBase *cb) const {
+        return !!nvm_allocs_.count(cb);
       }
 
       /**
@@ -324,7 +324,7 @@ namespace klee {
       /**
        * CallInsts have succeeding ContextDesc, which is nice to pre-compute
        */
-      std::unordered_map<llvm::CallInst*, NvmContextDesc::Shared> contexts;
+      std::unordered_map<llvm::CallBase*, NvmContextDesc::Shared> contexts;
 
       /* METHODS */
 
@@ -339,8 +339,8 @@ namespace klee {
       /**
        * Returns the priority of the subcontext.
        */
-      uint64_t constructCalledContext(llvm::CallInst *ci, llvm::Function *f);
-      uint64_t constructCalledContext(llvm::CallInst *ci);
+      uint64_t constructCalledContext(llvm::CallBase *cb, llvm::Function *f);
+      uint64_t constructCalledContext(llvm::CallBase *cb);
 
       /**
        * Core instructions are instructions that impact NVM
@@ -385,7 +385,7 @@ namespace klee {
        */
       NvmContextDesc::Shared tryUpdateContext(llvm::Value *v, bool isNvm);
 
-      NvmContextDesc::Shared tryResolveFnPtr(llvm::CallInst *ci, 
+      NvmContextDesc::Shared tryResolveFnPtr(llvm::CallBase *cb, 
                                              llvm::Function *f);
 
       /**
@@ -497,7 +497,7 @@ namespace klee {
 
       bool isNvmAllocSite(llvm::Instruction *i) const {
         // return nvmSites_.count(i);
-        return valueState_->isNvmAllocCall(dyn_cast<llvm::CallInst>(i));
+        return valueState_->isNvmAllocCall(dyn_cast<llvm::CallBase>(i));
       }
 
       /**
@@ -586,7 +586,7 @@ namespace klee {
     protected:
       
       std::list<NvmContextDesc::Shared> contextStack;
-      std::list<llvm::CallInst*> callInstStack; 
+      std::list<llvm::CallBase*> callInstStack; 
       NvmContextDesc::Shared contextDesc;
       KInstruction *curr;
 

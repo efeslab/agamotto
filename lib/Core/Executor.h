@@ -324,6 +324,10 @@ private:
                    KInstruction *ki,
                    llvm::Function *f,
                    std::vector< ref<Expr> > &arguments);
+
+  /* emulate certain inline assembly instructions */
+  void executeCpuid(ExecutionState &state, KInstruction *ki);
+  void executeRdtsc(ExecutionState &state, KInstruction *ki, llvm::InlineAsm *ia);
                    
   // do address resolution / object binding / out of bounds checking
   // and perform the operation
@@ -356,6 +360,10 @@ private:
   /// Check persistence of all memory objects. Return ALL errors.
   bool getAllPersistenceErrors(ExecutionState &state, std::unordered_set<std::string> &errors);
   bool getPersistenceErrors(ExecutionState &state, const MemoryObject *mo, std::unordered_set<std::string> &errors);
+  
+  std::unordered_set<uint64_t> markPersistenceErrors(ExecutionState &state, 
+                                                     const MemoryObject *mo, 
+                                                     const PersistentState *ps);
 
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included

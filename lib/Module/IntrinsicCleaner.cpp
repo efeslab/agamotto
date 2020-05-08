@@ -10,6 +10,8 @@
 #include "Passes.h"
 
 #include "klee/Config/Version.h"
+#include "klee/Internal/Support/ErrorHandling.h"
+
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/IR/Constants.h"
@@ -73,9 +75,16 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b, Module &M) {
       case Intrinsic::x86_sse_sfence:
         break;
 
+        // Probably safely ignorable.
+      case Intrinsic::x86_sse2_pause:
+        klee_warning_once(0, "Ignoring intrinsic function %s",
+                          ii->getName().str().c_str());
+        // intentional fallthrough
+
         // Safely ignorable.
       case Intrinsic::prefetch:
         ii->eraseFromParent();
+        dirty = true;
         break;
 
         // Lower vacopy so that object resolution etc is handled by
