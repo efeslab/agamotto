@@ -791,6 +791,7 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
 
   // Now update root cause.
   ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, PM_Unpersisted, prevWrites);
+  // ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, PM_Unpersisted);
   rootCauseWrites.extend(cacheLine, rootCauseExpr);
   pendingRootCauseWrites.extend(cacheLine, rootCauseExpr);
 }
@@ -807,7 +808,7 @@ void PersistentState::persistCacheLineAtOffset(const ExecutionState &state,
   ref<Expr> cacheLine = getCacheLine(offset);
   pendingCacheLineUpdates.extend(cacheLine, getPersistedExpr());
 
-  // llvm::errs() << "persist: " << *offset << "\n";
+  // llvm::errs() << getObject()->address << ": persist: " << *offset << "\n";
   // llvm::errs() << "\t" << getLocationInfo(state, cacheLine, "test") << "\n";
 
   ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, PM_UnnecessaryFlush);
@@ -893,12 +894,22 @@ PersistentState::getRootCauses(ExecutionState &state,
     return causes;
   }
 
-  auto idx = getAnyOffsetExpr();
-  auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
+  // auto idx = getAnyOffsetExpr();
+  // auto inBoundsConstraint = getObject()->getBoundsCheckOffset(idx);
 
-  state.constraints.addConstraint(inBoundsConstraint);
-  causes = getRootCause(state, ul, getCacheLine(idx));
-  state.constraints.removeConstraint(inBoundsConstraint);
+  // state.constraints.addConstraint(inBoundsConstraint);
+  // causes = getRootCause(state, ul, getCacheLine(idx));
+  // state.constraints.removeConstraint(inBoundsConstraint);
+  for (uint64_t cl = 0; cl < numCacheLines(); ++cl) {
+    bool res;
+    assert(solver->mustBeTrue(state, isCacheLinePersisted(cl), res));
+    if (res) continue;
+    
+    for (auto id : getRootCause(state, rootCauseWrites, cl)) {
+      assert(id > 0);
+      causes.insert(id);
+    }
+  }
   
   return causes;
 }
@@ -941,51 +952,34 @@ PersistentState::getRootCause(const ExecutionState &state,
   
   std::unordered_set<uint64_t> possibleCauses;
 
-  // auto *CE = dyn_cast<ConstantExpr>(result);
-  // assert(CE);
-  // if (CE->getZExtValue() > 0) {
-  //   llvm::errs() << "RC: " << CE->getZExtValue() << " FROM CL " << *cacheLine << "\n";
-  //   possibleCauses.insert(CE->getZExtValue());
-  // }
+  std::pair<ref<Expr>, ref<Expr> > range = solver->getRange(state, result);
 
-  for (uint64_t cl = 0; cl < numCacheLines(); ++cl) {
-    // Check if the incoming cache line could be this cache line
-    auto clExpr = ConstantExpr::create(cl, Expr::Int32);
-    auto clEq = EqExpr::create(clExpr, cacheLine);
-    bool couldntBe;
-    assert(solver->mustBeFalse(state, clEq, couldntBe));
-    if (couldntBe) continue;
+  ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
+  ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);  
+  assert(!lo.isNull() && !hi.isNull() && "FIXME: unhandled solver failure");
 
-    ref<Expr> clVal = ReadExpr::create(ul, clExpr);
-    std::pair<ref<Expr>, ref<Expr> > range = solver->getRange(state, clVal);
+  // This is a little jank, but 0 represents no root cause.
+  // If both are 0, there are no root causes.
+  // If the lower bound is 0, that means there's a version of life where this
+  // has no root cause. Skip it.
+  uint64_t loVal = lo->getZExtValue();
+  uint64_t hiVal = hi->getZExtValue();
+  if (loVal == 0 && hiVal == 0) return possibleCauses;
+  if (loVal == 0) loVal++;
+  assert(loVal <= hiVal);
 
-    ref<ConstantExpr> lo = dyn_cast<ConstantExpr>(range.first);
-    ref<ConstantExpr> hi = dyn_cast<ConstantExpr>(range.second);  
-    assert(!lo.isNull() && !hi.isNull() && "FIXME: unhandled solver failure");
-
-    // This is a little jank, but 0 represents no root cause.
-    // If both are 0, there are no root causes.
-    // If the lower bound is 0, that means there's a version of life where this
-    // has no root cause. Skip it.
-    uint64_t loVal = lo->getZExtValue();
-    uint64_t hiVal = hi->getZExtValue();
-    if (loVal == 0 && hiVal == 0) continue;
-    if (loVal == 0) loVal++;
-    assert(loVal <= hiVal);
-
-    if (loVal == hiVal) {
-      uint64_t id = loVal;
+  if (loVal == hiVal) {
+    uint64_t id = loVal;
+    possibleCauses.insert(id);
+  } else {
+    for (uint64_t id = loVal; id <= hiVal; ++id) {
+      ref<Expr> eqId = EqExpr::create(ConstantExpr::create(id, rootCauseWidth),
+                                      result);
+      bool mayBeCause = false;
+      bool success = solver->mayBeTrue(state, eqId, mayBeCause);
+      assert(success);
+      if (!mayBeCause) continue;
       possibleCauses.insert(id);
-    } else {
-      for (uint64_t id = loVal; id <= hiVal; ++id) {
-        ref<Expr> eqId = EqExpr::create(ConstantExpr::create(id, rootCauseWidth),
-                                        clVal);
-        bool mayBeCause = false;
-        bool success = solver->mayBeTrue(state, eqId, mayBeCause);
-        assert(success);
-        if (!mayBeCause) continue;
-        possibleCauses.insert(id);
-      }
     }
   }
 

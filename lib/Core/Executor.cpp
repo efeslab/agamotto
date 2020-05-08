@@ -3885,7 +3885,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           wos->write(state, offset, value);
           if (PersistentState *ps = dyn_cast<PersistentState>(wos)) {
             if (isNontemporal) {
-              // llvm::errs() << "nontemporal store!\n";
+              // llvm::errs() << "nontemporal store! " << mo->address << ": " << *offset << "\n";
 
               // Nontemporal writes don't dirty the cache, but they must
               // still cause an error until a fence happens.
@@ -4071,14 +4071,17 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
 
   // Warn if already flushed, otherwise process normally.
   if (isAlreadyPersisted) {
-    /* klee_warning("Unnecessary Flush"); */
+    // klee_warning("Unnecessary Flush");
+    // errs() << mo->address << ": " << *offset << "\n";
     // avoid masking later bugs; emit error, but continue
     std::unordered_set<std::string> errStrs;
     errStrs.insert(rootCauseMgr->getRootCauseString(ps->markFlushAsBug(state, offset)));
 
     emitPmemError(state, errStrs);
   } else {
-    /* klee_warning("Good Flush"); */
+    // klee_warning("Good Flush");
+    // errs() << mo->address << ": " << *offset << "\n";
+    // state.dumpStack();
     ps->persistCacheLineAtOffset(state, offset);
   }
 }
