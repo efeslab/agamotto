@@ -715,7 +715,7 @@ PersistentState::PersistentState(const PersistentState &ps)
     idxUnbounded(ps.idxUnbounded),
 
     rootCauseWrites(ps.rootCauseWrites),
-    pendingRootCauseWrites(ps.rootCauseWrites),
+    pendingRootCauseWrites(ps.pendingRootCauseWrites),
 
     rootCauseFlushes(ps.rootCauseFlushes),
     pendingRootCauseFlushes(ps.pendingRootCauseFlushes),
