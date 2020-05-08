@@ -20,6 +20,7 @@ klee_add_component(kleeCore
   CallPathManager.cpp
   Context.cpp
   CoreStats.cpp
+  CustomCheckerHandler.cpp
   ExecutionState.cpp
   Executor.cpp
   ExecutorUtil.cpp

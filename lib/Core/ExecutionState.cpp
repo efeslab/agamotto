@@ -120,6 +120,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     coveredLines(state.coveredLines),
     ptreeNode(state.ptreeNode),
     symbolics(state.symbolics),
+    persistentObjects(state.persistentObjects),
     arrayNames(state.arrayNames),
     openMergeStack(state.openMergeStack),
     steppedInstructions(state.steppedInstructions),
@@ -342,7 +343,6 @@ void ExecutionState::popFrame(Thread &t) {
       if (rootCauses.size()) {
         klee_warning("ERROR: alloca pmem error");
       }
-
       persistentObjects.erase(mo);
     }
     addressSpace.unbindObject(mo);

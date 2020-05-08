@@ -4,3 +4,6 @@
 [submodule "deps/andersen-pa"]
 	path = deps/andersen-pa
 	url = git@github.com:efeslab/andersen.git
+[submodule "deps/memcached-pmem-patched"]
+	path = deps/memcached-pmem-patched
+	url = git@github.com:efeslab/memcached-pmem.git

@@ -1350,7 +1350,7 @@ void SpecialFunctionHandler::handleIsPersisted(ExecutionState &state,
 
     bool hasErrs = executor.getPersistenceErrors(state, mo, errors);
     emitErrs = emitErrs || hasErrs;
-    ps->flushAll();
+    // ps->flushAll();
   }
 
   
