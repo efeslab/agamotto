@@ -28,7 +28,7 @@ namespace klee {
   class Expr;
   class ExecutionState;
   struct KInstruction;
-  class ObjectPair;
+  typedef std::pair<const MemoryObject*, const ObjectState*> ObjectPair;
   template<typename T> class ref;
 
   class CustomChecker {
