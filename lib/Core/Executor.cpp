@@ -4181,12 +4181,26 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
 
 void Executor::executePersistentMemoryFence(ExecutionState &state) {
   // llvm::errs() << "Fence\n";
+  bool fenceNecessary = false;
   for (const MemoryObject *mo : state.persistentObjects) {
     const ObjectState *os = state.addressSpace.findObject(mo);
     assert(os);
     ObjectState *wos = state.addressSpace.getWriteable(mo, os);
     PersistentState *ps = dyn_cast<PersistentState>(wos);
-    ps->commitPendingPersists(state);
+    bool commitNecessary = ps->commitPendingPersists(state);
+    // Only one needs to be true to make the commit necessary.
+    // I like doing this as a separate statement to avoid short circuit issues.
+    fenceNecessary = commitNecessary || fenceNecessary;
+  }
+
+  if (!fenceNecessary) {
+    auto id = rootCauseMgr->getRootCauseLocationID(state, nullptr, 
+                                                   state.prevPC(), 
+                                                   PM_UnnecessaryFence);
+    rootCauseMgr->markAsBug(id);
+    std::unordered_set<std::string> errs;
+    errs.insert(rootCauseMgr->getRootCauseString(id));
+    emitPmemError(state, errs);
   }
 }
 

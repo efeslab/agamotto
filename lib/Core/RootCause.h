@@ -39,7 +39,8 @@ namespace klee {
   enum RootCauseReason {
     PM_Unpersisted,
     PM_UnnecessaryFlush,
-    PM_FlushOnUnmodified
+    PM_FlushOnUnmodified,
+    PM_UnnecessaryFence
   };
 
   struct RootCauseLocation {

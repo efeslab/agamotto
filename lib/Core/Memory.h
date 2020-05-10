@@ -431,7 +431,11 @@ class PersistentState : public ObjectState {
     void persistCacheLineAtOffset(const ExecutionState &state, unsigned offset);
     void persistCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset);
 
-    void commitPendingPersists(const ExecutionState &state);
+    /**
+     * Returns true if there were any pending persists to commit. Otherwise,
+     * returns false.
+     */
+    bool commitPendingPersists(const ExecutionState &state);
     
     /**
      * Get an expression which will evaluate to 1 if all writes to the given

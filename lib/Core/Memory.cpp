@@ -818,9 +818,11 @@ void PersistentState::persistCacheLineAtOffset(const ExecutionState &state,
   pendingRootCauseWrites.extend(cacheLine, getNullptr());
 }
 
-void PersistentState::commitPendingPersists(const ExecutionState &state) {
+bool PersistentState::commitPendingPersists(const ExecutionState &state) {
   /* llvm::errs() << getObject()->name << ": "; */
   /* llvm::errs() << "commitPendingPersists\n"; */
+
+  size_t prevSz = cacheLineUpdates.getSize();
 
   // Apply the writes and flushes accumulated during this epoch.
   // The UpdateList will clean up orphaned UpdateNodes from cacheLineUpdates.
@@ -828,6 +830,8 @@ void PersistentState::commitPendingPersists(const ExecutionState &state) {
   rootCauseWrites = pendingRootCauseWrites;
   // clear
   pendingRootCauseFlushes = UpdateList(pendingRootCauseFlushes.root, nullptr);
+
+  return prevSz != cacheLineUpdates.getSize();
 }
 
 ref<Expr> PersistentState::getIsOffsetPersistedExpr(ref<Expr> offset,

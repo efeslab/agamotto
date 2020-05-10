@@ -28,6 +28,7 @@ namespace klee {
   class Expr;
   class ExecutionState;
   struct KInstruction;
+  class ObjectPair;
   template<typename T> class ref;
 
   class CustomChecker {
