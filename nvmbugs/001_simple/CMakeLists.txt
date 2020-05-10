@@ -40,6 +40,7 @@ klee_add_test_object(TARGET 001_DoubleFlushErr SOURCES
 
 klee_add_test_object(TARGET 001_DoubleFlushNoErr SOURCES
   double_flush_no_err.c
+  EXTRA_OPTIONS -mclwb
 )
 
 klee_add_test_object(TARGET 001_CleanFlushErr SOURCES
@@ -63,3 +64,6 @@ klee_add_test_object(TARGET 001_SimpleLoop SOURCES
 
 klee_add_test_object(TARGET 001_DoublePmemPersist 
                      SOURCES double_pmem_persist.c)
+
+klee_add_test_object(TARGET 001_NoFlushNoErr
+                     SOURCES no_flush_no_err.c)

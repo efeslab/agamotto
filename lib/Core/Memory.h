@@ -390,6 +390,9 @@ class PersistentState : public ObjectState {
     // due to copies, but we can make unique IDs
     std::shared_ptr<RootCauseManager> rootCauseMgr;
 
+    // This should function like a stack
+    std::list<ref<Expr>> ignoreBytes;
+
     /// DO NOT USE. Use clone() instead.
     PersistentState(const PersistentState &ps);
 
@@ -423,6 +426,17 @@ class PersistentState : public ObjectState {
     void write8(const ExecutionState &state, 
                 ref<Expr> offset, 
                 ref<Expr> value) override;
+    
+    /**
+     * write8's at this offset will not dirty the cacheline
+     */
+    void addIgnoreByte(ref<Expr> offset);
+    void addIgnoreOffset(ref<Expr> offset, uint64_t width);
+    /**
+     * Removes the offset from the ignore list.
+     */
+    void removeIgnoreByte(const ExecutionState &state, ref<Expr> offset);
+    void removeIgnoreOffset(const ExecutionState &state, ref<Expr> offset, uint64_t width);
 
     void dirtyCacheLineAtOffset(const ExecutionState &state, unsigned offset);
     void dirtyCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset);
