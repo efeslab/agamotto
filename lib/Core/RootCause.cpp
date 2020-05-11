@@ -36,7 +36,9 @@ RootCauseLocation::RootCauseLocation(const ExecutionState &state,
   for (const klee::StackFrame &sf : state.stack()) {
     stack.emplace_back(sf.caller, sf.kf);
   }
+}
 
+void RootCauseLocation::installExampleStackTrace(const ExecutionState &state) {
   std::string tmp;
   llvm::raw_string_ostream ss(tmp);
   state.dumpStack(ss);
@@ -79,6 +81,7 @@ std::string RootCauseLocation::str(void) const {
     info << " (no allocation info)";
   }
   
+  assert(!stackStr.empty() && "forgot to install string!");
   info << "\nStack: \n" << stackStr;
 
   return info.str();
@@ -142,8 +145,8 @@ bool klee::operator==(const RootCauseLocation &lhs,
   return lhs.allocSite == rhs.allocSite &&
          lhs.inst == rhs.inst &&
          lhs.stack == rhs.stack &&
-         lhs.reason == rhs.reason &&
-         lhs.maskedRoots == rhs.maskedRoots;
+         lhs.reason == rhs.reason;
+        //  && lhs.maskedRoots == rhs.maskedRoots;
 }
 
 /***/
@@ -163,6 +166,7 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
 
   rootToId[rcl] = id;
   idToRoot[id] = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
+  idToRoot[id]->rootCause.installExampleStackTrace(state);
 
   return id;
 }
@@ -210,6 +214,7 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
 
   rootToId[rcl] = newId;
   idToRoot[newId] = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
+  idToRoot[newId]->rootCause.installExampleStackTrace(state);
 
   return newId;
 }
