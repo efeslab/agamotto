@@ -22,17 +22,18 @@ int main() {
   _mm_clflush(&pmemaddr[0]);
 
   // On different cache lines, need to flush both
-  pmemaddr[1000] = 3;
-  pmemaddr[3000] = 4;
-  _mm_clflush(&pmemaddr[1000]);
-  _mm_clflush(&pmemaddr[3000]);
+  pmemaddr[BUF_LEN - (2 * 64)] = 3;
+  pmemaddr[BUF_LEN - 64] = 4;
+  _mm_clwb(&pmemaddr[BUF_LEN - (2 * 64)]);
+  _mm_clwb(&pmemaddr[BUF_LEN - 1]);
 
   _mm_sfence();
+  _mm_sfence();
 
-  klee_pmem_check_persisted(&pmemaddr[0], sizeof(pmemaddr[0]));
-  klee_pmem_check_persisted(&pmemaddr[1], sizeof(pmemaddr[1]));
-  klee_pmem_check_persisted(&pmemaddr[1000], sizeof(pmemaddr[1000]));
-  klee_pmem_check_persisted(&pmemaddr[3000], sizeof(pmemaddr[3000]));
+  // klee_pmem_check_persisted(&pmemaddr[0], sizeof(pmemaddr[0]));
+  // klee_pmem_check_persisted(&pmemaddr[1], sizeof(pmemaddr[1]));
+  // klee_pmem_check_persisted(&pmemaddr[1000], sizeof(pmemaddr[1000]));
+  // klee_pmem_check_persisted(&pmemaddr[3000], sizeof(pmemaddr[3000]));
   
   return 0;
   

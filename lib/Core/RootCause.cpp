@@ -15,6 +15,7 @@
 #include "RootCause.h"
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KInstruction.h"
+#include "CoreStats.h"
 
 using namespace klee;
 using namespace llvm;
@@ -35,7 +36,9 @@ RootCauseLocation::RootCauseLocation(const ExecutionState &state,
   for (const klee::StackFrame &sf : state.stack()) {
     stack.emplace_back(sf.caller, sf.kf);
   }
+}
 
+void RootCauseLocation::installExampleStackTrace(const ExecutionState &state) {
   std::string tmp;
   llvm::raw_string_ostream ss(tmp);
   state.dumpStack(ss);
@@ -44,6 +47,10 @@ RootCauseLocation::RootCauseLocation(const ExecutionState &state,
 
 void RootCauseLocation::addMaskedError(uint64_t id) {
   maskedRoots.insert(id);
+}
+
+void RootCauseLocation::addMaskingError(uint64_t id) {
+  maskingRoots.insert(id);
 }
 
 std::string RootCauseLocation::str(void) const {
@@ -74,6 +81,7 @@ std::string RootCauseLocation::str(void) const {
     info << " (no allocation info)";
   }
   
+  assert(!stackStr.empty() && "forgot to install string!");
   info << "\nStack: \n" << stackStr;
 
   return info.str();
@@ -88,7 +96,7 @@ RootCauseLocation::fullString(const RootCauseManager &mgr) const {
   info << str() << "\n";
 
   if (maskedRoots.size()) {
-    info << "Possible Masked:\n";
+    info << "May be masking:\n";
 
     for (auto id : maskedRoots) {
       info << "\tID #" << id << "\n";
@@ -99,9 +107,17 @@ RootCauseLocation::fullString(const RootCauseManager &mgr) const {
       }
     }
   } else {
-    info << "<no masked bugs>\n";
+    info << "<not masking anything>\n";
   }
   
+  if (maskingRoots.size()) {
+    info << "May be masked by:\n";
+    for (auto id: maskingRoots) {
+      info << "\tID #" << id << "\n";
+    }
+  } else {
+    info << "<not masked by anything>\n";
+  }
 
   return info.str();
 }
@@ -114,6 +130,8 @@ const char *RootCauseLocation::reasonString(void) const {
       return "flush (unnecessary)";
     case PM_FlushOnUnmodified:
       return "flush (never modified)";
+    case PM_UnnecessaryFence:
+      return "fence (unnecessary)";
     default:
       klee_error("unsupported!");
       break;
@@ -127,8 +145,8 @@ bool klee::operator==(const RootCauseLocation &lhs,
   return lhs.allocSite == rhs.allocSite &&
          lhs.inst == rhs.inst &&
          lhs.stack == rhs.stack &&
-         lhs.reason == rhs.reason &&
-         lhs.maskedRoots == rhs.maskedRoots;
+         lhs.reason == rhs.reason;
+        //  && lhs.maskedRoots == rhs.maskedRoots;
 }
 
 /***/
@@ -148,6 +166,7 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
 
   rootToId[rcl] = id;
   idToRoot[id] = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
+  idToRoot[id]->rootCause.installExampleStackTrace(state);
 
   return id;
 }
@@ -169,16 +188,21 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
    * we shouldn't have to do anything recursively here.
    */
 
+  uint64_t newId = nextId++;
+  assert(nextId > 0 && "ID overflow!");
+
   for (auto id : ids) {
     if (!idToRoot.count(id)) {
       llvm::errs() << id << "\n" << getSummary();
     }
     assert(idToRoot.count(id) && "we messed something up with our id tracking");
     rcl.addMaskedError(id);
+    idToRoot.at(id)->rootCause.addMaskingError(newId);
 
     for (auto subId : idToRoot.at(id)->rootCause.getMaskedSet()) {
       assert(idToRoot.count(subId) && "we messed something up with our id tracking");
       rcl.addMaskedError(subId);
+      idToRoot.at(subId)->rootCause.addMaskingError(newId);
     }
   }
 
@@ -186,13 +210,13 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
     return rootToId.at(rcl);
   }
 
-  uint64_t id = nextId++;
-  assert(nextId > 0 && "ID overflow!");
+  
 
-  rootToId[rcl] = id;
-  idToRoot[id] = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
+  rootToId[rcl] = newId;
+  idToRoot[newId] = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
+  idToRoot[newId]->rootCause.installExampleStackTrace(state);
 
-  return id;
+  return newId;
 }
 
 void RootCauseManager::markAsBug(uint64_t id) {
@@ -211,6 +235,21 @@ void RootCauseManager::markAsBug(uint64_t id) {
    */
 
   for (auto i : allIds) {
+    stats::nvmBugsTotalOccurences++;
+    if (idToRoot[i]->rootCause.getReason() == PM_Unpersisted) {
+      stats::nvmBugsCrtOccurences++;
+      if (!idToRoot[i]->occurences) {
+        stats::nvmBugsTotalUniq++;
+        stats::nvmBugsCrtUniq++;
+      }
+    } else {
+      stats::nvmBugsPerfOccurences++;
+      if (!idToRoot[i]->occurences) {
+        stats::nvmBugsTotalUniq++;
+        stats::nvmBugsPerfUniq++;
+      }
+    }
+
     ++idToRoot[i]->occurences;
     ++totalOccurences;
     buggyIds.insert(i);
@@ -221,6 +260,7 @@ void RootCauseManager::markAsBug(uint64_t id) {
 }
 
 std::string RootCauseManager::getRootCauseString(uint64_t id) const {
+  assert(id > 0 && "we don't do <= 0");
   assert(idToRoot.count(id) && "unknown ID!!!");
   return idToRoot.at(id)->rootCause.str();
 }
@@ -311,8 +351,8 @@ std::string RootCauseManager::getSummary(void) const {
   std::string infoStr;
   llvm::raw_string_ostream info(infoStr);
 
-  size_t nUnpersisted = 0, nExtra = 0, nClean = 0;
-  size_t nUnpersistedOc = 0, nExtraOc = 0, nCleanOc = 0;
+  size_t nUnpersisted = 0, nExtra = 0, nClean = 0, nFence = 0;
+  size_t nUnpersistedOc = 0, nExtraOc = 0, nCleanOc = 0, nFenceOc = 0;
   for (const auto &id : buggyIds) {
     switch(idToRoot.at(id)->rootCause.getReason()) {
       case PM_Unpersisted:
@@ -327,6 +367,10 @@ std::string RootCauseManager::getSummary(void) const {
         nClean++;
         nCleanOc += idToRoot.at(id)->occurences;
         break;
+      case PM_UnnecessaryFence:
+        nFence++;
+        nFenceOc += idToRoot.at(id)->occurences;
+        break;
       default:
         klee_error("unsupported!");
         break;
@@ -338,10 +382,12 @@ std::string RootCauseManager::getSummary(void) const {
   info << "\t\tNumber of unpersisted write bugs (correctness): " << nUnpersisted << "\n";
   info << "\t\tNumber of extra flush bugs (performance): " << nExtra << "\n";
   info << "\t\tNumber of flushes to untouched memory (performance): " << nClean << "\n";
+  info << "\t\tNumber of fences with nothing to commit (performance): " << nFence << "\n"; 
   info << "\tOverall bug occurences: " << totalOccurences << "\n";
   info << "\t\tNumber of unpersisted write occurences (correctness): " << nUnpersistedOc << "\n";
   info << "\t\tNumber of extra flush occurences (performance): " << nExtraOc << "\n";
   info << "\t\tNumber of untouched memory flush occurences (performance): " << nCleanOc << "\n";
+  info << "\t\tNumber of occurence of fences with nothing to commit (performance): " << nFenceOc << "\n"; 
 
   return info.str();
 }

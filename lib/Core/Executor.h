@@ -79,7 +79,8 @@ namespace klee {
   template<class T> class ref;
   class RootCauseManager;
 
-
+  /// (iangneal): custom checker support
+  class CustomCheckerHandler;
 
   /// \todo Add a context object to keep track of data only live
   /// during an instruction step. Should contain addedStates,
@@ -102,6 +103,10 @@ class Executor : public Interpreter {
   friend class NvmInstructionDesc;
 
   friend class ExecutionState;
+
+  friend class CustomCheckerHandler;
+  friend class CustomChecker;
+  friend class PmemObjTxAddChecker;
 
 public:
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
@@ -132,6 +137,9 @@ private:
 
   /// @brief (iangneal): Root cause tracking for NVM bugs. Could be extended
   std::shared_ptr<RootCauseManager> rootCauseMgr;
+
+  /// (iangneal): custom checkers
+  std::unique_ptr<CustomCheckerHandler> customCheckerHandler;
 
   ExternalDispatcher *externalDispatcher;
   TimingSolver *solver;

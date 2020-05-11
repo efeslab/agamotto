@@ -384,6 +384,8 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
     }
   }
 
+  posix_debug_msg("%s: setting up POSIX env...\n", __func__);
+
   if (!fid.sym_stdin_len && fid.sym_file_stdin_flag) {
     __emit_error("--sym-file-stdin shouldn't be set along without --sym-stdin");
   }

@@ -47,14 +47,18 @@ namespace stats {
   /// distance to a function return.
   extern Statistic minDistToReturn;
 
-  /// (iangneal): Core NVM stats. We don't want to go through the manager 
-  /// for everything...
+  /// (iangneal): Core NVM time stats.
   extern Statistic nvmHeuristicTime;
   extern Statistic nvmGetSharedTime;
   extern Statistic nvmAndersenTime;
-  extern Statistic nvmStatesKilledEndTrace;
-  extern Statistic nvmStatesKilledIrrelevant;
-  extern Statistic nvmStatesDeferred;
+
+  /// (iangneal): Core NVM bug stats. We do this for graphing purposes.
+  extern Statistic nvmBugsTotalUniq;
+  extern Statistic nvmBugsTotalOccurences;
+  extern Statistic nvmBugsPerfUniq;
+  extern Statistic nvmBugsPerfOccurences;
+  extern Statistic nvmBugsCrtUniq;
+  extern Statistic nvmBugsCrtOccurences;
 }
 }
 

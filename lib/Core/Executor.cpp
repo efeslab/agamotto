@@ -12,6 +12,7 @@
 #include "../Expr/ArrayExprOptimizer.h"
 #include "Context.h"
 #include "CoreStats.h"
+#include "CustomCheckerHandler.h"
 #include "ExternalDispatcher.h"
 #include "ImpliedValue.h"
 #include "Memory.h"
@@ -95,6 +96,9 @@ cl::OptionCategory DebugCat("Debugging options",
 cl::OptionCategory ExtCallsCat("External call policy options",
                                "These options impact external calls.");
 
+cl::OptionCategory CheckerCat("Bug checker options",
+                              "These options impact what kind of checkers run.");
+
 cl::OptionCategory SeedingCat(
     "Seeding options",
     "These options are related to the use of seeds to start exploration.");
@@ -118,7 +122,13 @@ cl::opt<bool>
     DebugScheduling("debug-schedule", cl::init(false),                                                                                                                                                                                                                                                                                                                                   
                     cl::desc("Print debug info related to scheduling, context "  
                               "switch, etc. (default=false)"),                    
-                    cl::cat(DebugCat));      
+                    cl::cat(DebugCat)); 
+
+cl::opt<bool>
+    EnableCustomCheckers("custom-checkers", cl::init(true),
+                         cl::desc("Enable use of custom checkers (e.g., PMDK "
+                                  "logging checkers, etc). (default=true)"),
+                         cl::cat(CheckerCat));
 } // namespace klee
 
 namespace {
@@ -447,6 +457,7 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
                    InterpreterHandler *ih)
     : Interpreter(opts), interpreterHandler(ih), searcher(0),
       rootCauseMgr(new RootCauseManager()),
+      customCheckerHandler(nullptr),
       externalDispatcher(new ExternalDispatcher(ctx)), statsTracker(0),
       pathWriter(0), symPathWriter(0), specialFunctionHandler(0), timers{time::Span(TimerInterval)},
       replayKTest(0), replayPath(0), usingSeeds(0),
@@ -2125,8 +2136,12 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     std::vector< ref<Expr> > arguments;
     arguments.reserve(numArgs);
 
-    for (unsigned j=0; j<numArgs; ++j)
+    for (unsigned j=0; j<numArgs; ++j) {
+      // if (f && f->getName() == "pmemobj_tx_add_common")
+      //   errs() << "Call arg " << *eval(ki, j+1, state).value << "\n";
       arguments.push_back(eval(ki, j+1, state).value);
+    }
+      
 
     if (f) {
       const FunctionType *fType =
@@ -3127,6 +3142,10 @@ void Executor::run(ExecutionState &initialState) {
       stepInstruction(state);
 
       executeInstruction(state, ki);
+      if (EnableCustomCheckers) {
+        assert(customCheckerHandler);
+        customCheckerHandler->handle(state);
+      }
       timers.invoke();
       if (::dumpStates) dumpStates();
       if (::dumpPTree) dumpPTree();
@@ -3191,6 +3210,11 @@ void Executor::run(ExecutionState &initialState) {
       stepInstruction(state);
 
       executeInstruction(state, ki);
+      if (EnableCustomCheckers) {
+        assert(customCheckerHandler);
+        customCheckerHandler->handle(state);
+      }
+
       timers.invoke();
       if (::dumpStates) dumpStates();
       if (::dumpPTree) dumpPTree();
@@ -3861,7 +3885,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           wos->write(state, offset, value);
           if (PersistentState *ps = dyn_cast<PersistentState>(wos)) {
             if (isNontemporal) {
-              // llvm::errs() << "nontemporal store!\n";
+              // llvm::errs() << "nontemporal store! " << mo->address << ": " << *offset << "\n";
 
               // Nontemporal writes don't dirty the cache, but they must
               // still cause an error until a fence happens.
@@ -3987,11 +4011,7 @@ void Executor::executeMarkPersistent(ExecutionState &state,
 
 void Executor::executeMarkPersistent(ExecutionState &state,
                                      const MemoryObject *mo) {
-  // klee_warning("Executor: Marking %p persistent!", (void*)mo->address);
   state.persistentObjects.insert(mo);
-  // for (const MemoryObject* m : state.persistentObjects) {
-  //   klee_warning("MemoryObject %p points to %p", m, (void*)m->address);
-  // }
 
   const ObjectState *os = state.addressSpace.findObject(mo);
   assert(os && "Cannot mark unbound MemoryObject persistent");
@@ -4051,14 +4071,17 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
 
   // Warn if already flushed, otherwise process normally.
   if (isAlreadyPersisted) {
-    /* klee_warning("Unnecessary Flush"); */
+    // klee_warning("Unnecessary Flush");
+    // errs() << mo->address << ": " << *offset << "\n";
     // avoid masking later bugs; emit error, but continue
     std::unordered_set<std::string> errStrs;
     errStrs.insert(rootCauseMgr->getRootCauseString(ps->markFlushAsBug(state, offset)));
 
     emitPmemError(state, errStrs);
   } else {
-    /* klee_warning("Good Flush"); */
+    // klee_warning("Good Flush");
+    // errs() << mo->address << ": " << *offset << "\n";
+    // state.dumpStack();
     ps->persistCacheLineAtOffset(state, offset);
   }
 }
@@ -4158,12 +4181,26 @@ void Executor::executePersistentMemoryFlush(ExecutionState &state,
 
 void Executor::executePersistentMemoryFence(ExecutionState &state) {
   // llvm::errs() << "Fence\n";
+  bool fenceNecessary = false;
   for (const MemoryObject *mo : state.persistentObjects) {
     const ObjectState *os = state.addressSpace.findObject(mo);
     assert(os);
     ObjectState *wos = state.addressSpace.getWriteable(mo, os);
     PersistentState *ps = dyn_cast<PersistentState>(wos);
-    ps->commitPendingPersists(state);
+    bool commitNecessary = ps->commitPendingPersists(state);
+    // Only one needs to be true to make the commit necessary.
+    // I like doing this as a separate statement to avoid short circuit issues.
+    fenceNecessary = commitNecessary || fenceNecessary;
+  }
+
+  if (!fenceNecessary) {
+    auto id = rootCauseMgr->getRootCauseLocationID(state, nullptr, 
+                                                   state.prevPC(), 
+                                                   PM_UnnecessaryFence);
+    rootCauseMgr->markAsBug(id);
+    std::unordered_set<std::string> errs;
+    errs.insert(rootCauseMgr->getRootCauseString(id));
+    emitPmemError(state, errs);
   }
 }
 
@@ -4481,6 +4518,10 @@ void Executor::runFunctionAsMain(Function *f,
   }
 
   initializeGlobals(*state);
+
+  if (EnableCustomCheckers) {
+    customCheckerHandler.reset(new CustomCheckerHandler(*this));
+  }
 
   processTree = std::make_unique<PTree>(state);
   run(*state);
