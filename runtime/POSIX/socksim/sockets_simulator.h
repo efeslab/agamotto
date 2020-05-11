@@ -1,6 +1,6 @@
 #ifndef SOCKETS_SIMULATOR_H_
 #define SOCKETS_SIMULATOR_H_
-#include "sockets.h"
+#include "../sockets.h"
 // This flag denotes if sockets simulator is used during a symbolic replay
 // Configurable in klee_init_env (option "-symbolic-sock-handler")
 extern char useSymbolicHandler;

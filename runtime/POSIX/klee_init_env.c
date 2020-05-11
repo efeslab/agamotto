@@ -14,7 +14,7 @@
 #include "fd.h"
 #include "misc.h"
 #include "sockets.h"
-#include "sockets_simulator.h"
+#include "socksim/sockets_simulator.h"
 #include "symfs.h"
 #include "netlink.h"
 

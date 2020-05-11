@@ -46,3 +46,5 @@ LLVMCC.Flags += $(LLVMCC.ExtraFlags) \
 	-D_DEBUG -D_GNU_SOURCE -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS
 
 LLVMCC.Warnings += -Wall -Wwrite-strings
+
+SRC_DIRS := .
