@@ -634,6 +634,7 @@ int nvms_alloc_range(
         if (cleared + bufsz > len)
             bufsz = len-cleared;
 
+        // (stolerbs): TODO/BUG/PATCH: need to make pwrite ensure full persistence
         int cnt = pwrite(handle->osfd, buf, bufsz, offset + cleared);
         if (cnt < 0)
         {

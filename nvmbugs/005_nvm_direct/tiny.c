@@ -46,5 +46,7 @@ main(int argc, char** argv)
                     attch, vspace, pspace, 0777);
     printf("Driver: detaching region\n");
     nvm_detach_region(desc);
+    printf("Driver: finishing thread\n");
+    nvm_thread_fini();
     printf("Driver: exiting now, success\n");
 }

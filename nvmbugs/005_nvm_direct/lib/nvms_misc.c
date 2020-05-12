@@ -123,7 +123,6 @@ void nvms_flush(
 void nvms_persist()
 {
 #ifdef LIBPMEM_H
-    //printf("pmem_drain being invoked\n");
     pmem_drain();
 #else
     return; // need some ASM here

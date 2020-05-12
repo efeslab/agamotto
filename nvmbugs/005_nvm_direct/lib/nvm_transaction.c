@@ -873,7 +873,7 @@ void nvm_txend()
     // stolerbs: BUG
     tx->state = reserved ? nvm_reserved_state : nvm_idle_state;
     // stolerbs: PATCH
-    nvm_flush(&(tx->state), sizeof(tx->state));
+    nvm_flush1(&tx->state);
     nvm_persist();
     td->persist_tx++;
 
@@ -4657,6 +4657,9 @@ void nvm_create_trans_table(
     for (s = 0; s < TRANS_TABLE_SLOTS; s++)
     {
         tt->transactions[s].slot = s + 1;
+        // (stolerbs): BUG transaction slot is not persisted
+        // (stolerbs): PATCH, persist the transaction table stuff
+        nvm_flush1(&tt->transactions[s].slot);
         tt->transactions[s].state = s <= TRANS_TABLE_SLOTS / 2 ?
                 nvm_idle_state : nvm_reserved_state;
     }
@@ -5314,6 +5317,9 @@ void nvm_recover(nvm_desc desc)
             case nvm_idle_state:
                 /* ensure state is idle */
                 tx->state = nvm_idle_state;
+                // (stolerbs): BUG state isn't flushed but should be
+                // (stolerbs): PATCH, persist the state
+                nvm_flush1(&tx->state);
 
                 /* Cleanup transient data */
                 tx->undo_ops = 0;

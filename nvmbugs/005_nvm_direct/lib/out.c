@@ -48,7 +48,8 @@
 #include "out.h"
 #include "valgrind_internal.h"
 
-static char nvml_src_version[] = "SRCVERSION:oof";
+// (stolerbs) Need to hardcode this since not provided by Eclipse
+static char nvml_src_version[] = "SRCVERSION:1.0";// SRCVERSION;
 
 static const char *Log_prefix;
 static int Log_level;

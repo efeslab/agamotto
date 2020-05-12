@@ -248,20 +248,20 @@ static size_t Movnt_threshold = MOVNT_THRESHOLD;
 static int Has_hw_drain;
 
 // stolerbs: garbage helper function, damn
-static int range_intersects_sus(void *addr, size_t len) {
-  uintptr_t off = (uintptr_t)addr & ~(FLUSH_ALIGN - 1);
-  size_t real_len = len + (FLUSH_ALIGN - len % FLUSH_ALIGN);
-  void *x1 = off, *x2 = off+real_len;
-  extern char* header_name_loc;
-  extern size_t header_name_sz;
-  void *y1 = header_name_loc, *y2 = header_name_loc+header_name_sz;
-  int ret = x1 <= y2 && y1 <= x2;
-  if (ret) {
-    printf("\theader_name_loc: %p to %p\n", header_name_loc, header_name_loc+header_name_sz);
-    printf("\trange tested: %p to %p, aligned from %p to %p \n", off, off+real_len, addr, (char*)addr+len);
-  }
-  return ret;
-}
+/* static int range_intersects_sus(void *addr, size_t len) { */
+/*   uintptr_t off = (uintptr_t)addr & ~(FLUSH_ALIGN - 1); */
+/*   size_t real_len = len + (FLUSH_ALIGN - len % FLUSH_ALIGN); */
+/*   void *x1 = off, *x2 = off+real_len; */
+/*   extern char* header_name_loc; */
+/*   extern size_t header_name_sz; */
+/*   void *y1 = header_name_loc, *y2 = header_name_loc+header_name_sz; */
+/*   int ret = x1 <= y2 && y1 <= x2; */
+/*   if (ret) { */
+/*     printf("\theader_name_loc: %p to %p\n", header_name_loc, header_name_loc+header_name_sz); */
+/*     printf("\trange tested: %p to %p, aligned from %p to %p \n", off, off+real_len, addr, (char*)addr+len); */
+/*   } */
+/*   return ret; */
+/* } */
 
 /*
  * pmem_has_hw_drain -- return whether or not HW drain (PCOMMIT) was found
@@ -382,9 +382,9 @@ flush_clwb(void *addr, size_t len)
 
 	uintptr_t uptr;
 
-  if (range_intersects_sus(addr, len)) {
-    printf("^ from FLUSH_CLWB\n");
-  }
+  /* if (range_intersects_sus(addr, len)) { */
+  /*   printf("^ from FLUSH_CLWB\n"); */
+  /* } */
 	/*
 	 * Loop through cache-line-size (typically 64B) aligned chunks
 	 * covering the given range.

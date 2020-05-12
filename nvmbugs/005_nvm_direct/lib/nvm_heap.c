@@ -77,6 +77,7 @@ static nvm_heap ^nvm_create_baseheap(const char *name, nvm_region ^rg,
         void ^extent, uint8_t ^addr, size_t bytes, uint16_t slot);
 static void nvm_freelist_link@(nvm_heap ^heap, nvm_blk ^nvb);
 static void nvm_freelist_unlink@(nvm_blk ^nvb);
+// (stolerbs): Need to add the static keyword to allow linking with CMake
 static inline void nvm_blk_clr(nvm_blk ^nvb) { nvm_set(nvb, 0, sizeof(nvm_blk)); }
 static void nvm_alloc_init_1(void ^addr, const nvm_type *tp);
 #else
@@ -87,6 +88,7 @@ static nvm_heap *nvm_create_baseheap(const char *name, nvm_region *rg,
         void *extent, uint8_t *addr, size_t bytes, uint16_t slot);
 static void nvm_freelist_link(nvm_heap *heap, nvm_blk *nvb);
 static void nvm_freelist_unlink(nvm_blk *nvb);
+// (stolerbs): Need to add the static keyword to allow linking with CMake
 static inline void nvm_blk_clr(nvm_blk *nvb) { nvm_set(nvb, 0, sizeof(nvm_blk)); }
 static void nvm_alloc_init_1(void *addr, const nvm_type *tp);
 #endif //NVM_EXT
@@ -2439,6 +2441,9 @@ static void nvm_alloc_init_1(void *addr, const nvm_type *tp)
                 if (bits != 0 || fld->count != 1)
                     nvms_assert_fail("type_usid field is wrong");
                 *(nvm_usid*)addr = tp->usid;
+                if (((nvm_usid*)addr)->d1 == 0) {
+                  printf("\tUSID REMAINS 0\n");
+                }
                 nvm_flush1(addr);
             }
             bits += 8 * sizeof(nvm_usid) * fld->count;

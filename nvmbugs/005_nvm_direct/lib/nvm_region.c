@@ -95,10 +95,6 @@ SOFTWARE.
 #include "nvm_heap0.h"
 #include "nvm_locks0.h"
 
-// stolerbs: pure testing bullshit, never do this
-char* header_name_loc = 0;
-size_t header_name_sz = 0;
-
 #ifdef NVM_EXT
 static nvm_desc nvm_map_region(
         const char *pathname,
@@ -583,12 +579,9 @@ nvm_desc nvm_create_region(
     region = nvms_region_addr(handle);
 
     /* set the persistent region name. We will flush later. */
-    printf("Writing region->header.name\n");
     strncpy(region->header.name, regionname,
             sizeof(region->header.name) - 1);
     // char[64] within the nvm_region_header struct, but at offset 32
-    header_name_loc = region->header.name;
-    header_name_sz = 64;
 
     /* This NVM segment has just been created so its attach count is set to
      * one. Attach count of 0 is used to ensure no match with attach_count. */
@@ -620,9 +613,7 @@ nvm_desc nvm_create_region(
     nvm_finishNT(rh);
 
     /* flush the region now that it is initialized. */
-    printf("flushing region, %lu bytes\n", sizeof(*region));
     nvm_flush(region, sizeof(*region));
-    printf("done with flushing region\n");
 
     /* Create the upgrade mutex array used for locking upgrades */
     nvm_app_data *ad = nvm_get_app_data();
