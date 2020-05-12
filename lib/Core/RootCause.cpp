@@ -36,7 +36,9 @@ RootCauseLocation::RootCauseLocation(const ExecutionState &state,
   for (const klee::StackFrame &sf : state.stack()) {
     stack.emplace_back(sf.caller, sf.kf);
   }
+}
 
+void RootCauseLocation::installExampleStackTrace(const ExecutionState &state) {
   std::string tmp;
   llvm::raw_string_ostream ss(tmp);
   state.dumpStack(ss);
@@ -79,6 +81,7 @@ std::string RootCauseLocation::str(void) const {
     info << " (no allocation info)";
   }
   
+  assert(!stackStr.empty() && "forgot to install string!");
   info << "\nStack: \n" << stackStr;
 
   return info.str();
@@ -127,6 +130,8 @@ const char *RootCauseLocation::reasonString(void) const {
       return "flush (unnecessary)";
     case PM_FlushOnUnmodified:
       return "flush (never modified)";
+    case PM_UnnecessaryFence:
+      return "fence (unnecessary)";
     default:
       klee_error("unsupported!");
       break;
@@ -140,8 +145,8 @@ bool klee::operator==(const RootCauseLocation &lhs,
   return lhs.allocSite == rhs.allocSite &&
          lhs.inst == rhs.inst &&
          lhs.stack == rhs.stack &&
-         lhs.reason == rhs.reason &&
-         lhs.maskedRoots == rhs.maskedRoots;
+         lhs.reason == rhs.reason;
+        //  && lhs.maskedRoots == rhs.maskedRoots;
 }
 
 /***/
@@ -161,6 +166,7 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
 
   rootToId[rcl] = id;
   idToRoot[id] = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
+  idToRoot[id]->rootCause.installExampleStackTrace(state);
 
   return id;
 }
@@ -208,6 +214,7 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
 
   rootToId[rcl] = newId;
   idToRoot[newId] = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
+  idToRoot[newId]->rootCause.installExampleStackTrace(state);
 
   return newId;
 }
@@ -344,8 +351,8 @@ std::string RootCauseManager::getSummary(void) const {
   std::string infoStr;
   llvm::raw_string_ostream info(infoStr);
 
-  size_t nUnpersisted = 0, nExtra = 0, nClean = 0;
-  size_t nUnpersistedOc = 0, nExtraOc = 0, nCleanOc = 0;
+  size_t nUnpersisted = 0, nExtra = 0, nClean = 0, nFence = 0;
+  size_t nUnpersistedOc = 0, nExtraOc = 0, nCleanOc = 0, nFenceOc = 0;
   for (const auto &id : buggyIds) {
     switch(idToRoot.at(id)->rootCause.getReason()) {
       case PM_Unpersisted:
@@ -360,6 +367,10 @@ std::string RootCauseManager::getSummary(void) const {
         nClean++;
         nCleanOc += idToRoot.at(id)->occurences;
         break;
+      case PM_UnnecessaryFence:
+        nFence++;
+        nFenceOc += idToRoot.at(id)->occurences;
+        break;
       default:
         klee_error("unsupported!");
         break;
@@ -371,10 +382,12 @@ std::string RootCauseManager::getSummary(void) const {
   info << "\t\tNumber of unpersisted write bugs (correctness): " << nUnpersisted << "\n";
   info << "\t\tNumber of extra flush bugs (performance): " << nExtra << "\n";
   info << "\t\tNumber of flushes to untouched memory (performance): " << nClean << "\n";
+  info << "\t\tNumber of fences with nothing to commit (performance): " << nFence << "\n"; 
   info << "\tOverall bug occurences: " << totalOccurences << "\n";
   info << "\t\tNumber of unpersisted write occurences (correctness): " << nUnpersistedOc << "\n";
   info << "\t\tNumber of extra flush occurences (performance): " << nExtraOc << "\n";
   info << "\t\tNumber of untouched memory flush occurences (performance): " << nCleanOc << "\n";
+  info << "\t\tNumber of occurence of fences with nothing to commit (performance): " << nFenceOc << "\n"; 
 
   return info.str();
 }

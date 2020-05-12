@@ -758,6 +758,34 @@ static bool isUpdateListHeadEqualTo(const UpdateList &updates,
   return true;
 }
 
+void PersistentState::addIgnoreByte(ref<Expr> offset) {
+  ignoreBytes.push_back(offset);
+}
+
+void PersistentState::addIgnoreOffset(ref<Expr> offset, uint64_t width) {
+  for (uint64_t byte = 0; byte < (width / 8); ++byte) {
+    auto add = ConstantExpr::create(byte, offset->getWidth());
+    addIgnoreByte(AddExpr::create(offset, add));
+  }
+}
+
+void PersistentState::removeIgnoreByte(const ExecutionState &state, ref<Expr> offset) {
+  ref<Expr> back = ignoreBytes.back();
+  ignoreBytes.pop_back();
+
+  bool isEq;
+  assert(solver->mustBeTrue(state, EqExpr::create(back, offset), isEq));
+  assert(isEq && "did not remove in proper order!");
+}
+
+void PersistentState::removeIgnoreOffset(const ExecutionState &state, ref<Expr> offset, uint64_t width) {
+  // Reverse order
+  for (uint64_t byte = (width / 8) - 1; byte >= 0; --byte) {
+    auto add = ConstantExpr::create(byte, offset->getWidth());
+    removeIgnoreByte(state, AddExpr::create(offset, add));
+  }
+}
+
 void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
                                              unsigned offset) {
   dirtyCacheLineAtOffset(state, ConstantExpr::create(offset, Expr::Int32));
@@ -765,6 +793,18 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
 
 void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
                                              ref<Expr> offset) {
+  // First, we check if we should be ignoring this offset.
+  for (ref<Expr> o : ignoreBytes) {
+    ref<Expr> eq = EqExpr::create(o, 
+                    ZExtExpr::create(offset, Context::get().getPointerWidth()));
+    bool isEq;
+    assert(solver->mustBeTrue(state, eq, isEq));
+    if (isEq) {
+      klee_warning_once(offset.get(), "Ignoring dirty-ing the byte!");
+      return;
+    }
+  }
+
   // Apply the dirty to the authoritative update list as well as the pending one
   // (so that we can properly identify unpersisted lines in the middle of an epoch).
   ref<Expr> cacheLine = getCacheLine(offset);
@@ -818,9 +858,11 @@ void PersistentState::persistCacheLineAtOffset(const ExecutionState &state,
   pendingRootCauseWrites.extend(cacheLine, getNullptr());
 }
 
-void PersistentState::commitPendingPersists(const ExecutionState &state) {
+bool PersistentState::commitPendingPersists(const ExecutionState &state) {
   /* llvm::errs() << getObject()->name << ": "; */
   /* llvm::errs() << "commitPendingPersists\n"; */
+
+  size_t prevSz = cacheLineUpdates.getSize();
 
   // Apply the writes and flushes accumulated during this epoch.
   // The UpdateList will clean up orphaned UpdateNodes from cacheLineUpdates.
@@ -828,6 +870,8 @@ void PersistentState::commitPendingPersists(const ExecutionState &state) {
   rootCauseWrites = pendingRootCauseWrites;
   // clear
   pendingRootCauseFlushes = UpdateList(pendingRootCauseFlushes.root, nullptr);
+
+  return prevSz != cacheLineUpdates.getSize();
 }
 
 ref<Expr> PersistentState::getIsOffsetPersistedExpr(ref<Expr> offset,

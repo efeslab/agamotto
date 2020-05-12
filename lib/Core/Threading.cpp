@@ -122,6 +122,29 @@ void Thread::dumpStack(llvm::raw_ostream &out) const {
   const KInstruction *target = prevPC? prevPC: pc;
   out << "Thread " << tuid.first << ", Process " << tuid.second << ", "
       << (enabled ? "enabled" : "disabled") << '\n';
+  // (iangneal): Debug help
+  out << "\t\tPC: " << *target->inst << " (";
+  for (uint64_t index = 0; index < target->inst->getNumOperands(); ++index) {
+    int vnumber = target->operands[index];
+    if (index > 0) out << ", ";
+    out << "op #" << index << "=";
+    // Determine if this is a constant or not.
+    if (vnumber < 0) {
+      out << "<global const>";
+    } else {
+      unsigned index = vnumber;
+      auto val = stack.back().locals[index].value;
+      if (!val.get()) {
+        out << "<nullexpr>";
+      } else if (isa<ConstantExpr>(val)) {
+        out << val;
+      } else {
+        out << "<symbolic>";
+      }
+    }
+  }
+  out << ")\n";
+
   for (stack_ty::const_reverse_iterator
          it = stack.rbegin(), ie = stack.rend();
        it != ie; ++it) {

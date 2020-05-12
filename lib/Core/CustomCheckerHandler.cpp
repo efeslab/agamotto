@@ -46,7 +46,56 @@ using namespace klee;
 
 /* #region CustomChecker */
 
-CustomChecker::CustomChecker(Executor &_executor) : executor(_executor) {}
+bool CustomChecker::isMemoryOperation(KInstruction *ki) {
+  if (CallBase *cb = dyn_cast<CallBase>(ki->inst)) {
+    Function *f = cb->getCalledFunction();
+    if (!f) return false;
+
+    switch(f->getIntrinsicID()) {
+      case Intrinsic::vastart:
+      case Intrinsic::x86_sse2_clflush:
+      case Intrinsic::x86_clflushopt:
+      case Intrinsic::x86_clwb:
+        return true;
+      default:
+        return false;
+    }
+  } else if (isa<StoreInst>(ki->inst) || isa<LoadInst>(ki->inst)) {
+    return true;
+  }
+
+  return false;
+}
+
+ResolutionList &CustomChecker::getResolutionList(void) {
+  return handler->currentResList;
+}
+
+ref<Expr> &CustomChecker::getAddress(void) {
+  return handler->addr;
+}
+
+Module *CustomChecker::getModule(void) {
+  return executor.kmodule->module.get();
+}
+
+ref<Expr> CustomChecker::getOpValue(ExecutionState &state, int opNum) {
+  return executor.eval(state.prevPC(), opNum, state).value;
+}
+
+ObjectPair &&CustomChecker::resolveAddress(ExecutionState &state, ref<Expr> addr) {
+  ObjectPair op;
+  bool success;
+  executor.solver->setTimeout(executor.coreSolverTimeout);
+  assert(state.addressSpace.resolveOne(state, executor.solver, addr, op, success));
+  executor.solver->setTimeout(time::Span());
+  assert(success);
+
+  return std::move(op);
+}
+
+CustomChecker::CustomChecker(CustomCheckerHandler *_handler, Executor &_executor) 
+  : handler(_handler), executor(_executor) {}
 
 CustomChecker::~CustomChecker() {}
 
@@ -64,7 +113,9 @@ class CounterChecker final : public CustomChecker {
 private:
   uint64_t ninvoke;
 public:
-  CounterChecker(Executor &_executor) : CustomChecker(_executor), ninvoke(0) {}
+  CounterChecker(CustomCheckerHandler *_handler, Executor &_executor) 
+    : CustomChecker(_handler, _executor), ninvoke(0) {}
+  
   ~CounterChecker() {
     klee_message("CounterChecker: invoked %lu times!\n", ninvoke);
   }
@@ -181,8 +232,8 @@ private:
   }
 
 public:
-  PmemObjTxAddChecker(Executor &_executor) 
-    : CustomChecker(_executor), in_tx(false), added_ranges() {}
+  PmemObjTxAddChecker(CustomCheckerHandler *_handler, Executor &_executor) 
+    : CustomChecker(_handler, _executor), in_tx(false), added_ranges() {}
 
   ~PmemObjTxAddChecker() {}
 
@@ -196,6 +247,70 @@ public:
   }
 };
 
+/**
+ * It's purpose in life is to filter out volatile 
+ */
+class VolatileFilter final : public CustomChecker {
+  private:
+    std::string ignoreName = "struct.volatile_byte";
+
+  public:
+    VolatileFilter(CustomCheckerHandler *_handler, Executor &_executor) 
+      : CustomChecker(_handler, _executor) {}
+
+    ~VolatileFilter() {}
+
+    void operator()(ExecutionState &state) override {
+      // if (LoadInst *li = dyn_cast<LoadInst>(state.prevPC()->inst)) {
+      //   Type *t = li->getPointerOperandType();
+      //   errs() << *li << ": " << *t << "\n";
+      // }
+      // if (StoreInst *si = dyn_cast<StoreInst>(state.prevPC()->inst)) {
+      //   Type *t = si->getPointerOperandType();
+      //   errs() << *si << ": " << *t << "\n";
+      // }
+      Instruction *i = state.prevPC()->inst;
+      // errs() << "NEXT INST: "<< *i << "\n";
+      assert(i);
+      for (unsigned opNum = 0; opNum < i->getNumOperands(); ++opNum) {
+        Value *op = i->getOperand(opNum);
+        assert(op);
+        // if (!op) {
+        //   errs() << *i << " OP " << opNum << "\n";
+        //   assert(op);
+        // }
+
+        // errs() << op << " OP# " << opNum << "\n";
+        Type *t = op->getType();
+        if (!t) {
+          // errs() << *i << "\n";
+          assert(false);
+        }
+        // errs() << *t << "\n";
+        if (PointerType *pt = dyn_cast<PointerType>(t)) {
+          t = pt->getElementType();
+        }
+        if (StructType *st = dyn_cast<StructType>(t)) {
+          if (st->getStructName() == ignoreName) {
+            // Add to ignore
+            ref<Expr> addr = getOpValue(state, opNum);
+            ObjectPair op = resolveAddress(state, addr);
+            if (op.second && isa<PersistentState>(op.second)) {
+              auto *wos = state.addressSpace.getWriteable(op.first, op.second);
+              auto *ps = dyn_cast<PersistentState>(wos);
+              // Now do offset calculation
+              auto offset = op.first->getOffsetExpr(addr);
+              llvm::DataLayout* dl = new llvm::DataLayout(getModule());
+              uint64_t structSz = dl->getTypeStoreSize(st) * 8;
+              ps->addIgnoreOffset(offset, structSz);
+              errs() << "Adding " << offset << " with size " << structSz << " to ignore!\n";
+            }
+          }
+        }
+      }
+    }
+};
+
 }
 
 /* #endregion */
@@ -203,11 +318,12 @@ public:
 /* #region CustomCheckerHandler */
 
 CustomCheckerHandler::CustomCheckerHandler(Executor &_executor) 
-  : executor(_executor) {
+  : executor(_executor), addr(nullptr) {
   // Bind new custom checkers here!
-#define addCC(T) checkers.emplace_back(new T(executor))
+#define addCC(T) checkers.emplace_back(new T(this, executor))
   addCC(CounterChecker);
   addCC(PmemObjTxAddChecker);
+  addCC(VolatileFilter);
 #undef addCC
 }
 
@@ -226,6 +342,15 @@ void CustomCheckerHandler::handle(ExecutionState &state) {
   for (CustomChecker *cc : checkers) {
     (*cc)(state);
   }
+
+  // Delete the memory stuff so it isn't accidentally reused.
+  addr = nullptr;
+  currentResList.clear();
+}
+
+void CustomCheckerHandler::setMemoryResolution(ref<Expr> address, ResolutionList &&rl) {
+  currentResList = std::move(rl);
+  addr = address;
 }
 
 /* #endregion */

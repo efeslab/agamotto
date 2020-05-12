@@ -7,6 +7,18 @@
 #include <immintrin.h>
 
 #include "btree_map.h"
+#include <time.h>
+#include <libpmem.h>
+
+
+uint64_t getnanosec(struct timespec *start, struct timespec *end)
+{
+	uint64_t ret = 0;
+	ret += (end->tv_sec - start->tv_sec) * 1000000000lu;
+	ret += (end->tv_nsec - start->tv_nsec);
+    return ret;
+}
+
 
 typedef struct driver_root {
     size_t num_nodes;
@@ -48,9 +60,9 @@ int main(int argc, const char *argv[]) {
     assert(TOID_VALID(root) && "Root is invalid!");
     printf("\troot.oid.offset: %lu\n", root.oid.off);
     printf("\troot._type: %p\n", root._type);
-    printf("\troot._type_num: %d\n", root._type_num);
+    //printf("\troot._type_num: %d\n", root._type_num);
     assert(D_RO(root) && "Root direct is null!");
-
+#if 0
     printf("Checking persistent state...\n");
 
     TX_BEGIN(pop) {
@@ -70,40 +82,58 @@ int main(int argc, const char *argv[]) {
         TX_SET(root, tree, TX_ZNEW(struct btree_map));
     } TX_END
 
-    printf("btree_map is now clean.\n");
-
+    fprintf(stderr, "btree_map is now clean.\n");
+#endif
+    uint64_t total_time = 0;
+    char buf[4096];
     for (uint64_t i = 0; i < n_entries; ++i) {
-        TX_BEGIN(pop) {
-            uint64_t reverse = n_entries - 1 - i;
-            TOID(uint64_t) val = TX_NEW(uint64_t);
-            TX_ADD(val);
-            *D_RW(val) = reverse; 
-            assert(!btree_map_insert(pop, D_RO(root)->tree, reverse, val.oid));
-            TX_SET(root, num_nodes, D_RO(root)->num_nodes + 1);
-        } TX_END
-        printf("Size is now %lu!\n", D_RO(root)->num_nodes);
+	    struct timespec start, end;
+        uint64_t reverse = n_entries - 1 - i;
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
+
+        pmem_memset_persist(buf, i, 4096);
+        //pmem_flush(buf, 4096);
+        _mm_sfence();
+
+        //TX_BEGIN(pop) {
+            //TOID(uint64_t) val = TX_NEW(uint64_t);
+            //TX_ADD(val);
+            //*D_RW(val) = reverse; 
+            //assert(!btree_map_insert(pop, D_RO(root)->tree, reverse, val.oid));
+            //TX_SET(root, num_nodes, D_RO(root)->num_nodes + 1);
+        //} //TX_END
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
+        total_time += getnanosec(&start, &end);
+        //fprintf(stderr, "%d\n", (int)buf[0]);
+        //fprintf(stderr, "Size is now %lu!\n", D_RO(root)->num_nodes);
+        //assert(!btree_map_remove_free(pop, D_RO(root)->tree, reverse));
     }
 
+    printf("Time/op: %lu nsec\n", total_time / n_entries);
+
+#if 0
     TX_BEGIN(pop) {
         assert(!btree_map_clear(pop, D_RO(root)->tree) && "Could not clear tree!");
     } TX_END
 
-    TX_BEGIN(pop) {
-        for (uint64_t i = 0; i < n_entries; ++i) {  
-            TOID(uint64_t) val = TX_NEW(uint64_t);
-            TX_ADD(val);
-            *D_RW(val) = i; 
-            assert(!btree_map_insert(pop, D_RO(root)->tree, i, val.oid));
-            TX_SET(root, num_nodes, D_RO(root)->num_nodes + 1);   
-            printf("Size is now %lu!\n", D_RO(root)->num_nodes);
-        }
-    } TX_END
+    fprintf(stderr, "btree_map is clean again.\n");
+
+	for (uint64_t i = 0; i < n_entries; ++i) {  
+		TX_BEGIN(pop) {
+			TOID(uint64_t) val = TX_NEW(uint64_t);
+			TX_ADD(val);
+			*D_RW(val) = i; 
+			assert(!btree_map_insert(pop, D_RO(root)->tree, i, val.oid));
+			TX_SET(root, num_nodes, D_RO(root)->num_nodes + 1);   
+			fprintf(stderr, "Size is now %lu!\n", D_RO(root)->num_nodes);
+		} TX_END
+	}
 
     for (uint64_t i = 0; i < n_entries; ++i) {
         PMEMoid val = btree_map_get(pop, D_RO(root)->tree, i);
         uint64_t *ptr = pmemobj_direct(val);
         assert(OID_INSTANCEOF(val, uint64_t) && ptr && *ptr == i);
-        printf("\t%lu => %lu!\n", i, *ptr);
+        fprintf(stderr, "\t%lu => %lu!\n", i, *ptr);
     }
 
     // want to cause btree_map_rotate_left to be invoked
@@ -113,9 +143,9 @@ int main(int argc, const char *argv[]) {
         btree_map_remove(pop, D_RO(root)->tree, reverse);
         TX_SET(root, num_nodes, D_RO(root)->num_nodes - 1);
       } TX_END
-      printf("Size is now %lu\n", D_RO(root)->num_nodes);
+      fprintf(stderr, "Size is now %lu\n", D_RO(root)->num_nodes);
     }
-
+#endif
     pmemobj_close(pop);
 
     return 0;

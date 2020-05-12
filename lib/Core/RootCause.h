@@ -39,7 +39,8 @@ namespace klee {
   enum RootCauseReason {
     PM_Unpersisted,
     PM_UnnecessaryFlush,
-    PM_FlushOnUnmodified
+    PM_FlushOnUnmodified,
+    PM_UnnecessaryFence
   };
 
   struct RootCauseLocation {
@@ -79,7 +80,7 @@ namespace klee {
     std::unordered_set<uint64_t> maskingRoots;
 
 
-    RootCauseLocation(const ExecutionState &state, 
+    RootCauseLocation(const ExecutionState &state,
                       const llvm::Value *allocationSite, 
                       const KInstruction *pc,
                       RootCauseReason r);
@@ -90,6 +91,8 @@ namespace klee {
     const std::unordered_set<uint64_t> &getMaskedSet() { return maskedRoots; }
 
     std::string str(void) const;
+
+    void installExampleStackTrace(const ExecutionState &state);
 
     std::string fullString(const RootCauseManager &mgr) const;
 
