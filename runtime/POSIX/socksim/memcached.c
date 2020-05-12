@@ -1,90 +1,28 @@
-#include "sockets_simulator.h"
+#include "memcached.h"
 
-#include <assert.h>
 #include <stdio.h>
-#include <pthread.h>
 
 #define MEMCACHED_PORT 11211
 
-typedef struct {
-  socket_event_handler_t __base;
-  socket_t *client_sock;
-  socket_t *server_sock;
-} memcached_1_5_13_handler_t;
-static memcached_1_5_13_handler_t memcached_1_5_13_handler;
+static void memcached_1_5_13_client_func(void *);
+static void memcached_update_client_func(void *);
 
-typedef struct {
-  socket_event_handler_t __base;
-  socket_t *client_sock;
-  socket_t *server_sock;
-} memcached_update_handler_t;
-static memcached_update_handler_t memcached_update_handler;
-
-// External references for sockets_simulator.c
-
-const socket_event_handler_t *const
-__memcached_1_5_13_handler = (const socket_event_handler_t *)&memcached_1_5_13_handler;
-
-const socket_event_handler_t *const
-__memcached_update_handler = (const socket_event_handler_t *)&memcached_update_handler;
+memcached_handler_t
+__memcached_1_5_13_handler = SIMULATED_CLIENT_HANDLER("memcached_1.5.13",
+                                                      MEMCACHED_PORT,
+                                                      memcached_1_5_13_client_func);
+memcached_handler_t
+__memcached_update_handler = SIMULATED_CLIENT_HANDLER("memcached_update",
+                                                      MEMCACHED_PORT,
+                                                      memcached_update_client_func);
 
 /**
  * memcached 1.5.13 handler
  */
 
-static void memcached_1_5_13_handler_init(void *self) {
-  memcached_1_5_13_handler_t *self_hdl = (memcached_1_5_13_handler_t*)self;
-  self_hdl->client_sock = _create_socket(AF_INET, SOCK_STREAM, 0);
-};
+static void memcached_1_5_13_client_func(void *self) {
+  simulated_client_handler_t *self_hdl = (simulated_client_handler_t *)self;
 
-static void
-memcached_1_5_13_handler_post_bind(void *self, socket_t *sock,
-                                          const struct sockaddr *addr,
-                                          socklen_t addrlen) {
-  memcached_1_5_13_handler_t *self_hdl = (memcached_1_5_13_handler_t*)self;
-  // I am only interested in socket bind to DEFAULT_ADDR:MEMCACHED_PORT
-  if (sock->domain != AF_INET) {
-    posix_debug_msg("memcached_1_5_13 bind handler: no bind, not AF_INET\n");
-    return;
-  }
-  const struct sockaddr_in *inetaddr = (struct sockaddr_in*)addr;
-  if (inetaddr->sin_addr.s_addr != __net.net_addr.s_addr) {
-    posix_debug_msg("memcached_1_5_13 bind handler: no bind, bad saddr \n");
-    return;
-  }
-  if (inetaddr->sin_port != htons(MEMCACHED_PORT)) {
-    posix_debug_msg("memcached_1_5_13 bind handler: no bind, bad port \n");
-    return;
-  }
-  self_hdl->server_sock = sock;
-  posix_debug_msg("memcached_1_5_13 bind handler catch the server socket\n");
-}
-
-typedef struct {
-  memcached_1_5_13_handler_t *self_hdl;
-} memcached_1_5_13_handler_post_listen_arg_t;
-
-memcached_1_5_13_handler_post_listen_arg_t memcached_1_5_13_listen_arg;
-
-static void *memcached_1_5_13_handler_post_listen_newthread(void *_arg) {
-  posix_debug_msg("Starting new memcached_1_5_13 listen handler thread\n");
-  memcached_1_5_13_handler_post_listen_arg_t *arg = (memcached_1_5_13_handler_post_listen_arg_t*)_arg;
-  memcached_1_5_13_handler_t *self_hdl = arg->self_hdl;
-  struct sockaddr_in server_addr;
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_addr = __net.net_addr;
-  server_addr.sin_port = htons(MEMCACHED_PORT);
-  char server_addr_str[MAX_SOCK_ADDRSTRLEN];
-  _get_sockaddr_str(server_addr_str, sizeof(server_addr_str), AF_INET,
-                    (const struct sockaddr*)&server_addr);
-  posix_debug_msg("Attempting to connect to the server socket %s\n",
-                  server_addr_str);
-  int ret;
-  ret = _stream_connect(self_hdl->client_sock,
-                            (const struct sockaddr *)&server_addr,
-                            sizeof(server_addr));
-  assert(ret == 0 && "memcached_1_5_13 listen handler fails to connect to "
-                      "the server socket");
   // char payload[1024];
   // const char val[] = "the_value";
   // snprintf(payload, sizeof(payload), "set the_key 1 0 %lu\n", sizeof(val));
@@ -94,7 +32,7 @@ static void *memcached_1_5_13_handler_post_listen_newthread(void *_arg) {
     strncpy(payload, "set", 3);
     strncpy(payload + 22, "shutdown", 8);
   }
-  ret = _write_socket(self_hdl->client_sock, payload, sizeof(payload) - 1);
+  int ret = _write_socket(self_hdl->client_sock, payload, sizeof(payload) - 1);
   posix_debug_msg("payload (set) write result %d\n", ret);
 
   // sleep(30);
@@ -107,39 +45,7 @@ static void *memcached_1_5_13_handler_post_listen_newthread(void *_arg) {
   // const char shutdown[] = "shutdown\r\n";
   // ret = _write_socket(self_hdl->client_sock, shutdown, sizeof(shutdown));
   // posix_debug_msg("payload (shutdown) write result %d\n", ret);
-  return NULL;
 }
-
-static void memcached_1_5_13_handler_post_listen(
-    void *self, socket_t *sock, __attribute__((unused)) int backlog) {
-  memcached_1_5_13_handler_t *self_hdl = (memcached_1_5_13_handler_t *)self;
-  posix_debug_msg(
-          "memcached_1_5_13 post listen handler self: %p\n", self_hdl);
-  if (self_hdl->server_sock && self_hdl->server_sock == sock) {
-    posix_debug_msg(
-          "memcached_1_5_13 post listen handler create new thread\n");
-    memcached_1_5_13_listen_arg.self_hdl = self_hdl;
-    pthread_t th;
-    int ret = pthread_create(&th, NULL,
-                             memcached_1_5_13_handler_post_listen_newthread,
-                             &memcached_1_5_13_listen_arg);
-    if (ret != 0) {
-      posix_debug_msg(
-          "memcached_1_5_13 listen handler pthread failed with ret %d\n", ret);
-    }
-  }
-}
-
-static memcached_1_5_13_handler_t memcached_1_5_13_handler = {
-    .__base = {
-        .name = "memcached_1.5.13",
-        .init = memcached_1_5_13_handler_init,
-        .post_bind = memcached_1_5_13_handler_post_bind,
-        .post_listen = memcached_1_5_13_handler_post_listen,
-    },
-    .client_sock = NULL,
-    .server_sock = NULL,
-};
 
 /**
  * memcached update handler
@@ -151,61 +57,9 @@ static memcached_1_5_13_handler_t memcached_1_5_13_handler = {
  * of updates symbolically.
  */
 
-static void memcached_update_handler_init(void *self) {
-  memcached_update_handler_t *self_hdl = (memcached_update_handler_t*)self;
-  self_hdl->client_sock = _create_socket(AF_INET, SOCK_STREAM, 0);
-};
+static void memcached_update_client_func(void *self) {
+  simulated_client_handler_t *self_hdl = (simulated_client_handler_t *)self;
 
-static void
-memcached_update_handler_post_bind(void *self, socket_t *sock,
-                                   const struct sockaddr *addr,
-                                   socklen_t addrlen) {
-  memcached_update_handler_t *self_hdl = (memcached_update_handler_t*)self;
-  // I am only interested in socket bind to DEFAULT_ADDR:MEMCACHED_PORT
-  if (sock->domain != AF_INET) {
-    posix_debug_msg("memcached update bind handler: no bind, not AF_INET\n");
-    return;
-  }
-  const struct sockaddr_in *inetaddr = (struct sockaddr_in*)addr;
-  if (inetaddr->sin_addr.s_addr != __net.net_addr.s_addr) {
-    posix_debug_msg("memcached update bind handler: no bind, bad saddr \n");
-    return;
-  }
-  if (inetaddr->sin_port != htons(MEMCACHED_PORT)) {
-    posix_debug_msg("memcached update bind handler: no bind, bad port \n");
-    return;
-  }
-  self_hdl->server_sock = sock;
-  posix_debug_msg("memcached update bind handler catch the server socket\n");
-}
-
-typedef struct {
-  memcached_update_handler_t *self_hdl;
-} memcached_update_handler_post_listen_arg_t;
-
-memcached_update_handler_post_listen_arg_t memcached_update_listen_arg;
-
-static void *memcached_update_handler_post_listen_newthread(void *_arg) {
-  posix_debug_msg("Starting new memcached update listen handler thread\n");
-  memcached_update_handler_post_listen_arg_t *arg = (memcached_update_handler_post_listen_arg_t*)_arg;
-  memcached_update_handler_t *self_hdl = arg->self_hdl;
-
-  struct sockaddr_in server_addr;
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_addr = __net.net_addr;
-  server_addr.sin_port = htons(MEMCACHED_PORT);
-  char server_addr_str[MAX_SOCK_ADDRSTRLEN];
-  _get_sockaddr_str(server_addr_str, sizeof(server_addr_str), AF_INET,
-                    (const struct sockaddr*)&server_addr);
-  posix_debug_msg("[memcached_update] Attempting to connect to the server socket %s\n",
-                  server_addr_str);
-  int ret;
-  ret = _stream_connect(self_hdl->client_sock,
-                            (const struct sockaddr *)&server_addr,
-                            sizeof(server_addr));
-  assert(ret == 0 && "memcached update listen handler fails to connect to "
-                      "the server socket");
-  
   static const char flushSeq[] = "\r\n";
   int nwrites = 10;
   char payload[128];
@@ -224,7 +78,7 @@ static void *memcached_update_handler_post_listen_newthread(void *_arg) {
 
   memset(payload, 0, sizeof(payload));
 
-  int i;
+  int i, ret;
   for (i = 0; i < nwrites; i++) {
     snprintf(payload, sizeof(payload), "set key_%c 1 0 5%sval_%c%s",
             keyData, flushSeq, keyData, flushSeq);
@@ -236,38 +90,5 @@ static void *memcached_update_handler_post_listen_newthread(void *_arg) {
   const char shutdown[] = "shutdown\r\n";
   ret = _write_socket(self_hdl->client_sock, shutdown, sizeof(shutdown));
   posix_debug_msg("payload (shutdown) write result %d\n", ret);
-
-  return NULL;
 }
 
-static void 
-memcached_update_handler_post_listen(void *self, socket_t *sock, 
-                                     __attribute__((unused)) int backlog) {
-  memcached_update_handler_t *self_hdl = (memcached_update_handler_t *)self;
-  posix_debug_msg(
-          "memcached update post listen handler self: %p\n", self_hdl);
-  if (self_hdl->server_sock && self_hdl->server_sock == sock) {
-    posix_debug_msg(
-          "memcached update post listen handler create new thread\n");
-    memcached_update_listen_arg.self_hdl = self_hdl;
-    pthread_t th;
-    int ret = pthread_create(&th, NULL,
-                             memcached_update_handler_post_listen_newthread,
-                             &memcached_update_listen_arg);
-    if (ret != 0) {
-      posix_debug_msg(
-          "memcached update listen handler pthread failed with ret %d\n", ret);
-    }
-  }
-}
-
-static memcached_update_handler_t memcached_update_handler = {
-    .__base = {
-        .name = "memcached_update",
-        .init = memcached_update_handler_init,
-        .post_bind = memcached_update_handler_post_bind,
-        .post_listen = memcached_update_handler_post_listen,
-    },
-    .client_sock = NULL,
-    .server_sock = NULL,
-};
