@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include "client.h"
 
 void simulated_client_handler_init(void *self) {
@@ -94,9 +98,8 @@ typedef struct {
 } simple_text_client_handler_t;
 
 static void simple_text_client_func(void *self) {
-  socket_event_handler_t *base = (socket_event_handler_t *)self;
-  simulated_client_handler_t *client = (simulated_client_handler_t *)base;
-  simple_text_client_handler_t *text_client = (simple_text_client_handler_t *)base;
+  simulated_client_handler_t *client = (simulated_client_handler_t *)self;
+  simple_text_client_handler_t *text_client = (simple_text_client_handler_t *)self;
 
   const char *payload = text_client->text;
   const int len = text_client->len;
@@ -116,6 +119,61 @@ create_simple_text_client(const char *name, int server_port,
                                        simple_text_client_func),
     .text = text,
     .len = len,
+  };
+
+  return (socket_event_handler_t *)handler;
+}
+
+/**
+ * Client from file.
+ */
+
+typedef struct {
+  simulated_client_handler_t __base;
+  const char *path;
+} file_client_handler_t;
+
+static void file_client_func(void *self) {
+  simulated_client_handler_t *client = (simulated_client_handler_t *)self;
+  file_client_handler_t *file_client = (file_client_handler_t *)self;
+
+  const char *path = file_client->path;
+
+  int fd = open(path, O_RDONLY);
+  if (fd < 0) {
+    perror("Could not open file for simulated tcp client");
+    exit(1);
+  }
+  posix_debug_msg("Successfully opened '%s' for simulated tcp client\n", path);
+
+  ssize_t rval;
+  ssize_t sent = 0;
+  char buffer[128];
+  while ((rval = read(fd, buffer, 128))) {
+    if (rval < 0) {
+      perror("Error reading from file for simulated tcp client");
+      exit(1);
+    }
+    _write_socket(client->client_sock, buffer, rval);
+    sent += rval;
+  }
+
+  posix_debug_msg("Sent %li bytes\n", sent);
+
+  close(fd);
+}
+
+socket_event_handler_t *
+create_client_from_file(const char *name, int server_port,
+                        const char *path) {
+  file_client_handler_t *handler;
+  handler = malloc(sizeof(*handler));
+
+  *handler = (file_client_handler_t) {
+    .__base = SIMULATED_CLIENT_HANDLER(name,
+                                       server_port,
+                                       file_client_func),
+    .path = path,
   };
 
   return (socket_event_handler_t *)handler;

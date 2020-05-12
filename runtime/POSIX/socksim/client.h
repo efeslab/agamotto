@@ -54,4 +54,12 @@ socket_event_handler_t *
 create_simple_text_client(const char *name, int server_port,
                           const char *text, unsigned len);
 
+/**
+ * Creates a new simulated client handler that connects to `server_port`,
+ * sends the contents of the file at `path`, then closes.
+ */
+socket_event_handler_t *
+create_client_from_file(const char *name, int server_port,
+                        const char *path);
+
 #endif

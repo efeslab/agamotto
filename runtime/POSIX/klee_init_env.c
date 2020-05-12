@@ -122,11 +122,10 @@ static char help_msg[] =
 "                            - Creates a simulated TCP client that connects to\n"
 "                              localhost:<PORT>, sends a symbolic payload of\n"
 "                              size <N>, then closes.\n"
-// TODO
-// "  -tcp-client-file <NAME> <PORT> <FILE>\n"
-// "                            - Creates a simulated TCP client that connects to\n"
-// "                              localhost:<PORT> and sends the data contained in\n"
-// "                              <FILE>.\n"
+"  -tcp-client-file <NAME> <PORT> <FILE>\n"
+"                            - Creates a simulated TCP client that connects to\n"
+"                              localhost:<PORT>, sends the data contained in\n"
+"                              <FILE>, then closes\n"
 "  -sock-handler <NAME>      - Use predefined socket handler\n"
 "  -symbolic-sock-handler    - Inform socket handler that it is used during a\n"
 "                              symbolic replay. (default=false)\n"
@@ -388,6 +387,18 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
         posix_debug_msg("Ignore unknown socket handler %s\n", name);
       else
         __add_socket_handler(&ssid, handler);
+    } else if (__streq(argv[k], "--tcp-client-file") ||
+               __streq(argv[k], "-tcp-client-file")) {
+      const char *msg = "--tcp-client-file expects three arguments: "
+                "<NAME> <PORT> <FILE>";
+      if (k + 3 >= argc) __emit_error(msg);
+      k++;
+      socket_event_handler_t *handler;
+      const char *name = argv[k++];
+      int port = (int)__str_to_int(argv[k++], msg);
+      const char *path = argv[k++];
+      handler = create_client_from_file(name, port, path);
+      __add_socket_handler(&ssid, handler);
     } else if (__streq(argv[k], "--symbolic-sock-handler") ||
                __streq(argv[k], "-symbolic-sock-handler")) {
       k++;
