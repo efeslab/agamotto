@@ -12,4 +12,6 @@ include $(LEVEL)/Makefile.cmake.bitcode.config
 
 ARCHIVE_NAME=kleeRuntimePOSIX
 
+SRC_DIRS += socksim
+
 include $(LEVEL)/Makefile.cmake.bitcode.rules

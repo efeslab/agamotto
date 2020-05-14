@@ -14,7 +14,8 @@
 #include "fd.h"
 #include "misc.h"
 #include "sockets.h"
-#include "sockets_simulator.h"
+#include "socksim/client.h"
+#include "socksim/sockets_simulator.h"
 #include "symfs.h"
 #include "netlink.h"
 
@@ -113,6 +114,21 @@ static char help_msg[] =
 "                              rather than on environment init. Essentially, this allows\n"
 "                              us to create a new file which we know to mark symbolic.\n"
 "                              Implies that the file will be created with zeroed memory.\n"
+/* Sockets */
+"  -tcp-client-text <NAME> <PORT> <TEXT>\n"
+"                            - Creates a simulated TCP client that connects to\n"
+"                              localhost:<PORT>, sends <TEXT>, then closes.\n"
+"  -tcp-client-sym <NAME> <PORT> <N>\n"
+"                            - Creates a simulated TCP client that connects to\n"
+"                              localhost:<PORT>, sends a symbolic payload of\n"
+"                              size <N>, then closes.\n"
+"  -tcp-client-file <NAME> <PORT> <FILE>\n"
+"                            - Creates a simulated TCP client that connects to\n"
+"                              localhost:<PORT>, sends the data contained in\n"
+"                              <FILE>, then closes\n"
+"  -sock-handler <NAME>      - Use predefined socket handler\n"
+"  -symbolic-sock-handler    - Inform socket handler that it is used during a\n"
+"                              symbolic replay. (default=false)\n"
 /* Other */
 "  -sym-stdin <N>            - Make stdin symbolic with size N.\n"
 "  -sym-file-stdin           - Make symbolic stdin behave like piped in from\n"
@@ -127,10 +143,7 @@ static char help_msg[] =
 "                              files.\n"
 "  -no-overlapped            - Do not keep per-state concrete file offsets\n"
 "  -fd-fail                  - Shortcut for '-max-fail 1'\n"
-"  -posix-debug              - Enable debug message in POSIX runtime\n"
-"  -sock-handler <NAME>      - Use predefined socket handler\n"
-"  -symbolic-sock-handler    - Inform socket handler that it is used during a\n"
-"                              symbolic replay. (default=false)\n";
+"  -posix-debug              - Enable debug message in POSIX runtime\n";
 
 static void __add_symfs_file(fs_init_descriptor_t *fid,
                              enum sym_file_type file_type,
@@ -147,6 +160,15 @@ static void __add_symfs_file(fs_init_descriptor_t *fid,
   sfd->pmem_type = pmem_type;
   sfd->file_path = file_path;
   sfd->file_size = file_size;
+}
+
+static void __add_socket_handler(socksim_init_descriptor_t *ssid,
+                                 socket_event_handler_t *handler) {
+  if (ssid->n_handlers >= MAX_SOCK_EVT_HANDLE) {
+    __emit_error("Maximum number of custom socket handlers reached.");
+  }
+
+  ssid->handlers[ssid->n_handlers++] = handler;
 }
 
 void klee_init_env(int *argcPtr, char ***argvPtr) {
@@ -171,9 +193,11 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
   fid.max_failures = 0;
   // This is defined in common.c
   enableDebug = 0;
+
+  socksim_init_descriptor_t ssid;
+  ssid.n_handlers = 0;
   // This is defined in sockets_simulator.c
   useSymbolicHandler = 0;
-  const char *sock_handler_name = NULL;
 
   sym_arg_name[5] = '\0';
 
@@ -325,6 +349,60 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
         __emit_error("--sym-pmem-delay file size cannot be 0\n");
       }
       __add_symfs_file(&fid, SYMBOLIC, PMEM_DELAY_CREATE, file_name, file_size);
+    } else if (__streq(argv[k], "--tcp-client-text") ||
+               __streq(argv[k], "-tcp-client-text")) {
+      const char *msg = "--tcp-client-text expects three arguments: "
+                "<NAME> <PORT> <TEXT>";
+      if (k + 3 >= argc) __emit_error(msg);
+      k++;
+      socket_event_handler_t *handler;
+      const char *name = argv[k++];
+      int port = (int)__str_to_int(argv[k++], msg);
+      const char *text = argv[k++];
+      handler = create_simple_text_client(name, port, text, strlen(text));
+      __add_socket_handler(&ssid, handler);
+    } else if (__streq(argv[k], "--tcp-client-sym") ||
+               __streq(argv[k], "-tcp-client-sym")) {
+      const char *msg = "--tcp-client-sym expects three arguments: "
+                "<NAME> <PORT> <N>";
+      if (k + 3 >= argc) __emit_error(msg);
+      k++;
+      socket_event_handler_t *handler;
+      const char *name = argv[k++];
+      int port = (int)__str_to_int(argv[k++], msg);
+      long size = __str_to_int(argv[k++], msg);
+      char *text = malloc(size);
+      klee_make_symbolic(text, size, name);
+      handler = create_simple_text_client(name, port, text, size);
+      __add_socket_handler(&ssid, handler);
+    } else if (__streq(argv[k], "--sock-handler") ||
+               __streq(argv[k], "-sock-handler")) {
+      const char *msg = "--sock-handler expects one string <NAME>";
+      if (k + 1 >= argc)
+        __emit_error(msg);
+      k++;
+      const char *name = argv[k++];
+      socket_event_handler_t *handler = get_predefined_socket_handler(name);
+      if (handler == NULL)
+        posix_debug_msg("Ignore unknown socket handler %s\n", name);
+      else
+        __add_socket_handler(&ssid, handler);
+    } else if (__streq(argv[k], "--tcp-client-file") ||
+               __streq(argv[k], "-tcp-client-file")) {
+      const char *msg = "--tcp-client-file expects three arguments: "
+                "<NAME> <PORT> <FILE>";
+      if (k + 3 >= argc) __emit_error(msg);
+      k++;
+      socket_event_handler_t *handler;
+      const char *name = argv[k++];
+      int port = (int)__str_to_int(argv[k++], msg);
+      const char *path = argv[k++];
+      handler = create_client_from_file(name, port, path);
+      __add_socket_handler(&ssid, handler);
+    } else if (__streq(argv[k], "--symbolic-sock-handler") ||
+               __streq(argv[k], "-symbolic-sock-handler")) {
+      k++;
+      useSymbolicHandler = 1;
     } else if (__streq(argv[k], "--sym-stdin") ||
                __streq(argv[k], "-sym-stdin")) {
       const char *msg =
@@ -370,14 +448,6 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
                __streq(argv[k], "-posix-debug")) {
       k++;
       enableDebug = 1;
-    } else if (__streq(argv[k], "--sock-handler") ||
-               __streq(argv[k], "-sock-handler")) {
-      k++;
-      sock_handler_name = argv[k++];
-    } else if (__streq(argv[k], "--symbolic-sock-handler") ||
-               __streq(argv[k], "-symbolic-sock-handler")) {
-      k++;
-      useSymbolicHandler = 1;
     } else {
       /* simply copy arguments */
       __add_arg(&new_argc, new_argv, argv[k++], 1024);
@@ -403,12 +473,8 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
   // klee_init_mmap();
   klee_init_network();
   klee_init_netlink();
-  klee_init_sockets_simulator();
+  klee_init_sockets_simulator(&ssid);
   klee_init_threads();
-
-  if (sock_handler_name) {
-    register_predefined_socket_handler(sock_handler_name);
-  }
 }
 
 /* The following function represents the main function of the user application
