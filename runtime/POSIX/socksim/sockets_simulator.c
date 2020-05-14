@@ -1,6 +1,7 @@
 #include <assert.h>
 
 #include "memcached.h"
+#include "redis.h"
 #include "sockets_simulator.h"
 
 char useSymbolicHandler;
@@ -9,6 +10,9 @@ socket_simulator_t __sock_simulator;
 static socket_event_handler_t *predefined_handlers[] = {
     (socket_event_handler_t *)(&__memcached_1_5_13_handler),
     (socket_event_handler_t *)(&__memcached_update_handler),
+    (socket_event_handler_t *)(&__redis_simple_concrete_handler),
+    (socket_event_handler_t *)(&__redis_symbolic_handler),
+    (socket_event_handler_t *)(&__redis_semi_symbolic_handler),
 };
 
 void klee_init_sockets_simulator(const socksim_init_descriptor_t *ssid) {
