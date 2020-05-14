@@ -4619,6 +4619,7 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
     if (pi!=pie) break;
   }
 
+  // Get viable *initial* values for all memory objects.
   std::vector< std::vector<unsigned char> > values;
   std::vector<const Array*> objects;
   for (unsigned i = 0; i != state.symbolics.size(); ++i) {
@@ -4632,6 +4633,30 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
     ExprPPrinter::printQuery(llvm::errs(), state.constraints,
                              ConstantExpr::alloc(0, Expr::Bool));
     return false;
+  }
+
+  // The program may have written to parts of the symbolic memory object,
+  // so our output should reflect those changes.
+  for (unsigned i = 0; i != state.symbolics.size(); ++i) {
+    const MemoryObject *mo = state.symbolics[i].first;
+    const ObjectState *os = state.addressSpace.findObject(mo);
+    if (!os)
+      continue;
+
+    size_t size = mo->size;
+
+    // Create a tmp Array with the initial values returned by the solver
+    // XXX TODO a way to clean these up so they're not leaked until program end.
+    std::vector< ref<ConstantExpr> > Init(size);
+    for (unsigned j = 0; j < size; ++j) {
+      Init[j] = ConstantExpr::create(values[i][j], Expr::Int8);
+    }
+    const Array *initialValues = arrayCache.CreateArray("tmp", size,
+                                                        &Init[0],
+                                                        &Init[0] + size);
+
+    // Read the contents of the memory object assuming those initial values
+    values[i] = os->readAll(initialValues);
   }
 
   for (unsigned i = 0; i != state.symbolics.size(); ++i)

@@ -443,6 +443,37 @@ ref<Expr> ObjectState::read8(ref<Expr> offset) const {
   return ReadExpr::create(getUpdates(), ZExtExpr::create(offset, Expr::Int32));
 }
 
+std::vector<unsigned char>
+ObjectState::readAll(const Array *initialValues) const {
+  const Array *myArray = updates.root;
+  if (myArray && myArray->isSymbolicArray()) {
+    assert(initialValues != nullptr &&
+           "Must supply initialValues when reading contents of symbolic");
+  }
+
+  if (initialValues) {
+    assert(initialValues->isConstantArray() &&
+           "Must supply a concrete Array for initialValues");
+  }
+
+  UpdateList newUpdates(updates);
+  newUpdates.root = initialValues;
+
+  std::vector<unsigned char> res(size, 0);
+  for (unsigned i = 0; i < size; ++i) {
+    // Default this byte to whatever's inside initialValues
+    // (in case there are known symbolics or something)
+    res[i] = initialValues->constantValues[i]->getZExtValue(8);
+
+    ref<Expr> byte = read8(i);
+    if (ConstantExpr *CE = dyn_cast<ConstantExpr>(byte)) {
+      res[i] = CE->getZExtValue(8);
+    }
+  }
+
+  return res;
+}
+
 void ObjectState::write8(const ExecutionState &_unused, unsigned offset, uint8_t value) {
   //assert(read_only == false && "writing to read-only object!");
   concreteStore[offset] = value;
