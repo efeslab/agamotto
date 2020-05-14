@@ -364,7 +364,10 @@ static nvm_heap *nvm_create_baseheap(
     nvm_blk_set(&heap->nvb_free, nvb_begin);
 
     /* Flush the heap  out of our processor cache. */
-    nvm_flush(heap, sizeof(*heap));
+    //stolerbs: BUG doesn't account for padding
+    //nvm_flush(heap, sizeof(*heap));
+    //stolerbs: PATCH
+    nvm_flush(heap, 772);
 
     return heap;
 }

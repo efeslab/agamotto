@@ -440,7 +440,6 @@ nvm_desc nvm_create_region(
     /* set the persistent region name. */
     strncpy((char*)region=>header.name, regionname,
             sizeof(region=>header.name) - 1);
-    nvm_flush(region=>header.name, sizeof(region=>header.name));
 
     /* This NVM segment has just been created so its attach count is set to
      * one. Attach count of 0 is used to ensure no match with attach_count. */
@@ -613,7 +612,10 @@ nvm_desc nvm_create_region(
     nvm_finishNT(rh);
 
     /* flush the region now that it is initialized. */
-    nvm_flush(region, sizeof(*region));
+    //stolerbs: BUG doesn't account for padding
+    //nvm_flush(region, sizeof(*region));
+    //stolerbs: PATCH
+    nvm_flush(region, 204);
 
     /* Create the upgrade mutex array used for locking upgrades */
     nvm_app_data *ad = nvm_get_app_data();

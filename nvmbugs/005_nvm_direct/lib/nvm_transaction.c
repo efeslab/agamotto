@@ -1761,7 +1761,16 @@ void nvm_undo(
         /* Build the operation data and ensure it is persistent */
         void_set(&r->addr, pt);
         nvm_copy(r->data, pt, bytes - sizeof(*r));
-        nvm_flush(r, bytes);
+        //stolerbs: BUG flushes too much?
+        //nvm_flush(r, bytes);
+        //stolerbs: PATCH? PATCH!
+        if (((int64_t)&r->addr) / 64 != ((int64_t)&r->data) / 64)
+        {
+          //printf("flushing %p \t %lu bytes\n", &r->addr, sizeof(r->addr));
+          nvm_flush(&r->addr, sizeof(r->addr));
+        } else {
+          //printf("not flushing %p, since on same cacheline as data\n", &r->addr);
+        }
 
         /* add the undo operation */
         nvm_add_oper(tx, nvm_op_restore, bytes);
