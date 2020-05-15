@@ -7,9 +7,9 @@
 #include <setjmp.h>
 #include <string.h>
 #include <pthread.h>
-#include "nvm.h"
-#include "nvm_region0.h"
-#include "nvm_heap0.h"
+#include "lib/nvm.h"
+#include "lib/nvm_region0.h"
+#include "lib/nvm_heap0.h"
 
 /* The virtual address to attach the main region at */
 //#define attch_int (1024 * 1024 * 1024 * 128LL) //fixed mapping

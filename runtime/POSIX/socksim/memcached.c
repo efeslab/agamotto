@@ -61,30 +61,30 @@ static void memcached_update_client_func(void *self) {
   simulated_client_handler_t *self_hdl = (simulated_client_handler_t *)self;
 
   static const char flushSeq[] = "\r\n";
-  int nwrites = 10;
+  int nwrites = 1;
+  char cmd[128];
   char payload[128];
-  char keyData = 'A';
 
   if (useSymbolicHandler) {
     klee_make_symbolic(payload, sizeof(payload), "memcached_update_payload");
 
     klee_make_symbolic(&nwrites, sizeof(nwrites), "memcached_update_nwrites");
     klee_assume(nwrites <= 10);
-
-    klee_make_symbolic(&keyData, sizeof(keyData), "memcached_update_key_data");
-    klee_assume(keyData > ' ');
-    klee_assume(keyData + 10 < '~');
   } 
 
   memset(payload, 0, sizeof(payload));
 
   int i, ret;
   for (i = 0; i < nwrites; i++) {
-    snprintf(payload, sizeof(payload), "set key_%c 1 0 5%sval_%c%s",
-            keyData, flushSeq, keyData, flushSeq);
+    snprintf(payload, sizeof(payload), "val_%d%s", i, flushSeq);
+    snprintf(cmd, sizeof(cmd), "set key_%d 1 0 %lu%s",
+            i, strlen(payload) - strlen(flushSeq), flushSeq);
+
+    ret = _write_socket(self_hdl->client_sock, cmd, strlen(cmd));
+    posix_debug_msg("CMD: '%s', ret %d\n", cmd, ret);
     ret = _write_socket(self_hdl->client_sock, payload, strlen(payload));
+    posix_debug_msg("VAL: '%s', ret %d\n", payload, ret);
     posix_debug_msg("Write #%d: payload (set) write result %d\n", i, ret);
-    keyData++;
   }
   
   const char shutdown[] = "shutdown\r\n";
