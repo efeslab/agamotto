@@ -44,7 +44,7 @@ Legend = [
     ('QCexCHits', 'Counterexample cache hits'),
     # (iangneal): For NVM-KLEE
     ('TNvmHeuristic', 'Time spent in calculating the NVM heuristic values'),
-    ('TNvmGetShared', 'Time spent in memory management code for NVM'),
+    ('TNvmOffline', 'Time spent in "offline" operations for NVM'),
     ('TNvmAndersen', 'Time spent in Andersen\'s alias analysis'),
     ('NvmBlocksTotal', 'Number of total NVM-relevant basic blocks'),
     ('NvmBlocksCovered', 'Number of executed NVM-relevant basic blocks'),
@@ -134,7 +134,7 @@ def getLabels(pr):
     elif pr == 'nvm':
         labels = ('Path', 'Instrs', 'Time(s)', 'ICov(%)', 'BCov(%)', 'ICount',
                   'States', 'maxStates', 'avgStates', 'Mem(MB)',
-                  'maxMem(MB)', 'avgMem(MB)', 'T-NvmHeuristic(%)', 'T-GetShared(%)',
+                  'maxMem(MB)', 'avgMem(MB)', 'T-NvmHeuristic(%)', 'T-Offline(%)',
                   'T-NvmA(%)',
                   'NvmBlocks', 'NvmBlocksExec', 'NvmUnique', 'NvmCov(%)',
                   'NvmStatesKilled', 'NvmStatesDeferred')

@@ -458,7 +458,7 @@ void StatsTracker::writeStatsHeader() {
              << "QueryCexCacheHits INTEGER,"
              // (iangneal): For NVM-KLEE
              << "NvmHeuristicTime INTEGER, "
-             << "NvmGetSharedTime INTEGER, "
+             << "NvmOfflineTime INTEGER, "
              << "NvmAndersenTime INTEGER, "
              << "NvmBugsTotalUniq INTEGER,"
              << "NvmBugsTotalOcc INTEGER,"
@@ -504,7 +504,7 @@ void StatsTracker::writeStatsHeader() {
              << "QueryCexCacheHits ," 
              // (iangneal): For NVM-KLEE
              << "NvmHeuristicTime ,"
-             << "NvmGetSharedTime ,"
+             << "NvmOfflineTime ,"
              << "NvmAndersenTime ,"
              << "NvmBugsTotalUniq ,"
              << "NvmBugsTotalOcc ,"
@@ -557,17 +557,18 @@ time::Span StatsTracker::elapsed() {
 }
 
 void StatsTracker::writeStatsLine() {
+  klee_warning_once(0, "Subtracting NvmOfflineTime!");
   sqlite3_bind_int64(insertStmt, 1, stats::instructions);
   sqlite3_bind_int64(insertStmt, 2, fullBranches);
   sqlite3_bind_int64(insertStmt, 3, partialBranches);
   sqlite3_bind_int64(insertStmt, 4, numBranches);
-  sqlite3_bind_int64(insertStmt, 5, time::getUserTime().toMicroseconds());
+  sqlite3_bind_int64(insertStmt, 5, time::getUserTime().toMicroseconds() - stats::nvmOfflineTime);
   sqlite3_bind_int64(insertStmt, 6, executor.states.size());
   sqlite3_bind_int64(insertStmt, 7, util::GetTotalMallocUsage() + executor.memory->getUsedDeterministicSize());
   sqlite3_bind_int64(insertStmt, 8, stats::queries);
   sqlite3_bind_int64(insertStmt, 9, stats::queryConstructs);
   sqlite3_bind_int64(insertStmt, 10, 0);  // was numObjects
-  sqlite3_bind_int64(insertStmt, 11, elapsed().toMicroseconds());
+  sqlite3_bind_int64(insertStmt, 11, elapsed().toMicroseconds() - stats::nvmOfflineTime);
   sqlite3_bind_int64(insertStmt, 12, stats::coveredInstructions);
   sqlite3_bind_int64(insertStmt, 13, stats::uncoveredInstructions);
   sqlite3_bind_int64(insertStmt, 14, stats::queryTime);
@@ -579,7 +580,7 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, 20, stats::queryCexCacheHits);
   // (iangneal): For NVM-KLEE
   sqlite3_bind_int64(insertStmt, 21, stats::nvmHeuristicTime);
-  sqlite3_bind_int64(insertStmt, 22, stats::nvmGetSharedTime);
+  sqlite3_bind_int64(insertStmt, 22, stats::nvmOfflineTime);
   sqlite3_bind_int64(insertStmt, 23, stats::nvmAndersenTime);
   sqlite3_bind_int64(insertStmt, 24, stats::nvmBugsTotalUniq);
   sqlite3_bind_int64(insertStmt, 25, stats::nvmBugsTotalOccurences);

@@ -49,7 +49,7 @@ namespace stats {
 
   /// (iangneal): Core NVM time stats.
   extern Statistic nvmHeuristicTime;
-  extern Statistic nvmGetSharedTime;
+  extern Statistic nvmOfflineTime;
   extern Statistic nvmAndersenTime;
 
   /// (iangneal): Core NVM bug stats. We do this for graphing purposes.

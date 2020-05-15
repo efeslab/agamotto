@@ -29,7 +29,7 @@ Statistic stats::trueBranches("TrueBranches", "Bt");
 Statistic stats::uncoveredInstructions("UncoveredInstructions", "Iuncov");
 
 Statistic stats::nvmHeuristicTime("NvmHeuristicTime", "NvmHTime");
-Statistic stats::nvmGetSharedTime("NvmGetSharedTime", "NvmGSTime");
+Statistic stats::nvmOfflineTime("NvmOfflineTime", "NvmOffline");
 Statistic stats::nvmAndersenTime("NvmAndersenTime", "NvmATime");
 
 Statistic stats::nvmBugsTotalUniq(
