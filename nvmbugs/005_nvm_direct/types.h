@@ -10,9 +10,9 @@
 #include <setjmp.h>
 #include <string.h>
 #include <pthread.h>
-#include "nvm.h"
-#include "nvm_region0.h"
-#include "nvm_heap0.h"
+#include "lib/nvm.h"
+#include "lib/nvm_region0.h"
+#include "lib/nvm_heap0.h"
 
 /* the number of log records in a log region */
 #define logsz  1024

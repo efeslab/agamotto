@@ -107,6 +107,7 @@ class Executor : public Interpreter {
   friend class CustomCheckerHandler;
   friend class CustomChecker;
   friend class PmemObjTxAddChecker;
+  friend class TxOnlyChecker;
 
 public:
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
