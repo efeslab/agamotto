@@ -125,9 +125,9 @@ cl::opt<bool>
                     cl::cat(DebugCat)); 
 
 cl::opt<bool>
-    EnableCustomCheckers("custom-checkers", cl::init(true),
+    EnableCustomCheckers("custom-checkers", cl::init(false),
                          cl::desc("Enable use of custom checkers (e.g., PMDK "
-                                  "logging checkers, etc). (default=true)"),
+                                  "logging checkers, etc). (default=false)"),
                          cl::cat(CheckerCat));
 } // namespace klee
 

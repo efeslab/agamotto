@@ -583,7 +583,6 @@ NvmContextDesc::Shared NvmContextDesc::tryGetNextContext(KInstruction *pc,
 }
 
 NvmContextDesc::Shared NvmContextDesc::tryUpdateContext(Value *v, bool isValNvm) {
-  TimerStatIncrementer timer2(stats::nvmGetSharedTime);
   NvmValueDesc::Shared newDesc = valueState->updateState(v, isValNvm);
 
   if (valueState != newDesc) {
@@ -1052,6 +1051,7 @@ const char *NvmHeuristicBuilder::typeDesc[] = {
 std::shared_ptr<NvmHeuristicInfo> 
 NvmHeuristicBuilder::create(Type t, Executor *executor, KFunction *main) {
   TimerStatIncrementer timer(stats::nvmHeuristicTime);
+  TimerStatIncrementer timer2(stats::nvmOfflineTime);
 
   NvmHeuristicInfo *ptr = nullptr;
   switch(t) {

@@ -368,7 +368,7 @@ class VolatileFilter final : public CustomChecker {
  */
 class TxOnlyChecker final : public PmemObjTxAddChecker {
   private:
-    std::string structs[2] = { "struct.redis_pmem_root", 
+    std::string structs[3] = { "struct.redis_pmem_root", 
                                "struct.hashmap_atomic",
                                "struct.driver_root" };
     std::list<TxRange> needed;
