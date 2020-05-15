@@ -1,0 +1,36 @@
+Error: persistent memory violation!
+File: src/clht_lb_res.c
+Line: 146
+assembly.ll line: 14003
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse2.mfence(), !dbg !10978 (op #0=<global const>)
+	#000014003 in mfence () at src/clht_lb_res.c:146
+	#100013931 in clflush (=206927056, =128, =true) at src/clht_lb_res.c:153
+	#200012691 in clht_create (=8) at src/clht_lb_res.c:338
+	#300012232 in _Z3runPPc (=202270528) at example-nothread.cpp:62
+	#400017253 in __klee_posix_wrapped_main (=2, =202270528) at example-nothread.cpp:179
+	#500010308 in __klee_posix_ctor_stub_insert_point (=2, =202270528, =46739632) at runtime/POSIX/./klee_init_env.c:491
+	#600010328 in __user_main (=5, =46739584, =46739632) at runtime/POSIX/./klee_init_env.c:499
+	#700004414 in __uClibc_main (=49969416, =5, =46739584, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004581 in main (=5, =46739584)
+Errors: 
+6) File: src/clht_lb_res.c
+Line: 146
+assembly.ll line: 14003
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse2.mfence(), !dbg !10978 (op #0=<global const>)
+	#000014003 in mfence () at src/clht_lb_res.c:146
+	#100013931 in clflush (=206927056, =128, =true) at src/clht_lb_res.c:153
+	#200012691 in clht_create (=8) at src/clht_lb_res.c:338
+	#300012232 in _Z3runPPc (=202270528) at example-nothread.cpp:62
+	#400017253 in __klee_posix_wrapped_main (=2, =202270528) at example-nothread.cpp:179
+	#500010308 in __klee_posix_ctor_stub_insert_point (=2, =202270528, =46739632) at runtime/POSIX/./klee_init_env.c:491
+	#600010328 in __user_main (=5, =46739584, =46739632) at runtime/POSIX/./klee_init_env.c:499
+	#700004414 in __uClibc_main (=49969416, =5, =46739584, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004581 in main (=5, =46739584)
+

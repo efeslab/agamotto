@@ -1,0 +1,46 @@
+Error: persistent memory violation!
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148150
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !7993 (op #0=<global const>)
+	#000148150 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100164202 in pmem_drain () at pmem.c:189
+	#200116470 in obj_norep_drain (=137723904) at obj.c:492
+	#300101309 in pmemops_drain.1002 (=137730608) at ./pmemops.h:76
+	#400101099 in palloc_exec_actions (=137730608, =135481984, =136951040, =1) at palloc.c:559
+	#500100106 in palloc_operation (=137730608, =0, =137730048, =24, =83598216, =207382016, =0, =32768, =0, =0, =135481984) at palloc.c:769
+	#600121968 in obj_alloc_root (=137723904, =24, =0, =0) at obj.c:2833
+	#700121806 in pmemobj_root_construct (=137723904, =24, =0, =0) at obj.c:2887
+	#800122161 in pmemobj_root (=137723904, =24) at obj.c:2912
+	#900011126 in __klee_posix_wrapped_main (=3, =137517600) at nvmbugs/000_pmdk_btree_map/driver.c:45
+	#1000009291 in __klee_posix_ctor_stub_insert_point (=3, =137517600, =58024208) at runtime/POSIX/./klee_init_env.c:491
+	#1100009311 in __user_main (=7, =58024144, =58024208) at runtime/POSIX/./klee_init_env.c:499
+	#1200003397 in __uClibc_main (=30080264, =7, =58024144, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300003564 in main (=7, =58024144)
+Errors: 
+3) File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148150
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !7993 (op #0=<global const>)
+	#000148150 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100164202 in pmem_drain () at pmem.c:189
+	#200116470 in obj_norep_drain (=137723904) at obj.c:492
+	#300101309 in pmemops_drain.1002 (=137730608) at ./pmemops.h:76
+	#400101099 in palloc_exec_actions (=137730608, =135481984, =136951040, =1) at palloc.c:559
+	#500100106 in palloc_operation (=137730608, =0, =137730048, =24, =83598216, =207382016, =0, =32768, =0, =0, =135481984) at palloc.c:769
+	#600121968 in obj_alloc_root (=137723904, =24, =0, =0) at obj.c:2833
+	#700121806 in pmemobj_root_construct (=137723904, =24, =0, =0) at obj.c:2887
+	#800122161 in pmemobj_root (=137723904, =24) at obj.c:2912
+	#900011126 in __klee_posix_wrapped_main (=3, =137517600) at nvmbugs/000_pmdk_btree_map/driver.c:45
+	#1000009291 in __klee_posix_ctor_stub_insert_point (=3, =137517600, =58024208) at runtime/POSIX/./klee_init_env.c:491
+	#1100009311 in __user_main (=7, =58024144, =58024208) at runtime/POSIX/./klee_init_env.c:499
+	#1200003397 in __uClibc_main (=30080264, =7, =58024144, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300003564 in main (=7, =58024144)
+
