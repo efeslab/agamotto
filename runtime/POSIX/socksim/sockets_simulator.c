@@ -19,6 +19,7 @@ typedef struct {
 static predefined_handler_t predefined_handlers[] = {
     PREDEFINED(__memcached_1_5_13_handler),
     PREDEFINED(__memcached_update_handler),
+    PREDEFINED(__memcached_rand_handler),
     PREDEFINED(__redis_simple_concrete_handler),
     PREDEFINED(__redis_file_handler),
     PREDEFINED(__redis_symbolic_handler),
