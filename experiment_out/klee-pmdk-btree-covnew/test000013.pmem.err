@@ -1,0 +1,54 @@
+Error: persistent memory violation!
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=159311168, op #2=159311168)
+	#000148116 in pmem_clwb (=159311168) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=159310992, =304) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=159310992, =304) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=159310992, =304) at pmem.c:232
+	#400116445 in obj_norep_flush (=155123712, =159310992, =304, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=155130680, =159310992, =304, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=344074400, =155123712) at tx.c:403
+	#700060340 in ravl_foreach_node (=344074368, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:81
+	#800060351 in ravl_foreach_node (=344074496, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:82
+	#900060292 in ravl_delete_cb (=699538976, =96649608, =155123712) at ../../src/../src/common/ravl.c:104
+	#1000130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1100129923 in pmemobj_tx_commit () at tx.c:999
+	#1200130565 in pmemobj_tx_process () at tx.c:1101
+	#1300011659 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:84
+	#1400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1700003564 in main (=7, =70550048)
+Errors: 
+22) File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=159310976, op #2=159310976)
+	#000148116 in pmem_clwb (=159310976) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=159310992, =304) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=159310992, =304) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=159310992, =304) at pmem.c:232
+	#400116445 in obj_norep_flush (=155123712, =159310992, =304, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=155130680, =159310992, =304, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=338282720, =155123712) at tx.c:403
+	#700060340 in ravl_foreach_node (=338282688, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:81
+	#800060351 in ravl_foreach_node (=239364992, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:82
+	#900060292 in ravl_delete_cb (=239276768, =96649608, =155123712) at ../../src/../src/common/ravl.c:104
+	#1000130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1100129923 in pmemobj_tx_commit () at tx.c:999
+	#1200130565 in pmemobj_tx_process () at tx.c:1101
+	#1300011659 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:84
+	#1400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1700003564 in main (=7, =70550048)
+
