@@ -1,0 +1,30 @@
+Error: persistent memory violation!
+File: libc/stdlib/_atexit.c
+Line: 336
+assembly.ll line: 11900
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @_exit(i32 %11) #50, !dbg !10992 (op #0=<global const>, op #1=0)
+	#000011900 in exit (=0) at libc/stdlib/_atexit.c:336
+	#100004411 in __uClibc_main (=38820232, =5, =39368192, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#200004577 in main (=5, =39368192)
+Errors: 
+50) File: src/clht_lb_res.c
+Line: 245
+assembly.ll line: 13590
+ allocated at _block_init_pmem_from_file():  %22 = call i8* @klee_pmem_alloc_pmem(i64 %19, i8* %20, i1 zeroext false, i8* %21), !dbg !11010
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 %12, i32* %10, !dbg !10987 (op #0=1, op #1=520566248)
+	#000013590 in clht_bucket_create_stats (=520566160, =1156495528) at src/clht_lb_res.c:245
+	#100013243 in clht_put (=520565968, =25, =25) at src/clht_lb_res.c:544
+	#200012688 in _ZZ3runPPcENK3$_0clEv (=339964992) at example-nothread.cpp:109
+	#300012271 in _Z3runPPc (=217739872) at example-nothread.cpp:114
+	#400016765 in __klee_posix_wrapped_main (=2, =217739872) at example-nothread.cpp:204
+	#500010304 in __klee_posix_ctor_stub_insert_point (=2, =217739872, =39368240) at runtime/POSIX/./klee_init_env.c:491
+	#600010324 in __user_main (=5, =39368192, =39368240) at runtime/POSIX/./klee_init_env.c:499
+	#700004410 in __uClibc_main (=38820232, =5, =39368192, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004577 in main (=5, =39368192)
+

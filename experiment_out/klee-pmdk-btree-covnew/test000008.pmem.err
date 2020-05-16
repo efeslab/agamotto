@@ -1,0 +1,47 @@
+Error: persistent memory violation!
+File: runtime/POSIX/./mman.c
+Line: 248
+assembly.ll line: 136340
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @klee_pmem_check_persisted(i8* %130, i64 %131), !dbg !8111 (op #0=<global const>, op #1=158269440, op #2=4096)
+	#000136340 in munmap_sym (=155123712, =8388608, =83246496, =0) at runtime/POSIX/./mman.c:248
+	#100136486 in munmap (=155123712, =8388608) at runtime/POSIX/./mman.c:272
+	#200073176 in util_unmap_part (=50801080) at ../../src/../src/common/set.c:489
+	#300075335 in util_replica_close (=239307008, =0) at ../../src/../src/common/set.c:2913
+	#400075115 in util_poolset_close (=239307008, =0) at ../../src/../src/common/set.c:635
+	#500117393 in obj_pool_cleanup (=155123712) at obj.c:1932
+	#600119024 in pmemobj_close (=155123712) at obj.c:1972
+	#700011973 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:120
+	#800009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#900009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1000003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1100003564 in main (=7, =70550048)
+Errors: 
+17) File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 10927
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %17, i8* %18, align 1, !dbg !8012 (op #0=1, op #1=158278848)
+	#000010927 in memcpy (=158278848, =297170192, =8) at libc/string/memcpy.c:29
+	#100051436 in huge_write_footer (=158278728, =16) at memblock.c:1136
+	#200052333 in memblock_huge_init (=5331662032, =155130416, =1, =0, =16) at memblock.c:1310
+	#300095907 in heap_split_block (=155130416, =2976482528, =5331660784, =1) at heap.c:961
+	#400095336 in heap_get_bestfit_block (=155130416, =2976482528, =5331660784) at heap.c:995
+	#500095571 in heap_ensure_run_bucket_filled (=155130416, =304870944, =1) at heap.c:884
+	#600095271 in heap_get_bestfit_block (=155130416, =304870944, =150402600) at heap.c:987
+	#700100825 in palloc_reservation_create (=155130416, =24, =96590728, =2973396032, =0, =32768, =0, =0, =150402560) at palloc.c:218
+	#800099976 in palloc_operation (=155130416, =0, =155129856, =24, =96590728, =2973396032, =0, =32768, =0, =0, =152421888) at palloc.c:732
+	#900121968 in obj_alloc_root (=155123712, =24, =0, =0) at obj.c:2833
+	#1000121806 in pmemobj_root_construct (=155123712, =24, =0, =0) at obj.c:2887
+	#1100122161 in pmemobj_root (=155123712, =24) at obj.c:2912
+	#1200011126 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:45
+	#1300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003564 in main (=7, =70550048)
+
