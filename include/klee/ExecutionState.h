@@ -129,9 +129,10 @@ public:
   // The numbers of times this state has run through Executor::stepInstruction
   std::uint64_t steppedInstructions;
 
-private:
   /// @brief (iangneal): Makes it easier to create new threads
   Executor *executor_;
+private:
+  
 
   ExecutionState() : ptreeNode(0) {}
 

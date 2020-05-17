@@ -16,6 +16,7 @@
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KInstruction.h"
 #include "CoreStats.h"
+#include "Executor.h"
 
 using namespace klee;
 using namespace llvm;
@@ -32,7 +33,7 @@ RootCauseLocation::RootCauseLocation(const ExecutionState &state,
   : allocSite(allocationSite), 
     inst(pc),
     reason(r) {
-  
+  timestamp = time::getUserTime().toMicroseconds() - stats::nvmOfflineTime;
   for (const klee::StackFrame &sf : state.stack()) {
     stack.emplace_back(sf.caller, sf.kf);
   }
@@ -151,6 +152,24 @@ bool klee::operator==(const RootCauseLocation &lhs,
 
 /***/
 
+/**
+ * This doesn't work as well as I would hope, but it should be at least better.
+ */
+uint64_t 
+RootCauseManager::getNewId(const ExecutionState &state, 
+                           const RootCauseLocation &rcl) {
+  uint64_t id = std::hash<std::string>{}(rcl.stackStr);
+  id = std::hash<uint64_t>{}(id ^ state.stateTime);
+  while (usedIds.count(id)) {
+    klee_warning_once(0, "Had to increment ID! Root cause tracking across runs "
+                         "may now be annoying!");
+    ++id;
+  }
+  usedIds.insert(id);
+
+  return id;
+} 
+
 uint64_t 
 RootCauseManager::getRootCauseLocationID(const ExecutionState &state, 
                                          const llvm::Value *allocationSite, 
@@ -161,14 +180,15 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
     return rootToId.at(rcl);
   }
 
-  uint64_t id = nextId++;
-  assert(nextId > 0 && "ID overflow!");
+  auto uniqRcl = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
+  uniqRcl->rootCause.installExampleStackTrace(state);
 
-  rootToId[rcl] = id;
-  idToRoot[id] = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
-  idToRoot[id]->rootCause.installExampleStackTrace(state);
+  uint64_t newId = getNewId(state, uniqRcl->rootCause);
 
-  return id;
+  rootToId[rcl] = newId;
+  idToRoot[newId] = std::move(uniqRcl);
+
+  return newId;
 }
 
 uint64_t 
@@ -179,6 +199,15 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
                                          const std::unordered_set<uint64_t> &ids) {
   RootCauseLocation rcl(state, allocationSite, pc, reason);
 
+  if (rootToId.count(rcl)) {
+    return rootToId.at(rcl);
+  }
+
+  auto uniqRcl = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
+  uniqRcl->rootCause.installExampleStackTrace(state);
+
+  uint64_t newId = getNewId(state, uniqRcl->rootCause);
+
   /**
    * We want all the ids so we can flatten the masking set (i.e., the masking 
    * set) tells you all writes this write masks, even if they may mask each 
@@ -187,9 +216,6 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
    * Since we do this each time, each id in ids should be flattened already, so
    * we shouldn't have to do anything recursively here.
    */
-
-  uint64_t newId = nextId++;
-  assert(nextId > 0 && "ID overflow!");
 
   for (auto id : ids) {
     if (!idToRoot.count(id)) {
@@ -206,15 +232,8 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
     }
   }
 
-  if (rootToId.count(rcl)) {
-    return rootToId.at(rcl);
-  }
-
-  
-
   rootToId[rcl] = newId;
-  idToRoot[newId] = std::unique_ptr<RootCauseInfo>(new RootCauseInfo(rcl));
-  idToRoot[newId]->rootCause.installExampleStackTrace(state);
+  idToRoot[newId] = std::move(uniqRcl);
 
   return newId;
 }
@@ -299,7 +318,7 @@ void RootCauseManager::dumpText(llvm::raw_ostream &out) const {
 
 void RootCauseManager::dumpCSV(llvm::raw_ostream &out) const {
   // Create header
-  out << "ID,Type,Occurences";
+  out << "ID,Timestamp,Type,Occurences";
   for (size_t stackframeNum = 0; stackframeNum < largestStack; ++stackframeNum) {
     // This is the full description as a convenience
     out << ",StackFrame" << stackframeNum << ",";
@@ -315,6 +334,7 @@ void RootCauseManager::dumpCSV(llvm::raw_ostream &out) const {
   for (const auto &id : buggyIds) {
     RootCauseLocation &rcl = idToRoot.at(id)->rootCause;
     out << id << ","; // ID
+    out << rcl.timestamp << ","; // Timestamp (microseconds)
     out << rcl.reasonString() << ","; // Type
     out << idToRoot.at(id)->occurences; // Occurences
 
