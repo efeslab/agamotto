@@ -1,0 +1,50 @@
+Error: persistent memory violation!
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148999
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !8365 (op #0=<global const>)
+	#000148999 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100165051 in pmem_drain () at pmem.c:189
+	#200165171 in pmem_persist (=158197200, =72) at pmem.c:244
+	#300116605 in obj_norep_persist (=154263552, =158197200, =72, =0) at obj.c:464
+	#400115730 in pmemops_xpersist.865 (=154270520, =158197200, =72, =0) at ./pmemops.h:51
+	#500115255 in pmemops_persist.846 (=154270520, =158197200, =72) at ./pmemops.h:57
+	#600121519 in pmemobj_persist (=154263552, =158197200, =72) at obj.c:2724
+	#700014699 in create_hashmap (=154263552, =9907816116311271240, =3933648, =0) at nvmbugs/hashmap_atomic/hashmap_atomic.c:150
+	#800014524 in hm_atomic_create (=154263552, =158197072, =0) at nvmbugs/hashmap_atomic/hashmap_atomic.c:443
+	#900011140 in map_hm_atomic_create (=154263552, =158197072, =0) at nvmbugs/hashmap_atomic/map_hashmap_atomic.c:87
+	#1000015506 in map_create (=154260000, =158197072, =0) at nvmbugs/hashmap_atomic/map.c:84
+	#1100014984 in __klee_posix_wrapped_main (=3, =153876704) at nvmbugs/hashmap_atomic/driver.c:150
+	#1200009362 in __klee_posix_ctor_stub_insert_point (=3, =153876704, =73686528) at runtime/POSIX/./klee_init_env.c:491
+	#1300009382 in __user_main (=7, =73686464, =73686528) at runtime/POSIX/./klee_init_env.c:499
+	#1400003468 in __uClibc_main (=45671432, =7, =73686464, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500003635 in main (=7, =73686464)
+Errors: 
+9) File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148999
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !8365 (op #0=<global const>)
+	#000148999 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100165051 in pmem_drain () at pmem.c:189
+	#200165171 in pmem_persist (=158197200, =72) at pmem.c:244
+	#300116605 in obj_norep_persist (=154263552, =158197200, =72, =0) at obj.c:464
+	#400115730 in pmemops_xpersist.865 (=154270520, =158197200, =72, =0) at ./pmemops.h:51
+	#500115255 in pmemops_persist.846 (=154270520, =158197200, =72) at ./pmemops.h:57
+	#600121519 in pmemobj_persist (=154263552, =158197200, =72) at obj.c:2724
+	#700014699 in create_hashmap (=154263552, =9907816116311271240, =3933648, =0) at nvmbugs/hashmap_atomic/hashmap_atomic.c:150
+	#800014524 in hm_atomic_create (=154263552, =158197072, =0) at nvmbugs/hashmap_atomic/hashmap_atomic.c:443
+	#900011140 in map_hm_atomic_create (=154263552, =158197072, =0) at nvmbugs/hashmap_atomic/map_hashmap_atomic.c:87
+	#1000015506 in map_create (=154260000, =158197072, =0) at nvmbugs/hashmap_atomic/map.c:84
+	#1100014984 in __klee_posix_wrapped_main (=3, =153876704) at nvmbugs/hashmap_atomic/driver.c:150
+	#1200009362 in __klee_posix_ctor_stub_insert_point (=3, =153876704, =73686528) at runtime/POSIX/./klee_init_env.c:491
+	#1300009382 in __user_main (=7, =73686464, =73686528) at runtime/POSIX/./klee_init_env.c:499
+	#1400003468 in __uClibc_main (=45671432, =7, =73686464, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500003635 in main (=7, =73686464)
+

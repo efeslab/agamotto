@@ -1,0 +1,50 @@
+Error: persistent memory violation!
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 156132
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !10981 (op #0=<global const>)
+	#000156132 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100172184 in pmem_drain () at pmem.c:189
+	#200126450 in obj_norep_drain (=200458240) at obj.c:492
+	#300111289 in pmemops_drain.1002 (=200464944) at ./pmemops.h:76
+	#400111079 in palloc_exec_actions (=200464944, =199668480, =189294848, =1) at palloc.c:559
+	#500110086 in palloc_operation (=200464944, =0, =200464384, =128, =112635144, =3358026304, =0, =32768, =0, =0, =199668480) at palloc.c:769
+	#600131948 in obj_alloc_root (=200458240, =128, =0, =0) at obj.c:2833
+	#700131786 in pmemobj_root_construct (=200458240, =128, =0, =0) at obj.c:2887
+	#800132141 in pmemobj_root (=200458240, =128) at obj.c:2912
+	#900012338 in clht_create (=8) at src/clht_lb_res.c:278
+	#1000012197 in _Z3runPPc (=200157568) at example-nothread.cpp:81
+	#1100016765 in __klee_posix_wrapped_main (=2, =200157568) at example-nothread.cpp:204
+	#1200010304 in __klee_posix_ctor_stub_insert_point (=2, =200157568, =100913136) at runtime/POSIX/./klee_init_env.c:491
+	#1300010324 in __user_main (=5, =100913088, =100913136) at runtime/POSIX/./klee_init_env.c:499
+	#1400004410 in __uClibc_main (=34699656, =5, =100913088, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500004577 in main (=5, =100913088)
+Errors: 
+1) File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 156132
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !10981 (op #0=<global const>)
+	#000156132 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100172184 in pmem_drain () at pmem.c:189
+	#200126450 in obj_norep_drain (=200458240) at obj.c:492
+	#300111289 in pmemops_drain.1002 (=200464944) at ./pmemops.h:76
+	#400111079 in palloc_exec_actions (=200464944, =199668480, =189294848, =1) at palloc.c:559
+	#500110086 in palloc_operation (=200464944, =0, =200464384, =128, =112635144, =3358026304, =0, =32768, =0, =0, =199668480) at palloc.c:769
+	#600131948 in obj_alloc_root (=200458240, =128, =0, =0) at obj.c:2833
+	#700131786 in pmemobj_root_construct (=200458240, =128, =0, =0) at obj.c:2887
+	#800132141 in pmemobj_root (=200458240, =128) at obj.c:2912
+	#900012338 in clht_create (=8) at src/clht_lb_res.c:278
+	#1000012197 in _Z3runPPc (=200157568) at example-nothread.cpp:81
+	#1100016765 in __klee_posix_wrapped_main (=2, =200157568) at example-nothread.cpp:204
+	#1200010304 in __klee_posix_ctor_stub_insert_point (=2, =200157568, =100913136) at runtime/POSIX/./klee_init_env.c:491
+	#1300010324 in __user_main (=5, =100913088, =100913136) at runtime/POSIX/./klee_init_env.c:499
+	#1400004410 in __uClibc_main (=34699656, =5, =100913088, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500004577 in main (=5, =100913088)
+

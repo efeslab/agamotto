@@ -1,0 +1,5421 @@
+Persistent Memory Bugs:
+	Number of bugs: 50
+		Number of unpersisted write bugs (correctness): 30
+		Number of extra flush bugs (performance): 10
+		Number of flushes to untouched memory (performance): 5
+		Number of fences with nothing to commit (performance): 5
+	Overall bug occurences: 1929342
+		Number of unpersisted write occurences (correctness): 190
+		Number of extra flush occurences (performance): 25710
+		Number of untouched memory flush occurences (performance): 1895838
+		Number of occurence of fences with nothing to commit (performance): 7604
+
+(1) ID #377320 with 807 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=201928640, op #2=201928640)
+	#000148116 in pmem_clwb (=201928640) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=201928656, =304) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=201928656, =304) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=201928656, =304) at pmem.c:232
+	#400116445 in obj_norep_flush (=197738496, =201928656, =304, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=197745464, =201928656, =304, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=6565703264, =197738496) at tx.c:403
+	#700060340 in ravl_foreach_node (=6565703232, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:81
+	#800060329 in ravl_foreach_node (=6604854144, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:79
+	#900060351 in ravl_foreach_node (=6581824256, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:82
+	#1000060292 in ravl_delete_cb (=6575949216, =96649608, =197738496) at ../../src/../src/common/ravl.c:104
+	#1100130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1200129923 in pmemobj_tx_commit () at tx.c:999
+	#1300130565 in pmemobj_tx_process () at tx.c:1101
+	#1400011922 in __klee_posix_wrapped_main (=3, =154860928) at nvmbugs/000_pmdk_btree_map/driver.c:116
+	#1500009291 in __klee_posix_ctor_stub_insert_point (=3, =154860928, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1600009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1700003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(2) ID #278495 with 3361 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=159057216, op #2=159057216)
+	#000148116 in pmem_clwb (=159057216) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=159057232, =8) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=159057232, =8) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=159057232, =8) at pmem.c:232
+	#400116445 in obj_norep_flush (=155123712, =159057232, =8, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=155130680, =159057232, =8, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=517621856, =155123712) at tx.c:403
+	#700060340 in ravl_foreach_node (=517621824, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:81
+	#800060329 in ravl_foreach_node (=373758464, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:79
+	#900060292 in ravl_delete_cb (=766575296, =96649608, =155123712) at ../../src/../src/common/ravl.c:104
+	#1000130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1100129923 in pmemobj_tx_commit () at tx.c:999
+	#1200130565 in pmemobj_tx_process () at tx.c:1101
+	#1300011922 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:116
+	#1400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1700003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(3) ID #305721 with 220 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=201925760, op #2=201925760)
+	#000148116 in pmem_clwb (=201925760) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=201925776, =304) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=201925776, =304) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=201925776, =304) at pmem.c:232
+	#400116445 in obj_norep_flush (=197738496, =201925776, =304, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=197745464, =201925776, =304, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=5976012960, =197738496) at tx.c:403
+	#700060340 in ravl_foreach_node (=5976012928, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:81
+	#800060351 in ravl_foreach_node (=5888803584, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:82
+	#900060329 in ravl_foreach_node (=5966760768, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:79
+	#1000060292 in ravl_delete_cb (=5966651008, =96649608, =197738496) at ../../src/../src/common/ravl.c:104
+	#1100130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1200129923 in pmemobj_tx_commit () at tx.c:999
+	#1300130565 in pmemobj_tx_process () at tx.c:1101
+	#1400011659 in __klee_posix_wrapped_main (=3, =154860928) at nvmbugs/000_pmdk_btree_map/driver.c:84
+	#1500009291 in __klee_posix_ctor_stub_insert_point (=3, =154860928, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1600009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1700003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(4) ID #287650 with 475 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=159310976, op #2=159310976)
+	#000148116 in pmem_clwb (=159310976) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=159310992, =304) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=159310992, =304) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=159310992, =304) at pmem.c:232
+	#400116445 in obj_norep_flush (=155123712, =159310992, =304, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=155130680, =159310992, =304, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=5580785440, =155123712) at tx.c:403
+	#700060340 in ravl_foreach_node (=5580785408, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:81
+	#800060351 in ravl_foreach_node (=5617770112, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:82
+	#900060329 in ravl_foreach_node (=5552738176, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:79
+	#1000060292 in ravl_delete_cb (=5493679072, =96649608, =155123712) at ../../src/../src/common/ravl.c:104
+	#1100130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1200129923 in pmemobj_tx_commit () at tx.c:999
+	#1300130565 in pmemobj_tx_process () at tx.c:1101
+	#1400011922 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:116
+	#1500009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1600009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1700003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(5) ID #278497 with 6481 occurences:
+Type of modification: fence (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148150
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !7993 (op #0=<global const>)
+	#000148150 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100164202 in pmem_drain () at pmem.c:189
+	#200116470 in obj_norep_drain (=155123712) at obj.c:492
+	#300101309 in pmemops_drain.1002 (=155130416) at ./pmemops.h:76
+	#400101099 in palloc_exec_actions (=155130416, =744994304, =343482368, =1) at palloc.c:559
+	#500109080 in palloc_publish (=155130416, =343482368, =1, =744994304) at palloc.c:660
+	#600129993 in pmemobj_tx_commit () at tx.c:1009
+	#700130565 in pmemobj_tx_process () at tx.c:1101
+	#800011922 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:116
+	#900009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1000009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1100003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1200003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(6) ID #381275 with 112 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=201418112, op #2=201418112)
+	#000148116 in pmem_clwb (=201418112) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=201418064, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=201418064, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=201418064, =112) at pmem.c:232
+	#400116445 in obj_norep_flush (=197738496, =201418064, =112, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=197745464, =201418064, =112, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=6622920608, =197738496) at tx.c:403
+	#700060340 in ravl_foreach_node (=6622920576, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:81
+	#800060329 in ravl_foreach_node (=6660938560, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:79
+	#900060329 in ravl_foreach_node (=6640886208, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:79
+	#1000060292 in ravl_delete_cb (=6627161600, =96649608, =197738496) at ../../src/../src/common/ravl.c:104
+	#1100130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1200129923 in pmemobj_tx_commit () at tx.c:999
+	#1300130565 in pmemobj_tx_process () at tx.c:1101
+	#1400011659 in __klee_posix_wrapped_main (=3, =154860928) at nvmbugs/000_pmdk_btree_map/driver.c:84
+	#1500009291 in __klee_posix_ctor_stub_insert_point (=3, =154860928, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1600009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1700003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(7) ID #278496 with 15741 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=159310976, op #2=159310976)
+	#000148116 in pmem_clwb (=159310976) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=159310992, =304) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=159310992, =304) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=159310992, =304) at pmem.c:232
+	#400116445 in obj_norep_flush (=155123712, =159310992, =304, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=155130680, =159310992, =304, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=373758496, =155123712) at tx.c:403
+	#700060340 in ravl_foreach_node (=373758464, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:81
+	#800060292 in ravl_delete_cb (=766575296, =96649608, =155123712) at ../../src/../src/common/ravl.c:104
+	#900130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1000129923 in pmemobj_tx_commit () at tx.c:999
+	#1100130565 in pmemobj_tx_process () at tx.c:1101
+	#1200011922 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:116
+	#1300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(8) ID #278167 with 1204 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=159310976, op #2=159310976)
+	#000148116 in pmem_clwb (=159310976) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=159310992, =304) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=159310992, =304) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=159310992, =304) at pmem.c:232
+	#400116445 in obj_norep_flush (=155123712, =159310992, =304, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=155130680, =159310992, =304, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=338282720, =155123712) at tx.c:403
+	#700060340 in ravl_foreach_node (=338282688, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:81
+	#800060351 in ravl_foreach_node (=239364992, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:82
+	#900060292 in ravl_delete_cb (=239276768, =96649608, =155123712) at ../../src/../src/common/ravl.c:104
+	#1000130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1100129923 in pmemobj_tx_commit () at tx.c:999
+	#1200130565 in pmemobj_tx_process () at tx.c:1101
+	#1300011659 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:84
+	#1400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1700003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(9) ID #278166 with 384 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=159057536, op #2=159057536)
+	#000148116 in pmem_clwb (=159057536) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=159057488, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=159057488, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=159057488, =112) at pmem.c:232
+	#400116445 in obj_norep_flush (=155123712, =159057488, =112, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=155130680, =159057488, =112, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=239365024, =155123712) at tx.c:403
+	#700060340 in ravl_foreach_node (=239364992, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:81
+	#800060292 in ravl_delete_cb (=239276768, =96649608, =155123712) at ../../src/../src/common/ravl.c:104
+	#900130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1000129923 in pmemobj_tx_commit () at tx.c:999
+	#1100130565 in pmemobj_tx_process () at tx.c:1101
+	#1200011659 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:84
+	#1300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(10) ID #277445 with 5 occurences:
+Type of modification: write (unpersisted)
+File: heap.c
+Line: 1625
+assembly.ll line: 98330
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.heap_rt* null, %struct.heap_rt** %99, align 8, !dbg !8395 (op #0=<global const>, op #1=155130504)
+	#000098330 in heap_cleanup (=155130416) at heap.c:1625
+	#100106793 in palloc_heap_cleanup (=155130416) at palloc.c:1305
+	#200106880 in pmalloc_cleanup (=155123712) at pmalloc.c:204
+	#300106869 in lane_section_cleanup (=155123712) at lane.c:394
+	#400117383 in obj_pool_cleanup (=155123712) at obj.c:1927
+	#500119024 in pmemobj_close (=155123712) at obj.c:1972
+	#600011973 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:120
+	#700009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#800009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#900003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1000003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #277160
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.heap_layout* %99, %struct.heap_layout** %101, align 8, !dbg !8429 (op #0=158277632, op #1=155130496)
+			#000097469 in heap_boot (=155130416, =158277632, =5234688, =155129888, =155123712, =155130680, =734320064, =239307008) at heap.c:1500
+			#100106773 in palloc_boot (=155130416, =158277632, =5234688, =155129888, =155123712, =155130680, =734320064, =239307008) at palloc.c:1248
+			#200106635 in pmalloc_boot (=155123712) at pmalloc.c:179
+			#300106419 in lane_recover_and_section_boot (=155123712) at lane.c:370
+			#400115245 in obj_runtime_init_common (=155123712) at obj.c:840
+			#500114780 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1206
+			#600114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#700113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#800011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#900009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#1000009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#1100003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#1200003564 in main (=7, =70550048)
+<not masked by anything>
+
+(11) ID #277160 with 5 occurences:
+Type of modification: write (unpersisted)
+File: heap.c
+Line: 1500
+assembly.ll line: 97469
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.heap_layout* %99, %struct.heap_layout** %101, align 8, !dbg !8429 (op #0=158277632, op #1=155130496)
+	#000097469 in heap_boot (=155130416, =158277632, =5234688, =155129888, =155123712, =155130680, =734320064, =239307008) at heap.c:1500
+	#100106773 in palloc_boot (=155130416, =158277632, =5234688, =155129888, =155123712, =155130680, =734320064, =239307008) at palloc.c:1248
+	#200106635 in pmalloc_boot (=155123712) at pmalloc.c:179
+	#300106419 in lane_recover_and_section_boot (=155123712) at lane.c:370
+	#400115245 in obj_runtime_init_common (=155123712) at obj.c:840
+	#500114780 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1206
+	#600114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+	#700113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#800011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#900009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1000009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1100003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1200003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #277445
+
+(12) ID #277308 with 5 occurences:
+Type of modification: write (unpersisted)
+File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 10927
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %17, i8* %18, align 1, !dbg !8012 (op #0=1, op #1=159065152)
+	#000010927 in memcpy (=159065152, =5331662032, =40) at libc/string/memcpy.c:29
+	#100092374 in container_ravl_insert_block (=5062898272, =5331662032) at container_ravl.c:60
+	#200046990 in bucket_insert_block (=2976482528, =5331662032) at bucket.c:75
+	#300095909 in heap_split_block (=155130416, =2976482528, =5331660784, =1) at heap.c:964
+	#400095336 in heap_get_bestfit_block (=155130416, =2976482528, =5331660784) at heap.c:995
+	#500095571 in heap_ensure_run_bucket_filled (=155130416, =304870944, =1) at heap.c:884
+	#600095271 in heap_get_bestfit_block (=155130416, =304870944, =150402600) at heap.c:987
+	#700100825 in palloc_reservation_create (=155130416, =24, =96590728, =2973396032, =0, =32768, =0, =0, =150402560) at palloc.c:218
+	#800099976 in palloc_operation (=155130416, =0, =155129856, =24, =96590728, =2973396032, =0, =32768, =0, =0, =152421888) at palloc.c:732
+	#900121968 in obj_alloc_root (=155123712, =24, =0, =0) at obj.c:2833
+	#1000121806 in pmemobj_root_construct (=155123712, =24, =0, =0) at obj.c:2887
+	#1100122161 in pmemobj_root (=155123712, =24) at obj.c:2912
+	#1200011126 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:45
+	#1300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003564 in main (=7, =70550048)
+
+<not masking anything>
+May be masked by:
+	ID #287697
+	ID #287694
+	ID #287693
+	ID #287680
+	ID #287664
+	ID #287661
+	ID #287658
+	ID #287654
+	ID #287653
+	ID #287642
+	ID #287638
+	ID #287631
+	ID #287622
+	ID #287648
+	ID #287611
+	ID #278808
+	ID #287649
+	ID #278806
+	ID #278174
+	ID #278123
+	ID #287681
+	ID #278172
+	ID #280314
+	ID #279510
+	ID #287635
+	ID #280309
+	ID #279512
+	ID #287600
+	ID #280311
+	ID #287629
+	ID #280303
+	ID #283982
+	ID #283984
+	ID #278121
+	ID #287593
+	ID #287599
+
+(13) ID #383 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 996
+assembly.ll line: 116878
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 (%struct.pmemobjpool*, i8*, i64, i32, i32)* null, i32 (%struct.pmemobjpool*, i8*, i64, i32, i32)** %16, align 8, !dbg !8007 (op #0=<global const>, op #1=155130864)
+	#000116878 in obj_replica_init_local (=155123712, =1, =8388608) at obj.c:996
+	#100114405 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1139
+	#200114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+	#300113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#400011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#500009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#600009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#700003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #378
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8* null, i8** %129, align 8, !dbg !8106 (op #0=<global const>, op #1=155130832)
+			#000114013 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1366
+			#100113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#200011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#600003564 in main (=7, =70550048)
+<not masked by anything>
+
+(14) ID #274405 with 5 occurences:
+Type of modification: write (unpersisted)
+File: lane.c
+Line: 258
+assembly.ll line: 98980
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.lane* %12, %struct.lane** %15, align 8, !dbg !8000 (op #0=293888000, op #1=155130576)
+	#000098980 in lane_boot (=155123712) at lane.c:258
+	#100115230 in obj_runtime_init_common (=155123712) at obj.c:835
+	#200114780 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1206
+	#300114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+	#400113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#500011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#600009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#700009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#800003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900003564 in main (=7, =70550048)
+
+May be masking:
+	ID #381
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i32 %112, i32* %114, align 8, !dbg !8122 (op #0=0, op #1=155130592)
+			#000114380 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1133
+			#100114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #274400
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i64 %41, i64* %43, align 8, !dbg !8032 (op #0=8868574788343802928, op #1=155130584)
+			#000114703 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1181
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #385
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.pool_set* %164, %struct.pool_set** %166, align 8, !dbg !8141 (op #0=239307008, op #1=155130616)
+			#000114066 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1379
+			#100113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#200011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#600003564 in main (=7, =70550048)
+	ID #274402
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.stats* %58, %struct.stats** %60, align 8, !dbg !8052 (op #0=734320064, op #1=155130608)
+			#000114727 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1189
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #283580
+	ID #283578
+	ID #283576
+	ID #283573
+	ID #283571
+	ID #283568
+	ID #283567
+	ID #283566
+	ID #283563
+	ID #283561
+	ID #283560
+	ID #278759
+	ID #283420
+	ID #279103
+	ID #279098
+	ID #283364
+	ID #278757
+	ID #278742
+	ID #283403
+	ID #283347
+	ID #277622
+	ID #283547
+	ID #279101
+	ID #283340
+	ID #283419
+	ID #277673
+	ID #283361
+	ID #277488
+	ID #278749
+	ID #279155
+	ID #277485
+	ID #277621
+	ID #277454
+	ID #277296
+	ID #279113
+	ID #283379
+	ID #283537
+	ID #277458
+	ID #277625
+	ID #277467
+	ID #283392
+	ID #277292
+	ID #283375
+	ID #277457
+	ID #277666
+	ID #283354
+	ID #277466
+	ID #283549
+	ID #277446
+	ID #279153
+	ID #277483
+	ID #277461
+	ID #283544
+	ID #277468
+	ID #281962
+	ID #277476
+	ID #277482
+	ID #279156
+	ID #277486
+	ID #277487
+	ID #281978
+	ID #283558
+	ID #282017
+	ID #283336
+	ID #277659
+	ID #283337
+	ID #283505
+	ID #283338
+	ID #279154
+	ID #283496
+	ID #283345
+	ID #283358
+	ID #283362
+	ID #283363
+	ID #283366
+	ID #283372
+	ID #283373
+	ID #282038
+	ID #283374
+	ID #283543
+	ID #283398
+	ID #283556
+	ID #283428
+	ID #283493
+	ID #283536
+	ID #283548
+	ID #283385
+	ID #283552
+	ID #283554
+
+(15) ID #60 with 45 occurences:
+Type of modification: write (unpersisted)
+File: libc/string/memset.c
+Line: 28
+assembly.ll line: 10966
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+	#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+	#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+	#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003564 in main (=7, =70550048)
+
+<not masking anything>
+May be masked by:
+	ID #736571
+	ID #717726
+	ID #707524
+	ID #707199
+	ID #659150
+	ID #638338
+	ID #625211
+	ID #614483
+	ID #600698
+	ID #577214
+	ID #538652
+	ID #502583
+	ID #491601
+	ID #488877
+	ID #481039
+	ID #459987
+	ID #459872
+	ID #432118
+	ID #422125
+	ID #415753
+	ID #405438
+	ID #371696
+	ID #365907
+	ID #350345
+	ID #345800
+	ID #343032
+	ID #334331
+	ID #331482
+	ID #329289
+	ID #326917
+	ID #323803
+	ID #315040
+	ID #315021
+	ID #314958
+	ID #314837
+	ID #313609
+	ID #313539
+	ID #313514
+	ID #310534
+	ID #310533
+	ID #306918
+	ID #306596
+	ID #638620
+	ID #305681
+	ID #302871
+	ID #300368
+	ID #297270
+	ID #296314
+	ID #295034
+	ID #295026
+	ID #294951
+	ID #294151
+	ID #364372
+	ID #288229
+	ID #292663
+	ID #288184
+	ID #450907
+	ID #288170
+	ID #288160
+	ID #288157
+	ID #304579
+	ID #288156
+	ID #379224
+	ID #288151
+	ID #288146
+	ID #288087
+	ID #288085
+	ID #288014
+	ID #287808
+	ID #287763
+	ID #287564
+	ID #285183
+	ID #284031
+	ID #283591
+	ID #283576
+	ID #283568
+	ID #283567
+	ID #283566
+	ID #283561
+	ID #283560
+	ID #283558
+	ID #283556
+	ID #283554
+	ID #283552
+	ID #283549
+	ID #283548
+	ID #283547
+	ID #283544
+	ID #283543
+	ID #283537
+	ID #283536
+	ID #283528
+	ID #356684
+	ID #283527
+	ID #283524
+	ID #283523
+	ID #283522
+	ID #614967
+	ID #283521
+	ID #283520
+	ID #283519
+	ID #283518
+	ID #287996
+	ID #283517
+	ID #287995
+	ID #283516
+	ID #283509
+	ID #283505
+	ID #283496
+	ID #283493
+	ID #283486
+	ID #287961
+	ID #283482
+	ID #283475
+	ID #283468
+	ID #489500
+	ID #283466
+	ID #283416
+	ID #283408
+	ID #283407
+	ID #283405
+	ID #283404
+	ID #283403
+	ID #283402
+	ID #283401
+	ID #283400
+	ID #283399
+	ID #283397
+	ID #283396
+	ID #283395
+	ID #283394
+	ID #283392
+	ID #283390
+	ID #283388
+	ID #283385
+	ID #283383
+	ID #283382
+	ID #283381
+	ID #283380
+	ID #283379
+	ID #684994
+	ID #283377
+	ID #283376
+	ID #283375
+	ID #283373
+	ID #287851
+	ID #283372
+	ID #467009
+	ID #283370
+	ID #283368
+	ID #283367
+	ID #283366
+	ID #283365
+	ID #283364
+	ID #725282
+	ID #283354
+	ID #283350
+	ID #283348
+	ID #283347
+	ID #283346
+	ID #283345
+	ID #283342
+	ID #283341
+	ID #283340
+	ID #283338
+	ID #283337
+	ID #283336
+	ID #282128
+	ID #282038
+	ID #283515
+	ID #282022
+	ID #283510
+	ID #282017
+	ID #282011
+	ID #283471
+	ID #281978
+	ID #281968
+	ID #283374
+	ID #281881
+	ID #280672
+	ID #283508
+	ID #280522
+	ID #283469
+	ID #280483
+	ID #279273
+	ID #279156
+	ID #279155
+	ID #279154
+	ID #341859
+	ID #279153
+	ID #279147
+	ID #279146
+	ID #279145
+	ID #656842
+	ID #279113
+	ID #279110
+	ID #279109
+	ID #279107
+	ID #279106
+	ID #279103
+	ID #283580
+	ID #279101
+	ID #279100
+	ID #283578
+	ID #279099
+	ID #320902
+	ID #279098
+	ID #278907
+	ID #278812
+	ID #278759
+	ID #278756
+	ID #278750
+	ID #278744
+	ID #278305
+	ID #277673
+	ID #279152
+	ID #277659
+	ID #277643
+	ID #277642
+	ID #277641
+	ID #277629
+	ID #279121
+	ID #277628
+	ID #279120
+	ID #277627
+	ID #277626
+	ID #277625
+	ID #277624
+	ID #277623
+	ID #277622
+	ID #277621
+	ID #281967
+	ID #277488
+	ID #287938
+	ID #277487
+	ID #626848
+	ID #277486
+	ID #708962
+	ID #277485
+	ID #277484
+	ID #281962
+	ID #277483
+	ID #277482
+	ID #277481
+	ID #277480
+	ID #277479
+	ID #277478
+	ID #277477
+	ID #277476
+	ID #277475
+	ID #277474
+	ID #277473
+	ID #277472
+	ID #277471
+	ID #277470
+	ID #277469
+	ID #283440
+	ID #277468
+	ID #283439
+	ID #277467
+	ID #277466
+	ID #277465
+	ID #283436
+	ID #277464
+	ID #283435
+	ID #277463
+	ID #283434
+	ID #277462
+	ID #283433
+	ID #277461
+	ID #277460
+	ID #368532
+	ID #277459
+	ID #277458
+	ID #277457
+	ID #283428
+	ID #277456
+	ID #277455
+	ID #277454
+	ID #283418
+	ID #277446
+	ID #283417
+	ID #280431
+	ID #277445
+	ID #277296
+	ID #277295
+	ID #277294
+	ID #277293
+	ID #277292
+	ID #513183
+	ID #277289
+	ID #277288
+	ID #277286
+	ID #277285
+	ID #277283
+	ID #277282
+	ID #277280
+	ID #277279
+	ID #277277
+	ID #277276
+	ID #277274
+	ID #277273
+	ID #526602
+	ID #277271
+	ID #277270
+	ID #277268
+	ID #277267
+	ID #278758
+	ID #277265
+	ID #278757
+	ID #277264
+	ID #277262
+	ID #277261
+	ID #408643
+	ID #277259
+	ID #278751
+	ID #277258
+	ID #278749
+	ID #277256
+	ID #277255
+	ID #277254
+	ID #277252
+	ID #278743
+	ID #277250
+	ID #278742
+	ID #277249
+	ID #732613
+	ID #277248
+	ID #277246
+	ID #277244
+	ID #277243
+	ID #277241
+	ID #277240
+	ID #277238
+	ID #277237
+	ID #277235
+	ID #277234
+	ID #566874
+	ID #277232
+	ID #277231
+	ID #277229
+	ID #277228
+	ID #277226
+	ID #277225
+	ID #277223
+	ID #277222
+	ID #277220
+	ID #277219
+	ID #277217
+	ID #277216
+	ID #277214
+	ID #277213
+	ID #277211
+	ID #277210
+	ID #277208
+	ID #277207
+	ID #277205
+	ID #277204
+	ID #277202
+	ID #277201
+	ID #277199
+	ID #277198
+	ID #277196
+	ID #277195
+	ID #341392
+	ID #277193
+	ID #710162
+	ID #277192
+	ID #317501
+	ID #277190
+	ID #277189
+	ID #277187
+	ID #277186
+	ID #277184
+	ID #277183
+	ID #280167
+	ID #277181
+	ID #277180
+	ID #277178
+	ID #277177
+	ID #277175
+	ID #287625
+	ID #277174
+	ID #277172
+	ID #277171
+	ID #277169
+	ID #277168
+	ID #277167
+	ID #277165
+	ID #277163
+	ID #277162
+	ID #277160
+	ID #277159
+	ID #277157
+	ID #277156
+	ID #277155
+	ID #277154
+	ID #290590
+	ID #277153
+	ID #277152
+	ID #277148
+	ID #277136
+	ID #277135
+	ID #277134
+	ID #277133
+	ID #277132
+	ID #277131
+	ID #290562
+	ID #277125
+	ID #277031
+	ID #277030
+	ID #277029
+	ID #277028
+	ID #277027
+	ID #277026
+	ID #277022
+	ID #277014
+	ID #308366
+	ID #277013
+	ID #277012
+	ID #551723
+	ID #277011
+	ID #277010
+	ID #277001
+	ID #276964
+	ID #284428
+	ID #276963
+	ID #339668
+	ID #276962
+	ID #276961
+	ID #276960
+	ID #276959
+	ID #276957
+	ID #684545
+	ID #276956
+	ID #276955
+	ID #276954
+	ID #648710
+	ID #276953
+	ID #587496
+	ID #276952
+	ID #1932
+	ID #1926
+	ID #275600
+	ID #1923
+	ID #275597
+	ID #1922
+	ID #275596
+	ID #1921
+	ID #275595
+	ID #293054
+	ID #1919
+	ID #275593
+	ID #1917
+	ID #275591
+	ID #1915
+	ID #284089
+	ID #1912
+	ID #275586
+	ID #1911
+	ID #290515
+	ID #275585
+	ID #1910
+	ID #275584
+	ID #1909
+	ID #275583
+	ID #1908
+	ID #275582
+	ID #1907
+	ID #1904
+	ID #275578
+	ID #1903
+	ID #275577
+	ID #1902
+	ID #275576
+	ID #1901
+	ID #1899
+	ID #275573
+	ID #1898
+	ID #1895
+	ID #1894
+	ID #1893
+	ID #275567
+	ID #1892
+	ID #275566
+	ID #1891
+	ID #1890
+	ID #1889
+	ID #275563
+	ID #1887
+	ID #274852
+	ID #275561
+	ID #1886
+	ID #274851
+	ID #281532
+	ID #275560
+	ID #1885
+	ID #274850
+	ID #275559
+	ID #303466
+	ID #282564
+	ID #1880
+	ID #275554
+	ID #1879
+	ID #274844
+	ID #275553
+	ID #275549
+	ID #275546
+	ID #1868
+	ID #1867
+	ID #481118
+	ID #1865
+	ID #1864
+	ID #1863
+	ID #1861
+	ID #1859
+	ID #276951
+	ID #1858
+	ID #276950
+	ID #1857
+	ID #276949
+	ID #1856
+	ID #276948
+	ID #1855
+	ID #1853
+	ID #578531
+	ID #302326
+	ID #276945
+	ID #1852
+	ID #275526
+	ID #276944
+	ID #1851
+	ID #276943
+	ID #1850
+	ID #275524
+	ID #1848
+	ID #275522
+	ID #300828
+	ID #276940
+	ID #1847
+	ID #276939
+	ID #300446
+	ID #1846
+	ID #1845
+	ID #737640
+	ID #274810
+	ID #276937
+	ID #1842
+	ID #430079
+	ID #313625
+	ID #274807
+	ID #277009
+	ID #275516
+	ID #276934
+	ID #1841
+	ID #274806
+	ID #275515
+	ID #376329
+	ID #274805
+	ID #278500
+	ID #275514
+	ID #276932
+	ID #276929
+	ID #274801
+	ID #276927
+	ID #1834
+	ID #276926
+	ID #1829
+	ID #275502
+	ID #276919
+	ID #1826
+	ID #279523
+	ID #1825
+	ID #1824
+	ID #1823
+	ID #276912
+	ID #302292
+	ID #276911
+	ID #276910
+	ID #276907
+	ID #1814
+	ID #276906
+	ID #1813
+	ID #1812
+	ID #1811
+	ID #1810
+	ID #1809
+	ID #1808
+	ID #276900
+	ID #1807
+	ID #292941
+	ID #1806
+	ID #275480
+	ID #1805
+	ID #1804
+	ID #276896
+	ID #1802
+	ID #384
+	ID #274767
+	ID #276894
+	ID #1875
+	ID #382
+	ID #274765
+	ID #1799
+	ID #297488
+	ID #1874
+	ID #381
+	ID #274764
+	ID #276891
+	ID #1798
+	ID #1873
+	ID #380
+	ID #274763
+	ID #1797
+	ID #1872
+	ID #379
+	ID #1796
+	ID #1871
+	ID #378
+	ID #274761
+	ID #718435
+	ID #1795
+	ID #1870
+	ID #377
+	ID #274760
+	ID #1794
+	ID #376
+	ID #274759
+	ID #1793
+	ID #274758
+	ID #1792
+	ID #274757
+	ID #276884
+	ID #1791
+	ID #274756
+	ID #1790
+	ID #1789
+	ID #1788
+	ID #1787
+	ID #1785
+	ID #1784
+	ID #276876
+	ID #1783
+	ID #276875
+	ID #1782
+	ID #276874
+	ID #1781
+	ID #276873
+	ID #1780
+	ID #274745
+	ID #1779
+	ID #1778
+	ID #1777
+	ID #1776
+	ID #276868
+	ID #1775
+	ID #536649
+	ID #276867
+	ID #1774
+	ID #276866
+	ID #1773
+	ID #276865
+	ID #1772
+	ID #276864
+	ID #1771
+	ID #276863
+	ID #1770
+	ID #1769
+	ID #276861
+	ID #1767
+	ID #276859
+	ID #1766
+	ID #276858
+	ID #1765
+	ID #1764
+	ID #704964
+	ID #1761
+	ID #1760
+	ID #1759
+	ID #1758
+	ID #1757
+	ID #276849
+	ID #292890
+	ID #1755
+	ID #1754
+	ID #1753
+	ID #1752
+	ID #1751
+	ID #1750
+	ID #276842
+	ID #1749
+	ID #1748
+	ID #1747
+	ID #383953
+	ID #1745
+	ID #1744
+	ID #1743
+	ID #1742
+	ID #1741
+	ID #276833
+	ID #433217
+	ID #1740
+	ID #1738
+	ID #1737
+	ID #1736
+	ID #1735
+	ID #1717
+	ID #1722
+	ID #711
+	ID #1713
+	ID #276857
+	ID #652
+	ID #2070
+	ID #1816
+	ID #275035
+	ID #1654
+	ID #1652
+	ID #274617
+	ID #640
+	ID #1729
+	ID #274694
+	ID #718
+	ID #1732
+	ID #290281
+	ID #639
+	ID #2057
+	ID #1726
+	ID #274691
+	ID #276920
+	ID #715
+	ID #633
+	ID #1712
+	ID #276836
+	ID #631
+	ID #2049
+	ID #1720
+	ID #709
+	ID #1711
+	ID #1641
+	ID #276835
+	ID #630
+	ID #1710
+	ID #626
+	ID #1628
+	ID #625
+	ID #276829
+	ID #624
+	ID #1613
+	ID #1657
+	ID #1924
+	ID #275598
+	ID #1994
+	ID #1653
+	ID #572
+	ID #1990
+	ID #276814
+	ID #609
+	ID #372291
+	ID #2027
+	ID #1733
+	ID #385
+	ID #274768
+	ID #710
+	ID #1721
+	ID #278306
+	ID #276813
+	ID #1918
+	ID #1988
+	ID #621
+	ID #278235
+	ID #2030
+	ID #310674
+	ID #1623
+	ID #606
+	ID #620
+	ID #2029
+	ID #1622
+	ID #289880
+	ID #1731
+	ID #276925
+	ID #720
+	ID #275812
+	ID #383
+	ID #274766
+	ID #276913
+	ID #708
+	ID #1719
+	ID #478183
+	ID #1916
+	ID #275590
+	ID #1986
+	ID #605
+	ID #292742
+	ID #1607
+	ID #619
+	ID #304797
+	ID #1718
+	ID #604
+	ID #2022
+	ID #1695
+	ID #614
+	ID #1680
+	ID #276804
+	ID #599
+	ID #1694
+	ID #598
+	ID #1913
+	ID #275587
+	ID #2058
+	ID #565
+	ID #1983
+	ID #1698
+	ID #1728
+	ID #274693
+	ID #1716
+	ID #276890
+	ID #685
+	ID #1696
+	ID #600
+	ID #2018
+	ID #1602
+	ID #645
+	ID #570
+	ID #2063
+	ID #1914
+	ID #1984
+	ID #276823
+	ID #618
+	ID #2036
+	ID #1684
+	ID #603
+	ID #2021
+	ID #1627
+	ID #616
+	ID #321229
+	ID #1727
+	ID #274692
+	ID #1715
+	ID #277666
+	ID #274680
+	ID #1928
+	ID #275602
+	ID #580
+	ID #1998
+	ID #1929
+	ID #300674
+	ID #581
+	ID #1930
+	ID #582
+	ID #2000
+	ID #2007
+	ID #1601
+	ID #590
+	ID #2008
+	ID #593
+	ID #2011
+	ID #603766
+	ID #594
+	ID #2012
+	ID #1596
+	ID #1687
+	ID #676
+	ID #1840
+	ID #275059
+	ID #1678
+	ID #276802
+	ID #597
+	ID #1621
+	ID #610
+	ID #601
+	ID #2019
+	ID #1612
+	ID #1734
+	ID #276928
+	ID #723
+	ID #1725
+	ID #278310
+	ID #612
+	ID #276817
+	ID #1739
+	ID #287384
+	ID #276933
+	ID #728
+	ID #283360
+	ID #274402
+	ID #586
+	ID #1597
+	ID #587
+	ID #1598
+	ID #1619
+	ID #276818
+	ID #613
+	ID #2031
+	ID #1624
+	ID #276828
+	ID #623
+	ID #2041
+	ID #1639
+	ID #276834
+	ID #629
+	ID #1640
+	ID #283563
+	ID #274605
+	ID #1643
+	ID #276735
+	ID #1658
+	ID #1659
+	ID #1660
+	ID #2068
+	ID #1661
+	ID #276856
+	ID #651
+	ID #576
+	ID #2069
+	ID #1815
+	ID #275034
+	ID #1662
+	ID #2042
+	ID #276754
+	ID #1664
+	ID #2044
+	ID #276756
+	ID #304744
+	ID #297279
+	ID #1665
+	ID #276757
+	ID #655
+	ID #1819
+	ID #275038
+	ID #304745
+	ID #297280
+	ID #1666
+	ID #1667
+	ID #276759
+	ID #1668
+	ID #1669
+	ID #1670
+	ID #1671
+	ID #276763
+	ID #1672
+	ID #1673
+	ID #1674
+	ID #1675
+	ID #1676
+	ID #1677
+	ID #1681
+	ID #1682
+	ID #1685
+	ID #1686
+	ID #677
+	ID #1688
+	ID #678
+	ID #1689
+	ID #1691
+	ID #1692
+	ID #276887
+	ID #682
+	ID #1693
+	ID #276893
+	ID #688
+	ID #1699
+	ID #1700
+	ID #1701
+	ID #276793
+	ID #1702
+	ID #589
+	ID #276794
+	ID #692
+	ID #1703
+	ID #276898
+	ID #693
+	ID #1704
+	ID #276899
+	ID #694
+	ID #1705
+	ID #1706
+	ID #276901
+	ID #696
+	ID #1707
+	ID #1708
+	ID #699319
+	ID #276800
+	ID #1709
+	ID #276801
+	ID #712
+	ID #1723
+	ID #274688
+	ID #1724
+	ID #274689
+	ID #611
+	ID #276816
+	ID #1933
+	ID #1934
+	ID #1935
+	ID #281127
+	ID #1936
+	ID #1937
+	ID #293073
+	ID #1938
+	ID #1940
+	ID #1941
+	ID #1942
+	ID #1943
+	ID #1944
+	ID #1945
+	ID #1946
+	ID #1947
+	ID #279646
+	ID #1948
+	ID #1951
+	ID #1952
+	ID #1953
+	ID #1954
+	ID #1955
+	ID #1956
+	ID #1957
+	ID #1959
+	ID #1960
+	ID #1961
+	ID #1962
+	ID #1965
+	ID #1966
+	ID #1967
+	ID #1968
+	ID #278177
+	ID #1972
+	ID #278178
+	ID #1973
+	ID #1974
+	ID #1975
+	ID #1976
+	ID #1977
+	ID #1978
+	ID #1979
+	ID #1980
+	ID #390161
+	ID #1981
+	ID #1985
+	ID #1987
+	ID #1989
+	ID #1992
+	ID #1997
+	ID #2001
+	ID #2002
+	ID #2003
+	ID #2006
+	ID #2010
+	ID #440955
+	ID #2013
+	ID #276726
+	ID #2014
+	ID #2025
+	ID #2026
+	ID #2033
+	ID #2035
+	ID #2040
+	ID #276758
+	ID #2046
+	ID #2050
+	ID #276764
+	ID #2052
+	ID #276765
+	ID #2053
+	ID #2054
+	ID #1800
+	ID #275019
+	ID #566
+	ID #2059
+	ID #612697
+	ID #2060
+	ID #568
+	ID #2061
+	ID #2062
+	ID #2064
+	ID #2066
+	ID #358894
+	ID #2067
+	ID #2072
+	ID #1818
+	ID #275037
+	ID #283351
+	ID #274393
+	ID #283358
+	ID #274400
+	ID #668553
+	ID #283359
+	ID #274401
+	ID #283361
+	ID #274403
+	ID #283362
+	ID #274404
+	ID #283363
+	ID #274405
+	ID #274512
+	ID #274518
+	ID #274519
+	ID #283478
+	ID #281985
+	ID #274520
+	ID #281986
+	ID #274521
+	ID #283480
+	ID #274522
+	ID #283481
+	ID #274523
+	ID #274612
+	ID #283571
+	ID #274613
+	ID #2028
+	ID #276740
+	ID #576200
+	ID #274614
+	ID #283573
+	ID #274615
+	ID #274616
+	ID #274751
+	ID #274808
+	ID #276935
+	ID #691356
+	ID #274809
+	ID #276936
+	ID #274848
+	ID #274849
+	ID #1634
+	ID #274853
+	ID #275562
+	ID #275036
+	ID #1820
+	ID #275039
+	ID #1821
+	ID #275040
+	ID #1822
+	ID #275041
+	ID #1827
+	ID #275046
+	ID #284005
+	ID #1828
+	ID #275047
+	ID #1830
+	ID #275049
+	ID #1831
+	ID #275050
+	ID #275051
+	ID #1833
+	ID #275052
+	ID #1835
+	ID #275054
+	ID #1836
+	ID #275055
+	ID #1837
+	ID #275056
+	ID #1838
+	ID #275057
+	ID #275058
+	ID #275523
+	ID #276941
+	ID #275550
+	ID #275551
+	ID #283017
+	ID #275552
+	ID #290485
+	ID #275555
+	ID #275556
+	ID #275574
+	ID #275579
+	ID #275594
+	ID #275599
+	ID #677218
+	ID #275601
+	ID #275805
+	ID #275828
+	ID #275829
+	ID #275830
+	ID #275831
+	ID #275832
+	ID #275833
+	ID #275834
+	ID #275835
+	ID #275837
+	ID #275838
+	ID #275839
+	ID #275840
+	ID #275841
+	ID #275842
+	ID #275843
+	ID #275852
+	ID #275853
+	ID #275854
+	ID #275855
+	ID #275856
+	ID #275857
+	ID #275858
+	ID #302733
+	ID #275859
+	ID #275860
+	ID #275861
+	ID #275862
+	ID #275863
+	ID #275865
+	ID #295275
+	ID #275866
+	ID #275867
+	ID #275868
+	ID #275869
+	ID #275870
+	ID #283398
+	ID #275933
+	ID #283409
+	ID #275944
+	ID #302819
+	ID #283410
+	ID #275945
+	ID #504375
+	ID #302820
+	ID #275946
+	ID #283412
+	ID #275947
+	ID #283413
+	ID #275948
+	ID #277442
+	ID #275949
+	ID #283415
+	ID #275950
+	ID #283419
+	ID #275954
+	ID #283420
+	ID #275955
+	ID #283421
+	ID #275956
+	ID #283422
+	ID #275957
+	ID #353594
+	ID #283423
+	ID #275958
+	ID #283424
+	ID #275959
+	ID #291612
+	ID #1970
+	ID #276682
+	ID #2043
+	ID #276755
+	ID #276848
+	ID #276854
+	ID #650
+	ID #276855
+	ID #276909
+	ID #399350
+	ID #276924
+
+(16) ID #281125 with 46 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=159310976, op #2=159310976)
+	#000148116 in pmem_clwb (=159310976) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=159310992, =304) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=159310992, =304) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=159310992, =304) at pmem.c:232
+	#400116445 in obj_norep_flush (=155123712, =159310992, =304, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=155130680, =159310992, =304, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=5419549472, =155123712) at tx.c:403
+	#700060340 in ravl_foreach_node (=5419549440, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:81
+	#800060329 in ravl_foreach_node (=5418888576, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:79
+	#900060351 in ravl_foreach_node (=5408720704, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:82
+	#1000060292 in ravl_delete_cb (=5381057984, =96649608, =155123712) at ../../src/../src/common/ravl.c:104
+	#1100130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1200129923 in pmemobj_tx_commit () at tx.c:999
+	#1300130565 in pmemobj_tx_process () at tx.c:1101
+	#1400011659 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:84
+	#1500009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1600009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1700003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(17) ID #277412 with 44 occurences:
+Type of modification: fence (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148150
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !7993 (op #0=<global const>)
+	#000148150 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100164202 in pmem_drain () at pmem.c:189
+	#200116470 in obj_norep_drain (=155123712) at obj.c:492
+	#300101309 in pmemops_drain.1002 (=155130416) at ./pmemops.h:76
+	#400101099 in palloc_exec_actions (=155130416, =152421888, =1964941312, =2) at palloc.c:559
+	#500109080 in palloc_publish (=155130416, =1964941312, =2, =152421888) at palloc.c:660
+	#600129993 in pmemobj_tx_commit () at tx.c:1009
+	#700130565 in pmemobj_tx_process () at tx.c:1101
+	#800011445 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:71
+	#900009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1000009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1100003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1200003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(18) ID #277442 with 5 occurences:
+Type of modification: write (unpersisted)
+File: runtime/POSIX/./threadsync.c
+Line: 155
+assembly.ll line: 136865
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.mutex_data_t* null, %struct.mutex_data_t** %9, align 8, !dbg !8025 (op #0=<global const>, op #1=155130920)
+	#000136865 in pthread_mutex_destroy (=155130920) at runtime/POSIX/./threadsync.c:155
+	#100041884 in os_mutex_destroy (=155130920) at ../../src/../src/core/os_thread_posix.c:85
+	#200115395 in util_mutex_destroy.852 (=155130920) at ../common/sys_util.h:43
+	#300117366 in obj_pool_cleanup (=155123712) at obj.c:1919
+	#400119024 in pmemobj_close (=155123712) at obj.c:1972
+	#500011973 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:120
+	#600009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#700009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#800003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #274404
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %union.padded_pmemmutex* null, %union.padded_pmemmutex** %82, align 8, !dbg !8073 (op #0=<global const>, op #1=155130888)
+			#000114767 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1201
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #277293
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.mutex_data_t* %11, %struct.mutex_data_t** %13, align 8, !dbg !8035 (op #0=4997803680, op #1=155130920)
+			#000136798 in _mutex_init (=155130920, =0) at runtime/POSIX/./threadsync.c:114
+			#100136775 in pthread_mutex_init (=155130920, =0) at runtime/POSIX/./threadsync.c:146
+			#200041577 in os_mutex_init (=155130920) at ../../src/../src/core/os_thread_posix.c:76
+			#300115370 in util_mutex_init.849 (=155130920) at ../common/sys_util.h:28
+			#400114841 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1236
+			#500114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#600113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#700011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#800009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#900009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#1000003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#1100003564 in main (=7, =70550048)
+	ID #274401
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %union.anon.318* %48, %union.anon.318** %50, align 8, !dbg !8041 (op #0=253441568, op #1=155130880)
+			#000114712 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1185
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+<not masked by anything>
+
+(19) ID #277294 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1244
+assembly.ll line: 114862
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 0, i32* %140, align 8, !dbg !8148 (op #0=<global const>, op #1=155130968)
+	#000114862 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1244
+	#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+	#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #274403
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8* null, i8** %68, align 8, !dbg !8061 (op #0=<global const>, op #1=155130976)
+			#000114740 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1193
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+<not masked by anything>
+
+(20) ID #277293 with 5 occurences:
+Type of modification: write (unpersisted)
+File: runtime/POSIX/./threadsync.c
+Line: 114
+assembly.ll line: 136798
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.mutex_data_t* %11, %struct.mutex_data_t** %13, align 8, !dbg !8035 (op #0=4997803680, op #1=155130920)
+	#000136798 in _mutex_init (=155130920, =0) at runtime/POSIX/./threadsync.c:114
+	#100136775 in pthread_mutex_init (=155130920, =0) at runtime/POSIX/./threadsync.c:146
+	#200041577 in os_mutex_init (=155130920) at ../../src/../src/core/os_thread_posix.c:76
+	#300115370 in util_mutex_init.849 (=155130920) at ../common/sys_util.h:28
+	#400114841 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1236
+	#500114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+	#600113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#700011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#800009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#900009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1000003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1100003564 in main (=7, =70550048)
+
+May be masking:
+	ID #274401
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %union.anon.318* %48, %union.anon.318** %50, align 8, !dbg !8041 (op #0=253441568, op #1=155130880)
+			#000114712 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1185
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #274404
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %union.padded_pmemmutex* null, %union.padded_pmemmutex** %82, align 8, !dbg !8073 (op #0=<global const>, op #1=155130888)
+			#000114767 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1201
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #737640
+	ID #732613
+	ID #725282
+	ID #717726
+	ID #707524
+	ID #707199
+	ID #699319
+	ID #691356
+	ID #684545
+	ID #677218
+	ID #659150
+	ID #656842
+	ID #626848
+	ID #300828
+	ID #297488
+	ID #300368
+	ID #297280
+	ID #383953
+	ID #295275
+	ID #297279
+	ID #433217
+	ID #718435
+	ID #280672
+	ID #290485
+	ID #290281
+	ID #504375
+	ID #638338
+	ID #289880
+	ID #288184
+	ID #288170
+	ID #320902
+	ID #736571
+	ID #292742
+	ID #481118
+	ID #292663
+	ID #287938
+	ID #481039
+	ID #288160
+	ID #625211
+	ID #294951
+	ID #290515
+	ID #288156
+	ID #310534
+	ID #288151
+	ID #288087
+	ID #294151
+	ID #288085
+	ID #304744
+	ID #290590
+	ID #297270
+	ID #341859
+	ID #365907
+	ID #288014
+	ID #287996
+	ID #278310
+	ID #279646
+	ID #295026
+	ID #287995
+	ID #287961
+	ID #638620
+	ID #399350
+	ID #293073
+	ID #302820
+	ID #390161
+	ID #306918
+	ID #288229
+	ID #331482
+	ID #279523
+	ID #566874
+	ID #329289
+	ID #278812
+	ID #432118
+	ID #278177
+	ID #551723
+	ID #313514
+	ID #288157
+	ID #305681
+	ID #415753
+	ID #614483
+	ID #280167
+	ID #284089
+	ID #287763
+	ID #302292
+	ID #282128
+	ID #278178
+	ID #710162
+	ID #287564
+	ID #323803
+	ID #339668
+	ID #587496
+	ID #684994
+	ID #278235
+	ID #300446
+	ID #278305
+	ID #287851
+	ID #345800
+	ID #283591
+	ID #282564
+	ID #278306
+	ID #277442
+	ID #296314
+	ID #292890
+	ID #302326
+	ID #281532
+	ID #304745
+	ID #292941
+	ID #489500
+	ID #304797
+	ID #281881
+	ID #283017
+	ID #300674
+	ID #321229
+	ID #290562
+	ID #708962
+	ID #284005
+	ID #284031
+	ID #284428
+	ID #303466
+	ID #356684
+	ID #278500
+	ID #280522
+	ID #291612
+	ID #302733
+	ID #353594
+	ID #285183
+	ID #278907
+	ID #526602
+	ID #287384
+	ID #281127
+	ID #287808
+	ID #302819
+	ID #372291
+	ID #302871
+	ID #304579
+	ID #310533
+	ID #313539
+	ID #502583
+	ID #704964
+	ID #310674
+	ID #430079
+	ID #313625
+	ID #287625
+	ID #600698
+	ID #314837
+	ID #314958
+	ID #306596
+	ID #315021
+	ID #668553
+	ID #315040
+	ID #279273
+	ID #376329
+	ID #536649
+	ID #280431
+	ID #317501
+	ID #405438
+	ID #326917
+	ID #334331
+	ID #288146
+	ID #308366
+	ID #341392
+	ID #343032
+	ID #350345
+	ID #358894
+	ID #364372
+	ID #368532
+	ID #648710
+	ID #371696
+	ID #459872
+	ID #280483
+	ID #379224
+	ID #603766
+	ID #313609
+	ID #408643
+	ID #293054
+	ID #422125
+	ID #295034
+	ID #440955
+	ID #450907
+	ID #459987
+	ID #467009
+	ID #538652
+	ID #478183
+	ID #577214
+	ID #488877
+	ID #491601
+	ID #513183
+	ID #576200
+	ID #578531
+	ID #612697
+	ID #614967
+
+(21) ID #385 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1379
+assembly.ll line: 114066
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.pool_set* %164, %struct.pool_set** %166, align 8, !dbg !8141 (op #0=239307008, op #1=155130616)
+	#000114066 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1379
+	#100113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#200011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#600003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #381
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i32 %112, i32* %114, align 8, !dbg !8122 (op #0=0, op #1=155130592)
+			#000114380 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1133
+			#100114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #283578
+	ID #283571
+	ID #283566
+	ID #283561
+	ID #283558
+	ID #283547
+	ID #283543
+	ID #283505
+	ID #283496
+	ID #283493
+	ID #283428
+	ID #283420
+	ID #283419
+	ID #283403
+	ID #283398
+	ID #283392
+	ID #283385
+	ID #283375
+	ID #283372
+	ID #283366
+	ID #283361
+	ID #283345
+	ID #283340
+	ID #283337
+	ID #283336
+	ID #282038
+	ID #282017
+	ID #281978
+	ID #283537
+	ID #279156
+	ID #276763
+	ID #279101
+	ID #276757
+	ID #274523
+	ID #276861
+	ID #277028
+	ID #275856
+	ID #274520
+	ID #275854
+	ID #274518
+	ID #274850
+	ID #275843
+	ID #275840
+	ID #277009
+	ID #283580
+	ID #275829
+	ID #277666
+	ID #275598
+	ID #274763
+	ID #278757
+	ID #275582
+	ID #276924
+	ID #275576
+	ID #278749
+	ID #275573
+	ID #275566
+	ID #283363
+	ID #275949
+	ID #275870
+	ID #275554
+	ID #275549
+	ID #283379
+	ID #274617
+	ID #276936
+	ID #274614
+	ID #276952
+	ID #274688
+	ID #277026
+	ID #274691
+	ID #283374
+	ID #274612
+	ID #275056
+	ID #276893
+	ID #274402
+	ID #274400
+	ID #275035
+	ID #278742
+	ID #275834
+	ID #283576
+	ID #276836
+	ID #274807
+	ID #274694
+	ID #275526
+	ID #275863
+	ID #274768
+	ID #276939
+	ID #283567
+	ID #274805
+	ID #275831
+	ID #283573
+	ID #276833
+	ID #277031
+	ID #274756
+	ID #275579
+	ID #276927
+	ID #275593
+	ID #276929
+	ID #279098
+	ID #275054
+	ID #283373
+	ID #275959
+	ID #283364
+	ID #276961
+	ID #274853
+	ID #276857
+	ID #275867
+	ID #275551
+	ID #275584
+	ID #276932
+	ID #275059
+	ID #279103
+	ID #275838
+	ID #274810
+	ID #283548
+	ID #277482
+	ID #275954
+	ID #274761
+	ID #277457
+	ID #281962
+	ID #275559
+	ID #275859
+	ID #275522
+	ID #274848
+	ID #275956
+	ID #283358
+	ID #275944
+	ID #277292
+	ID #276909
+	ID #275561
+	ID #275590
+	ID #274405
+	ID #275037
+	ID #275040
+	ID #283338
+	ID #275587
+	ID #276935
+	ID #275046
+	ID #275602
+	ID #275049
+	ID #274765
+	ID #277461
+	ID #276800
+	ID #283544
+	ID #276804
+	ID #283556
+	ID #276816
+	ID #279154
+	ID #283563
+	ID #276823
+	ID #283560
+	ID #277157
+	ID #283568
+	ID #276828
+	ID #276848
+	ID #276855
+	ID #275852
+	ID #275515
+	ID #276863
+	ID #276866
+	ID #276868
+	ID #275862
+	ID #276873
+	ID #275865
+	ID #276876
+	ID #276898
+	ID #276901
+	ID #276906
+	ID #276913
+	ID #276919
+	ID #275595
+	ID #276943
+	ID #283347
+	ID #276944
+	ID #276954
+	ID #276948
+	ID #277622
+	ID #275946
+	ID #276957
+	ID #277458
+	ID #283354
+	ID #276951
+	ID #277625
+	ID #276964
+	ID #277011
+	ID #277014
+	ID #276793
+	ID #277467
+	ID #277136
+	ID #277152
+	ID #283552
+	ID #277486
+	ID #277154
+	ID #283554
+	ID #277488
+	ID #283362
+	ID #276959
+	ID #277296
+	ID #277446
+	ID #274758
+	ID #277454
+	ID #275599
+	ID #277621
+	ID #277466
+	ID #277476
+	ID #283549
+	ID #277483
+	ID #277468
+	ID #277131
+	ID #279153
+	ID #277485
+	ID #283536
+	ID #277133
+	ID #279155
+	ID #276813
+	ID #277487
+	ID #277659
+	ID #277673
+	ID #275052
+	ID #278759
+	ID #276754
+	ID #279113
+
+(22) ID #277441 with 5 occurences:
+Type of modification: write (unpersisted)
+File: nvmbugs/000_pmdk_btree_map/driver.c
+Line: 74
+assembly.ll line: 11490
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i64 0, i64* %336, align 8, !dbg !8134 (op #0=<global const>, op #1=159057232)
+	#000011490 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:74
+	#100009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#200009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#300003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#400003564 in main (=7, =70550048)
+
+<not masking anything>
+May be masked by:
+	ID #288130
+	ID #288129
+	ID #288125
+	ID #280521
+	ID #288103
+	ID #278162
+	ID #279739
+	ID #278222
+	ID #284302
+	ID #278899
+	ID #288038
+	ID #288044
+	ID #280509
+	ID #288094
+	ID #288128
+	ID #288114
+	ID #288119
+	ID #288122
+
+(23) ID #277336 with 44 occurences:
+Type of modification: fence (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148150
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !7993 (op #0=<global const>)
+	#000148150 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100164202 in pmem_drain () at pmem.c:189
+	#200116470 in obj_norep_drain (=155123712) at obj.c:492
+	#300101309 in pmemops_drain.1002 (=155130416) at ./pmemops.h:76
+	#400101099 in palloc_exec_actions (=155130416, =152421888, =150402560, =1) at palloc.c:559
+	#500100106 in palloc_operation (=155130416, =0, =155129856, =24, =96590728, =2973396032, =0, =32768, =0, =0, =152421888) at palloc.c:769
+	#600121968 in obj_alloc_root (=155123712, =24, =0, =0) at obj.c:2833
+	#700121806 in pmemobj_root_construct (=155123712, =24, =0, =0) at obj.c:2887
+	#800122161 in pmemobj_root (=155123712, =24) at obj.c:2912
+	#900011126 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:45
+	#1000009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1100009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1200003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(24) ID #344103 with 477 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=201928960, op #2=201928960)
+	#000148116 in pmem_clwb (=201928960) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=201928976, =304) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=201928976, =304) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=201928976, =304) at pmem.c:232
+	#400116445 in obj_norep_flush (=197738496, =201928976, =304, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=197745464, =201928976, =304, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=6311912544, =197738496) at tx.c:403
+	#700060340 in ravl_foreach_node (=6311912512, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:81
+	#800060351 in ravl_foreach_node (=6264953280, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:82
+	#900060351 in ravl_foreach_node (=6278391168, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:82
+	#1000060292 in ravl_delete_cb (=6265364128, =96649608, =197738496) at ../../src/../src/common/ravl.c:104
+	#1100130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1200129923 in pmemobj_tx_commit () at tx.c:999
+	#1300130565 in pmemobj_tx_process () at tx.c:1101
+	#1400011922 in __klee_posix_wrapped_main (=3, =154860928) at nvmbugs/000_pmdk_btree_map/driver.c:116
+	#1500009291 in __klee_posix_ctor_stub_insert_point (=3, =154860928, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1600009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1700003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(25) ID #282799 with 3189 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=159311616, op #2=159311616)
+	#000148116 in pmem_clwb (=159311616) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=159311640, =24) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=159311640, =24) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=159311640, =24) at pmem.c:232
+	#400116445 in obj_norep_flush (=155123712, =159311640, =24, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=155130680, =159311640, =24, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=5493794848, =155123712) at tx.c:403
+	#700060340 in ravl_foreach_node (=5493794816, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:81
+	#800060351 in ravl_foreach_node (=5493627776, =96649608, =155123712, =1) at ../../src/../src/common/ravl.c:82
+	#900060292 in ravl_delete_cb (=5493580160, =96649608, =155123712) at ../../src/../src/common/ravl.c:104
+	#1000130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1100129923 in pmemobj_tx_commit () at tx.c:999
+	#1200130565 in pmemobj_tx_process () at tx.c:1101
+	#1300011922 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:116
+	#1400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1700003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(26) ID #58 with 2640 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=155123904, op #2=155123904)
+	#000148116 in pmem_clwb (=155123904) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=155123712, =4096) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=155123712, =4096) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=155123712, =4096) at pmem.c:232
+	#400164321 in pmem_persist (=155123712, =4096) at pmem.c:243
+	#500081157 in util_persist (=1, =155123712, =4096) at ../common/util_pmem.h:27
+	#600081125 in util_persist_auto (=1, =155123712, =4096) at ../common/util_pmem.h:40
+	#700080645 in util_header_create (=239307008, =0, =0, =77640176, =0) at ../../src/../src/common/set.c:2326
+	#800083863 in util_replica_init_headers_local (=239307008, =0, =1, =77640176) at ../../src/../src/common/set.c:2777
+	#900083737 in util_replica_create_local (=239307008, =0, =1, =77640176) at ../../src/../src/common/set.c:2823
+	#1000082240 in util_pool_create_uuids (=152916976, =150304384, =8388608, =8388608, =2097152, =77640176, =155083720, =1, =0) at ../../src/../src/common/set.c:3313
+	#1100084145 in util_pool_create (=152916976, =150304384, =8388608, =8388608, =2097152, =77640176, =155083720, =1) at ../../src/../src/common/set.c:3356
+	#1200113889 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1343
+	#1300113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#1400011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#1500009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1600009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1700003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(27) ID #277299 with 5 occurences:
+Type of modification: write (unpersisted)
+File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 10927
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %17, i8* %18, align 1, !dbg !8012 (op #0=1, op #1=158278848)
+	#000010927 in memcpy (=158278848, =263300784, =8) at libc/string/memcpy.c:29
+	#100051436 in huge_write_footer (=158278720, =17) at memblock.c:1136
+	#200052333 in memblock_huge_init (=5331663328, =155130416, =0, =0, =17) at memblock.c:1310
+	#300046777 in heap_zone_init (=155130416, =0, =0) at heap.c:427
+	#400096082 in heap_populate_bucket (=155130416, =2976482528) at heap.c:659
+	#500095535 in heap_ensure_run_bucket_filled (=155130416, =304870944, =1) at heap.c:871
+	#600095271 in heap_get_bestfit_block (=155130416, =304870944, =150402600) at heap.c:987
+	#700100825 in palloc_reservation_create (=155130416, =24, =96590728, =2973396032, =0, =32768, =0, =0, =150402560) at palloc.c:218
+	#800099976 in palloc_operation (=155130416, =0, =155129856, =24, =96590728, =2973396032, =0, =32768, =0, =0, =152421888) at palloc.c:732
+	#900121968 in obj_alloc_root (=155123712, =24, =0, =0) at obj.c:2833
+	#1000121806 in pmemobj_root_construct (=155123712, =24, =0, =0) at obj.c:2887
+	#1100122161 in pmemobj_root (=155123712, =24) at obj.c:2912
+	#1200011126 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:45
+	#1300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003564 in main (=7, =70550048)
+
+<not masking anything>
+May be masked by:
+	ID #287566
+	ID #287550
+	ID #287545
+	ID #287536
+	ID #284652
+	ID #284638
+	ID #284632
+	ID #284625
+	ID #284617
+	ID #287614
+	ID #284612
+	ID #284604
+	ID #284592
+	ID #284591
+	ID #279002
+	ID #284552
+	ID #287586
+	ID #278343
+	ID #279001
+	ID #287572
+	ID #284570
+	ID #277618
+	ID #284616
+	ID #284537
+	ID #278115
+	ID #284647
+	ID #277537
+	ID #277530
+	ID #284560
+	ID #284588
+	ID #278347
+	ID #277531
+	ID #278798
+	ID #277534
+	ID #277535
+	ID #284646
+	ID #278168
+	ID #277536
+	ID #279502
+	ID #279541
+	ID #287601
+	ID #284599
+	ID #279543
+	ID #277307
+	ID #284575
+	ID #287608
+	ID #279550
+	ID #287584
+	ID #284582
+	ID #280249
+	ID #279544
+	ID #280255
+	ID #284596
+	ID #282700
+	ID #282706
+	ID #287588
+	ID #283954
+	ID #284658
+	ID #284579
+	ID #284580
+	ID #278344
+	ID #284585
+
+(28) ID #274404 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1201
+assembly.ll line: 114767
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %union.padded_pmemmutex* null, %union.padded_pmemmutex** %82, align 8, !dbg !8073 (op #0=<global const>, op #1=155130888)
+	#000114767 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1201
+	#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+	#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #274401
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %union.anon.318* %48, %union.anon.318** %50, align 8, !dbg !8041 (op #0=253441568, op #1=155130880)
+			#000114712 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1185
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #737640
+	ID #732613
+	ID #725282
+	ID #707524
+	ID #707199
+	ID #691356
+	ID #684545
+	ID #677218
+	ID #659150
+	ID #656842
+	ID #626848
+	ID #614483
+	ID #612697
+	ID #587496
+	ID #578531
+	ID #576200
+	ID #551723
+	ID #538652
+	ID #536649
+	ID #513183
+	ID #504375
+	ID #502583
+	ID #491601
+	ID #489500
+	ID #488877
+	ID #481118
+	ID #478183
+	ID #467009
+	ID #459872
+	ID #450907
+	ID #433217
+	ID #430079
+	ID #415753
+	ID #638620
+	ID #399350
+	ID #390161
+	ID #383953
+	ID #372291
+	ID #648710
+	ID #371696
+	ID #368532
+	ID #365907
+	ID #710162
+	ID #287564
+	ID #323803
+	ID #339668
+	ID #287384
+	ID #283376
+	ID #283421
+	ID #302292
+	ID #708962
+	ID #284005
+	ID #283435
+	ID #283423
+	ID #284089
+	ID #283415
+	ID #283409
+	ID #297270
+	ID #341859
+	ID #283417
+	ID #284428
+	ID #278750
+	ID #303466
+	ID #283401
+	ID #459987
+	ID #283399
+	ID #282564
+	ID #283388
+	ID #422125
+	ID #293054
+	ID #290590
+	ID #304744
+	ID #577214
+	ID #283350
+	ID #283346
+	ID #283341
+	ID #288184
+	ID #283412
+	ID #684994
+	ID #278235
+	ID #300446
+	ID #283017
+	ID #283407
+	ID #717726
+	ID #281985
+	ID #287763
+	ID #283382
+	ID #603766
+	ID #408643
+	ID #313609
+	ID #304797
+	ID #281881
+	ID #281532
+	ID #304745
+	ID #284031
+	ID #277628
+	ID #277623
+	ID #282128
+	ID #278178
+	ID #277626
+	ID #277459
+	ID #290485
+	ID #300674
+	ID #279106
+	ID #376329
+	ID #279273
+	ID #302820
+	ID #283396
+	ID #278306
+	ID #314837
+	ID #283591
+	ID #317501
+	ID #280431
+	ID #278177
+	ID #278305
+	ID #283380
+	ID #432118
+	ID #279120
+	ID #277462
+	ID #277455
+	ID #313514
+	ID #285183
+	ID #353594
+	ID #281967
+	ID #278812
+	ID #277464
+	ID #277473
+	ID #526602
+	ID #278907
+	ID #281127
+	ID #283404
+	ID #699319
+	ID #278743
+	ID #297280
+	ID #279109
+	ID #283394
+	ID #277469
+	ID #283439
+	ID #305681
+	ID #288157
+	ID #279523
+	ID #566874
+	ID #329289
+	ID #283365
+	ID #278310
+	ID #279646
+	ID #287996
+	ID #600698
+	ID #287625
+	ID #614967
+	ID #277293
+	ID #283359
+	ID #277471
+	ID #280167
+	ID #379224
+	ID #280483
+	ID #718435
+	ID #283368
+	ID #280672
+	ID #440955
+	ID #295034
+	ID #287808
+	ID #287851
+	ID #345800
+	ID #481039
+	ID #287938
+	ID #302733
+	ID #291612
+	ID #287961
+	ID #287995
+	ID #288014
+	ID #288087
+	ID #283433
+	ID #288151
+	ID #310534
+	ID #288160
+	ID #288170
+	ID #320902
+	ID #288229
+	ID #331482
+	ID #638338
+	ID #289880
+	ID #290281
+	ID #288156
+	ID #290515
+	ID #300368
+	ID #321229
+	ID #290562
+	ID #292663
+	ID #736571
+	ID #292742
+	ID #306918
+	ID #278500
+	ID #280522
+	ID #356684
+	ID #292941
+	ID #293073
+	ID #288085
+	ID #294151
+	ID #625211
+	ID #294951
+	ID #295026
+	ID #279099
+	ID #295275
+	ID #297279
+	ID #277442
+	ID #296314
+	ID #292890
+	ID #302326
+	ID #297488
+	ID #300828
+	ID #302819
+	ID #302871
+	ID #304579
+	ID #310533
+	ID #313539
+	ID #704964
+	ID #310674
+	ID #313625
+	ID #314958
+	ID #306596
+	ID #315021
+	ID #668553
+	ID #315040
+	ID #405438
+	ID #334331
+	ID #326917
+	ID #308366
+	ID #288146
+	ID #341392
+	ID #343032
+	ID #350345
+	ID #358894
+	ID #364372
+
+(29) ID #277443 with 190 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=155129856, op #2=155129856)
+	#000148116 in pmem_clwb (=155129856) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=155129896, =8) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=155129896, =8) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=155129896, =8) at pmem.c:232
+	#400164321 in pmem_persist (=155129896, =8) at pmem.c:243
+	#500116407 in obj_norep_persist (=155123712, =155129896, =8, =0) at obj.c:464
+	#600115505 in pmemops_xpersist.1245 (=155130680, =155129896, =8, =0) at ./pmemops.h:51
+	#700115478 in pmemops_persist.1244 (=155130680, =155129896, =8) at ./pmemops.h:57
+	#800115438 in stats_delete (=155123712, =734320064) at stats.c:138
+	#900117371 in obj_pool_cleanup (=155123712) at obj.c:1921
+	#1000119024 in pmemobj_close (=155123712) at obj.c:1972
+	#1100011973 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:120
+	#1200009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1300009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1400003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(30) ID #277295 with 5 occurences:
+Type of modification: write (unpersisted)
+File: sync.c
+Line: 48
+assembly.ll line: 108183
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i64 %32, i64* %26, !dbg !8032 (op #0=1, op #1=155130760)
+	#000108183 in _get_value (=2, =155130760, =155130768, =0, =44103176) at sync.c:48
+	#100108109 in get_mutex (=155123712, =155130760) at sync.c:91
+	#200107241 in pmemobj_mutex_lock (=155123712, =155130760) at sync.c:201
+	#300121876 in pmemobj_mutex_lock_nofail (=155123712, =155130760) at ./sync.h:84
+	#400121793 in pmemobj_root_construct (=155123712, =24, =0, =0) at obj.c:2884
+	#500122161 in pmemobj_root (=155123712, =24) at obj.c:2912
+	#600011126 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:45
+	#700009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#800009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#900003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1000003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+<not masked by anything>
+
+(31) ID #271743 with 1892352 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=155132032, op #2=155132032)
+	#000148116 in pmem_clwb (=155132032) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=155131904, =3145728) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=155131904, =3145728) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=155131904, =3145728) at pmem.c:232
+	#400164321 in pmem_persist (=155131904, =3145728) at pmem.c:243
+	#500116407 in obj_norep_persist (=155123712, =155131904, =3145728, =2147483648) at obj.c:464
+	#600106194 in pmemops_xpersist.664 (=155130680, =155131904, =3145728, =2147483648) at ./pmemops.h:51
+	#700106167 in lane_init_data (=155123712) at lane.c:320
+	#800114527 in obj_descr_create (=155123712, =150352672, =8388608) at obj.c:887
+	#900114072 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1382
+	#1000113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#1100011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#1200009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1300009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1400003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(32) ID #378 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1366
+assembly.ll line: 114013
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8* null, i8** %129, align 8, !dbg !8106 (op #0=<global const>, op #1=155130832)
+	#000114013 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1366
+	#100113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#200011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#600003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #2067
+	ID #2059
+	ID #1989
+	ID #1998
+	ID #1761
+	ID #651
+	ID #1872
+	ID #2063
+	ID #720
+	ID #1734
+	ID #2046
+	ID #624
+	ID #1700
+	ID #1774
+	ID #1848
+	ID #693
+	ID #2003
+	ID #1687
+	ID #581
+	ID #1776
+	ID #1719
+	ID #1956
+	ID #1640
+	ID #1825
+	ID #383
+	ID #620
+	ID #611
+	ID #1796
+	ID #1806
+	ID #1821
+	ID #1665
+	ID #1823
+	ID #1852
+	ID #1859
+	ID #1893
+	ID #1903
+	ID #1833
+	ID #1912
+	ID #2008
+	ID #1613
+	ID #1929
+	ID #1777
+	ID #1935
+	ID #1960
+
+(33) ID #274400 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1181
+assembly.ll line: 114703
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i64 %41, i64* %43, align 8, !dbg !8032 (op #0=8868574788343802928, op #1=155130584)
+	#000114703 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1181
+	#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+	#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003564 in main (=7, =70550048)
+
+May be masking:
+	ID #381
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i32 %112, i32* %114, align 8, !dbg !8122 (op #0=0, op #1=155130592)
+			#000114380 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1133
+			#100114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #385
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.pool_set* %164, %struct.pool_set** %166, align 8, !dbg !8141 (op #0=239307008, op #1=155130616)
+			#000114066 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1379
+			#100113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#200011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#600003564 in main (=7, =70550048)
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #283580
+	ID #283578
+	ID #283571
+	ID #283568
+	ID #283567
+	ID #283566
+	ID #283561
+	ID #277458
+	ID #276954
+	ID #276939
+	ID #274768
+	ID #276929
+	ID #276757
+	ID #276913
+	ID #276868
+	ID #283573
+	ID #276833
+	ID #275831
+	ID #283563
+	ID #276823
+	ID #283560
+	ID #277157
+	ID #283336
+	ID #279154
+	ID #283496
+	ID #276800
+	ID #276763
+	ID #279101
+	ID #283576
+	ID #276836
+	ID #275834
+	ID #277031
+	ID #276861
+	ID #274523
+	ID #277028
+	ID #282038
+	ID #283374
+	ID #283544
+	ID #276804
+	ID #275856
+	ID #274520
+	ID #275859
+	ID #275522
+	ID #275843
+	ID #275840
+	ID #274807
+	ID #276932
+	ID #275584
+	ID #278757
+	ID #274853
+	ID #276857
+	ID #274694
+	ID #276901
+	ID #276898
+	ID #274691
+	ID #275863
+	ID #275526
+	ID #283375
+	ID #275579
+	ID #283428
+	ID #274810
+	ID #283548
+	ID #277482
+	ID #274402
+	ID #283420
+	ID #274614
+	ID #281962
+	ID #276924
+	ID #275576
+	ID #278749
+	ID #274405
+	ID #275037
+	ID #275040
+	ID #276943
+	ID #275595
+	ID #275862
+	ID #276873
+	ID #275056
+	ID #276876
+	ID #276816
+	ID #283556
+	ID #279103
+	ID #275059
+	ID #277622
+	ID #276948
+	ID #276957
+	ID #275946
+	ID #275867
+	ID #275551
+	ID #275870
+	ID #283385
+	ID #275554
+	ID #283403
+	ID #275956
+	ID #283358
+	ID #277292
+	ID #274850
+	ID #275598
+	ID #275561
+	ID #276909
+	ID #275566
+	ID #276863
+	ID #283543
+	ID #275049
+	ID #275602
+	ID #276964
+	ID #277011
+	ID #277014
+	ID #277467
+	ID #277136
+	ID #277154
+	ID #283554
+	ID #277488
+	ID #277446
+	ID #274758
+	ID #277454
+	ID #275599
+	ID #277621
+	ID #274761
+	ID #277457
+	ID #274765
+	ID #277461
+	ID #277466
+	ID #277476
+	ID #283549
+	ID #277483
+	ID #277468
+	ID #279153
+	ID #277485
+	ID #283552
+	ID #277486
+	ID #283537
+	ID #279156
+	ID #277487
+	ID #277659
+	ID #283337
+	ID #277666
+	ID #277673
+	ID #278742
+	ID #275052
+	ID #278759
+	ID #279098
+	ID #279113
+	ID #281978
+	ID #282017
+	ID #276935
+	ID #275587
+	ID #283338
+	ID #283505
+	ID #283340
+	ID #283345
+	ID #283347
+	ID #277625
+	ID #276951
+	ID #283354
+	ID #283361
+	ID #277296
+	ID #283362
+	ID #275949
+	ID #283363
+	ID #276961
+	ID #283364
+	ID #283366
+	ID #283372
+	ID #275959
+	ID #283373
+	ID #274617
+	ID #283379
+	ID #283392
+	ID #283398
+	ID #283419
+	ID #283493
+	ID #277133
+	ID #279155
+	ID #283536
+	ID #283547
+	ID #283558
+
+(34) ID #274401 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1185
+assembly.ll line: 114712
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %union.anon.318* %48, %union.anon.318** %50, align 8, !dbg !8041 (op #0=253441568, op #1=155130880)
+	#000114712 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1185
+	#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+	#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #737640
+	ID #732613
+	ID #725282
+	ID #707524
+	ID #707199
+	ID #691356
+	ID #684545
+	ID #677218
+	ID #659150
+	ID #656842
+	ID #626848
+	ID #614483
+	ID #612697
+	ID #578531
+	ID #576200
+	ID #551723
+	ID #538652
+	ID #536649
+	ID #513183
+	ID #502583
+	ID #491601
+	ID #488877
+	ID #481118
+	ID #478183
+	ID #450907
+	ID #433217
+	ID #430079
+	ID #415753
+	ID #638620
+	ID #399350
+	ID #390161
+	ID #383953
+	ID #372291
+	ID #648710
+	ID #371696
+	ID #368532
+	ID #365907
+	ID #364372
+	ID #358894
+	ID #350345
+	ID #343032
+	ID #339668
+	ID #331482
+	ID #566874
+	ID #329289
+	ID #405438
+	ID #334331
+	ID #326917
+	ID #323803
+	ID #320902
+	ID #314958
+	ID #314837
+	ID #313625
+	ID #603766
+	ID #408643
+	ID #313609
+	ID #313539
+	ID #704964
+	ID #310674
+	ID #310534
+	ID #310533
+	ID #306918
+	ID #315021
+	ID #306596
+	ID #304745
+	ID #303466
+	ID #302871
+	ID #302820
+	ID #302819
+	ID #302292
+	ID #379224
+	ID #280483
+	ID #376329
+	ID #279273
+	ID #432118
+	ID #279120
+	ID #278750
+	ID #278305
+	ID #276802
+	ID #278177
+	ID #277626
+	ID #277459
+	ID #290485
+	ID #277473
+	ID #280167
+	ID #277471
+	ID #278306
+	ID #279523
+	ID #717726
+	ID #281985
+	ID #277469
+	ID #277135
+	ID #277462
+	ID #313514
+	ID #277455
+	ID #274616
+	ID #467009
+	ID #276941
+	ID #277156
+	ID #283376
+	ID #287384
+	ID #276963
+	ID #278812
+	ID #277464
+	ID #668553
+	ID #315040
+	ID #275948
+	ID #283435
+	ID #274809
+	ID #275861
+	ID #275524
+	ID #459872
+	ID #274522
+	ID #275858
+	ID #283401
+	ID #684994
+	ID #278235
+	ID #283412
+	ID #300446
+	ID #587496
+	ID #274760
+	ID #275833
+	ID #317501
+	ID #280431
+	ID #275039
+	ID #710162
+	ID #287564
+	ID #699319
+	ID #278743
+	ID #297280
+	ID #275578
+	ID #276926
+	ID #276759
+	ID #305681
+	ID #288157
+	ID #283439
+	ID #345800
+	ID #274693
+	ID #276950
+	ID #279646
+	ID #526602
+	ID #278907
+	ID #274404
+	ID #292941
+	ID #281532
+	ID #275958
+	ID #279106
+	ID #300674
+	ID #304579
+	ID #275597
+	ID #279109
+	ID #274767
+	ID #341859
+	ID #276818
+	ID #276859
+	ID #489500
+	ID #275842
+	ID #356684
+	ID #278500
+	ID #280522
+	ID #277013
+	ID #614967
+	ID #277293
+	ID #276956
+	ID #283359
+	ID #275586
+	ID #276934
+	ID #275869
+	ID #304797
+	ID #281881
+	ID #278178
+	ID #277623
+	ID #275601
+	ID #600698
+	ID #287625
+	ID #276865
+	ID #275058
+	ID #287996
+	ID #276875
+	ID #283388
+	ID #504375
+	ID #276900
+	ID #275563
+	ID #276911
+	ID #283591
+	ID #440955
+	ID #295034
+	ID #281127
+	ID #281967
+	ID #341392
+	ID #308366
+	ID #288146
+	ID #275051
+	ID #282128
+	ID #276835
+	ID #282564
+	ID #459987
+	ID #283399
+	ID #283017
+	ID #283341
+	ID #288184
+	ID #283346
+	ID #353594
+	ID #285183
+	ID #577214
+	ID #283350
+	ID #278310
+	ID #283365
+	ID #718435
+	ID #280672
+	ID #283368
+	ID #422125
+	ID #293054
+	ID #283380
+	ID #283394
+	ID #283396
+	ID #283404
+	ID #283407
+	ID #283409
+	ID #294151
+	ID #288085
+	ID #304744
+	ID #290590
+	ID #297270
+	ID #284428
+	ID #283417
+	ID #283421
+	ID #283415
+	ID #284089
+	ID #283382
+	ID #287763
+	ID #283423
+	ID #708962
+	ID #284005
+	ID #277628
+	ID #284031
+	ID #287808
+	ID #287851
+	ID #481039
+	ID #287938
+	ID #302733
+	ID #291612
+	ID #287961
+	ID #274852
+	ID #287995
+	ID #288014
+	ID #288087
+	ID #277030
+	ID #283433
+	ID #288151
+	ID #288160
+	ID #288170
+	ID #288229
+	ID #638338
+	ID #289880
+	ID #290281
+	ID #288156
+	ID #290515
+	ID #300368
+	ID #321229
+	ID #290562
+	ID #292663
+	ID #736571
+	ID #292742
+	ID #302326
+	ID #292890
+	ID #293073
+	ID #625211
+	ID #294951
+	ID #295026
+	ID #279099
+	ID #295275
+	ID #297279
+	ID #277442
+	ID #296314
+	ID #297488
+	ID #275553
+	ID #300828
+
+(35) ID #379 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1110
+assembly.ll line: 114298
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 (i8*, i8*, i64, i32)* @obj_norep_persist, i32 (i8*, i8*, i64, i32)** %54, align 8, !dbg !8053 (op #0=<global const>, op #1=155130680)
+	#000114298 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1110
+	#100114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+	#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #377
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.pmemobjpool* null, %struct.pmemobjpool** %127, align 8, !dbg !8103 (op #0=<global const>, op #1=155130624)
+			#000114010 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1365
+			#100113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#200011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#600003564 in main (=7, =70550048)
+May be masked by:
+	ID #2068
+	ID #2064
+	ID #2062
+	ID #2010
+	ID #2007
+	ID #2000
+	ID #1990
+	ID #1707
+	ID #1666
+	ID #1765
+	ID #1915
+	ID #582
+	ID #1840
+	ID #1689
+	ID #694
+	ID #1800
+	ID #652
+	ID #1826
+	ID #1863
+	ID #384
+	ID #621
+	ID #1720
+	ID #614
+	ID #1641
+	ID #1957
+	ID #1787
+	ID #1788
+	ID #1795
+	ID #625
+	ID #1810
+	ID #1907
+	ID #1828
+	ID #723
+	ID #1829
+	ID #1861
+	ID #1940
+	ID #1619
+	ID #1856
+	ID #1930
+	ID #1967
+	ID #1875
+	ID #2053
+	ID #1737
+	ID #1895
+
+(36) ID #277444 with 189 occurences:
+Type of modification: fence (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148150
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !7993 (op #0=<global const>)
+	#000148150 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100164202 in pmem_drain () at pmem.c:189
+	#200164322 in pmem_persist (=155129896, =8) at pmem.c:244
+	#300116407 in obj_norep_persist (=155123712, =155129896, =8, =0) at obj.c:464
+	#400115505 in pmemops_xpersist.1245 (=155130680, =155129896, =8, =0) at ./pmemops.h:51
+	#500115478 in pmemops_persist.1244 (=155130680, =155129896, =8) at ./pmemops.h:57
+	#600115438 in stats_delete (=155123712, =734320064) at stats.c:138
+	#700117371 in obj_pool_cleanup (=155123712) at obj.c:1921
+	#800119024 in pmemobj_close (=155123712) at obj.c:1972
+	#900011973 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:120
+	#1000009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1100009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1200003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(37) ID #277296 with 5 occurences:
+Type of modification: write (unpersisted)
+File: lane.c
+Line: 520
+assembly.ll line: 105362
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 %62, i32* %60, !dbg !8026 (op #0=8, op #1=155130564)
+	#000105362 in lane_hold (=155123712, =261615656) at lane.c:520
+	#100099827 in pmalloc_operation_hold_type (=155123712, =1, =1) at pmalloc.c:46
+	#200119489 in pmalloc_operation_hold (=155123712) at pmalloc.c:73
+	#300121949 in obj_alloc_root (=155123712, =24, =0, =0) at obj.c:2829
+	#400121806 in pmemobj_root_construct (=155123712, =24, =0, =0) at obj.c:2887
+	#500122161 in pmemobj_root (=155123712, =24) at obj.c:2912
+	#600011126 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:45
+	#700009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#800009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#900003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1000003564 in main (=7, =70550048)
+
+May be masking:
+	ID #381
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i32 %112, i32* %114, align 8, !dbg !8122 (op #0=0, op #1=155130592)
+			#000114380 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1133
+			#100114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #277292
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.ctl* %12, %struct.ctl** %14, align 8, !dbg !8004 (op #0=248223744, op #1=155130600)
+			#000041309 in obj_ctl_init_and_load (=155123712) at obj.c:157
+			#100114828 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1231
+			#200114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#300113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#400011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#500009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#600009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#700003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#800003564 in main (=7, =70550048)
+	ID #274402
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.stats* %58, %struct.stats** %60, align 8, !dbg !8052 (op #0=734320064, op #1=155130608)
+			#000114727 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1189
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #385
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.pool_set* %164, %struct.pool_set** %166, align 8, !dbg !8141 (op #0=239307008, op #1=155130616)
+			#000114066 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1379
+			#100113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#200011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#600003564 in main (=7, =70550048)
+	ID #274400
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i64 %41, i64* %43, align 8, !dbg !8032 (op #0=8868574788343802928, op #1=155130584)
+			#000114703 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1181
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #274405
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.lane* %12, %struct.lane** %15, align 8, !dbg !8000 (op #0=293888000, op #1=155130576)
+			#000098980 in lane_boot (=155123712) at lane.c:258
+			#100115230 in obj_runtime_init_common (=155123712) at obj.c:835
+			#200114780 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1206
+			#300114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#400113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#500011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#600009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#700009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#800003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#900003564 in main (=7, =70550048)
+May be masked by:
+	ID #277446
+
+(38) ID #274403 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1193
+assembly.ll line: 114740
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8* null, i8** %68, align 8, !dbg !8061 (op #0=<global const>, op #1=155130976)
+	#000114740 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1193
+	#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+	#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #283440
+	ID #283436
+	ID #283434
+	ID #283424
+	ID #283422
+	ID #283418
+	ID #283416
+	ID #283413
+	ID #279110
+	ID #283402
+	ID #279107
+	ID #277627
+	ID #279100
+	ID #278751
+	ID #279121
+	ID #277629
+	ID #277624
+	ID #277474
+	ID #277463
+	ID #283383
+	ID #277460
+	ID #283348
+	ID #283390
+	ID #277465
+	ID #281968
+	ID #283342
+	ID #283351
+	ID #283360
+	ID #277472
+	ID #283397
+	ID #283367
+	ID #283370
+	ID #277294
+	ID #283377
+	ID #277456
+	ID #283381
+	ID #277470
+	ID #283395
+	ID #283400
+	ID #278744
+	ID #283405
+	ID #281986
+	ID #283408
+	ID #283410
+
+(39) ID #305716 with 350 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 148116
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !7996 (op #0=<global const>, op #1=201673728, op #2=201673728)
+	#000148116 in pmem_clwb (=201673728) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100148100 in flush_clwb_nolog (=201673680, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200147933 in flush_clwb (=201673680, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300164295 in pmem_flush (=201673680, =112) at pmem.c:232
+	#400116445 in obj_norep_flush (=197738496, =201673680, =112, =2147483648) at obj.c:478
+	#500130157 in pmemops_xflush.1191 (=197745464, =201673680, =112, =2147483648) at ./pmemops.h:64
+	#600130111 in tx_flush_range (=5888803616, =197738496) at tx.c:403
+	#700060340 in ravl_foreach_node (=5888803584, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:81
+	#800060329 in ravl_foreach_node (=5966760768, =96649608, =197738496, =1) at ../../src/../src/common/ravl.c:79
+	#900060292 in ravl_delete_cb (=5966651008, =96649608, =197738496) at ../../src/../src/common/ravl.c:104
+	#1000130037 in tx_pre_commit (=85324000) at tx.c:432
+	#1100129923 in pmemobj_tx_commit () at tx.c:999
+	#1200130565 in pmemobj_tx_process () at tx.c:1101
+	#1300011659 in __klee_posix_wrapped_main (=3, =154860928) at nvmbugs/000_pmdk_btree_map/driver.c:84
+	#1400009291 in __klee_posix_ctor_stub_insert_point (=3, =154860928, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1700003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(40) ID #381 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1133
+assembly.ll line: 114380
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 %112, i32* %114, align 8, !dbg !8122 (op #0=0, op #1=155130592)
+	#000114380 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1133
+	#100114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+	#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #283578
+	ID #283571
+	ID #283561
+	ID #283558
+	ID #283547
+	ID #283543
+	ID #283505
+	ID #283496
+	ID #283493
+	ID #283428
+	ID #283420
+	ID #283419
+	ID #283403
+	ID #283392
+	ID #283385
+	ID #283372
+	ID #283366
+	ID #283345
+	ID #283340
+	ID #283337
+	ID #283336
+	ID #282038
+	ID #282017
+	ID #281978
+	ID #279154
+	ID #279101
+	ID #278757
+	ID #277673
+	ID #277666
+	ID #277659
+	ID #283554
+	ID #277488
+	ID #283552
+	ID #277486
+	ID #277485
+	ID #283549
+	ID #277483
+	ID #283548
+	ID #277482
+	ID #277476
+	ID #277466
+	ID #277458
+	ID #277446
+	ID #283560
+	ID #277157
+	ID #277154
+	ID #277152
+	ID #277136
+	ID #283536
+	ID #279155
+	ID #277133
+	ID #279153
+	ID #277468
+	ID #277131
+	ID #277031
+	ID #277028
+	ID #277026
+	ID #277014
+	ID #279098
+	ID #275054
+	ID #1842
+	ID #278759
+	ID #275052
+	ID #275049
+	ID #274853
+	ID #276857
+	ID #283537
+	ID #279156
+	ID #1805
+	ID #274810
+	ID #274807
+	ID #277461
+	ID #274765
+	ID #276936
+	ID #277457
+	ID #274761
+	ID #274694
+	ID #283379
+	ID #274617
+	ID #274691
+	ID #1813
+	ID #275863
+	ID #275526
+	ID #274523
+	ID #283374
+	ID #274612
+	ID #1979
+	ID #276861
+	ID #274520
+	ID #274848
+	ID #275859
+	ID #275522
+	ID #275856
+	ID #275854
+	ID #275037
+	ID #274405
+	ID #274402
+	ID #276952
+	ID #2069
+	ID #283363
+	ID #275949
+	ID #283354
+	ID #277625
+	ID #276951
+	ID #276939
+	ID #1723
+	ID #2060
+	ID #283567
+	ID #274805
+	ID #1760
+	ID #2018
+	ID #278742
+	ID #275035
+	ID #275870
+	ID #2011
+	ID #275056
+	ID #1901
+	ID #276893
+	ID #2001
+	ID #283566
+	ID #1834
+	ID #279103
+	ID #275059
+	ID #274768
+	ID #1798
+	ID #274400
+	ID #586
+	ID #283544
+	ID #276804
+	ID #274850
+	ID #1880
+	ID #277454
+	ID #274758
+	ID #275593
+	ID #276929
+	ID #283375
+	ID #1643
+	ID #274688
+	ID #275040
+	ID #2070
+	ID #385
+	ID #696
+	ID #276932
+	ID #275584
+	ID #283361
+	ID #618
+	ID #275834
+	ID #283576
+	ID #276836
+	ID #283398
+	ID #655
+	ID #1676
+	ID #275046
+	ID #728
+	ID #283358
+	ID #277292
+	ID #275944
+	ID #274756
+	ID #626
+	ID #277011
+	ID #2019
+	ID #276901
+	ID #1624
+	ID #274763
+	ID #274518
+	ID #1885
+	ID #275598
+	ID #274614
+	ID #633
+	ID #1818
+	ID #1748
+	ID #1972
+	ID #276964
+	ID #1827
+	ID #275865
+	ID #276876
+	ID #275554
+	ID #1845
+	ID #275838
+	ID #1857
+	ID #278749
+	ID #2072
+	ID #276954
+	ID #276906
+	ID #1914
+	ID #1923
+	ID #1706
+	ID #275549
+	ID #275551
+	ID #281962
+	ID #275559
+	ID #275566
+	ID #275573
+	ID #275561
+	ID #276909
+	ID #276927
+	ID #275579
+	ID #1938
+	ID #275582
+	ID #275590
+	ID #277621
+	ID #275599
+	ID #283338
+	ID #275587
+	ID #1943
+	ID #276935
+	ID #275602
+	ID #283580
+	ID #275829
+	ID #275831
+	ID #283573
+	ID #1841
+	ID #276833
+	ID #275840
+	ID #277009
+	ID #275843
+	ID #276873
+	ID #275862
+	ID #275867
+	ID #277622
+	ID #276948
+	ID #275954
+	ID #275956
+	ID #283373
+	ID #275959
+	ID #283364
+	ID #276961
+	ID #279113
+	ID #276754
+	ID #276757
+	ID #275576
+	ID #276924
+	ID #276763
+	ID #277467
+	ID #276793
+	ID #276800
+	ID #277487
+	ID #276813
+	ID #283556
+	ID #276816
+	ID #283563
+	ID #276823
+	ID #283568
+	ID #276828
+	ID #276848
+	ID #276855
+	ID #275852
+	ID #1871
+	ID #275515
+	ID #276863
+	ID #1874
+	ID #276866
+	ID #276868
+	ID #276898
+	ID #276913
+	ID #276919
+	ID #275595
+	ID #276943
+	ID #283347
+	ID #276944
+	ID #275946
+	ID #276957
+	ID #283362
+	ID #277296
+	ID #276959
+
+(41) ID #277158 with 5 occurences:
+Type of modification: write (unpersisted)
+File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 10927
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %17, i8* %18, align 1, !dbg !8012 (op #0=8, op #1=155130416)
+	#000010927 in memcpy (=155130416, =155130680, =80) at libc/string/memcpy.c:29
+	#100097464 in heap_boot (=155130416, =158277632, =5234688, =155129888, =155123712, =155130680, =734320064, =239307008) at heap.c:1499
+	#200106773 in palloc_boot (=155130416, =158277632, =5234688, =155129888, =155123712, =155130680, =734320064, =239307008) at palloc.c:1248
+	#300106635 in pmalloc_boot (=155123712) at pmalloc.c:179
+	#400106419 in lane_recover_and_section_boot (=155123712) at lane.c:370
+	#500115245 in obj_runtime_init_common (=155123712) at obj.c:840
+	#600114780 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1206
+	#700114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+	#800113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#900011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#1000009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1100009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1200003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300003564 in main (=7, =70550048)
+
+May be masking:
+	ID #274399
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i32 %37, i32* %39, align 4, !dbg !8027 (op #0=0, op #1=155130412)
+			#000114698 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1179
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+<not masked by anything>
+
+(42) ID #274399 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1179
+assembly.ll line: 114698
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 %37, i32* %39, align 4, !dbg !8027 (op #0=0, op #1=155130412)
+	#000114698 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1179
+	#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+	#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003564 in main (=7, =70550048)
+
+<not masking anything>
+May be masked by:
+	ID #277287
+	ID #277284
+	ID #277281
+	ID #277278
+	ID #277275
+	ID #277272
+	ID #277269
+	ID #277266
+	ID #277203
+	ID #277197
+	ID #277194
+	ID #277191
+	ID #277188
+	ID #277185
+	ID #277182
+	ID #277179
+	ID #277253
+	ID #277176
+	ID #277161
+	ID #277158
+	ID #277164
+	ID #277200
+	ID #277173
+	ID #277247
+	ID #277170
+	ID #277206
+	ID #277209
+	ID #277212
+	ID #277215
+	ID #277218
+	ID #277221
+	ID #277224
+	ID #277227
+	ID #277230
+	ID #277233
+	ID #277236
+	ID #277239
+	ID #277242
+	ID #277166
+	ID #277245
+	ID #277251
+	ID #277257
+	ID #277260
+	ID #277263
+
+(43) ID #377 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1365
+assembly.ll line: 114010
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.pmemobjpool* null, %struct.pmemobjpool** %127, align 8, !dbg !8103 (op #0=<global const>, op #1=155130624)
+	#000114010 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1365
+	#100113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#200011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#600003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #2068
+	ID #2064
+	ID #2040
+	ID #2021
+	ID #2010
+	ID #1737
+	ID #2062
+	ID #1895
+	ID #1721
+	ID #1707
+	ID #1944
+	ID #1682
+	ID #2007
+	ID #1840
+	ID #1677
+	ID #1668
+	ID #1826
+	ID #1864
+	ID #593
+	ID #1778
+	ID #1757
+	ID #1836
+	ID #1915
+	ID #639
+	ID #1641
+	ID #614
+	ID #1795
+	ID #605
+	ID #1720
+	ID #384
+	ID #1957
+	ID #621
+	ID #1712
+	ID #1601
+	ID #570
+	ID #1810
+	ID #1657
+	ID #1815
+	ID #1829
+	ID #1987
+	ID #1767
+	ID #2049
+	ID #379
+	ID #682
+	ID #1788
+	ID #610
+	ID #1946
+	ID #1735
+	ID #723
+	ID #1725
+	ID #652
+	ID #1619
+	ID #1689
+	ID #1856
+	ID #711
+	ID #1764
+	ID #1922
+	ID #1765
+	ID #1775
+	ID #1787
+	ID #1807
+	ID #2053
+	ID #1886
+	ID #1809
+	ID #1800
+	ID #1967
+	ID #1828
+	ID #1907
+	ID #1694
+	ID #1861
+	ID #1940
+	ID #694
+	ID #1863
+	ID #2042
+	ID #1875
+	ID #1731
+	ID #1898
+	ID #582
+	ID #1918
+	ID #1930
+	ID #1627
+	ID #625
+	ID #1961
+	ID #1980
+	ID #1983
+	ID #1990
+	ID #1666
+	ID #2000
+
+(44) ID #384 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1007
+assembly.ll line: 116906
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store void (i8*, i64)* @pmem_persist, void (i8*, i64)** %33, align 8, !dbg !8022 (op #0=<global const>, op #1=155130632)
+	#000116906 in obj_replica_init_local (=155123712, =1, =8388608) at obj.c:1007
+	#100114405 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1139
+	#200114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+	#300113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#400011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#500009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#600009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#700003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800003564 in main (=7, =70550048)
+
+May be masking:
+	ID #377
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.pmemobjpool* null, %struct.pmemobjpool** %127, align 8, !dbg !8103 (op #0=<global const>, op #1=155130624)
+			#000114010 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1365
+			#100113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#200011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#600003564 in main (=7, =70550048)
+	ID #379
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i32 (i8*, i8*, i64, i32)* @obj_norep_persist, i32 (i8*, i8*, i64, i32)** %54, align 8, !dbg !8053 (op #0=<global const>, op #1=155130680)
+			#000114298 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1110
+			#100114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+<not masked by anything>
+
+(45) ID #277292 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 157
+assembly.ll line: 41309
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.ctl* %12, %struct.ctl** %14, align 8, !dbg !8004 (op #0=248223744, op #1=155130600)
+	#000041309 in obj_ctl_init_and_load (=155123712) at obj.c:157
+	#100114828 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1231
+	#200114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+	#300113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#400011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#500009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#600009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#700003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #274402
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.stats* %58, %struct.stats** %60, align 8, !dbg !8052 (op #0=734320064, op #1=155130608)
+			#000114727 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1189
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #385
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.pool_set* %164, %struct.pool_set** %166, align 8, !dbg !8141 (op #0=239307008, op #1=155130616)
+			#000114066 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1379
+			#100113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#200011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#600003564 in main (=7, =70550048)
+	ID #274400
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i64 %41, i64* %43, align 8, !dbg !8032 (op #0=8868574788343802928, op #1=155130584)
+			#000114703 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1181
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #274405
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.lane* %12, %struct.lane** %15, align 8, !dbg !8000 (op #0=293888000, op #1=155130576)
+			#000098980 in lane_boot (=155123712) at lane.c:258
+			#100115230 in obj_runtime_init_common (=155123712) at obj.c:835
+			#200114780 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1206
+			#300114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#400113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#500011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#600009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#700009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#800003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#900003564 in main (=7, =70550048)
+	ID #381
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i32 %112, i32* %114, align 8, !dbg !8122 (op #0=0, op #1=155130592)
+			#000114380 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1133
+			#100114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #283573
+	ID #283567
+	ID #283563
+	ID #277666
+	ID #283549
+	ID #277659
+	ID #283505
+	ID #283578
+	ID #278759
+	ID #279154
+	ID #283571
+	ID #277488
+	ID #279153
+	ID #277673
+	ID #283556
+	ID #277487
+	ID #282038
+	ID #277486
+	ID #283554
+	ID #277446
+	ID #283566
+	ID #277483
+	ID #283568
+	ID #277485
+	ID #277476
+	ID #283544
+	ID #283576
+	ID #278757
+	ID #283493
+	ID #277482
+	ID #279155
+	ID #283558
+	ID #283580
+	ID #279156
+	ID #282017
+	ID #283496
+	ID #283536
+	ID #277296
+	ID #283537
+	ID #283543
+	ID #283547
+	ID #283548
+	ID #283552
+	ID #283560
+	ID #283561
+
+(46) ID #277446 with 5 occurences:
+Type of modification: write (unpersisted)
+File: lane.c
+Line: 335
+assembly.ll line: 106244
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.lane* null, %struct.lane** %30, align 8, !dbg !8021 (op #0=<global const>, op #1=155130576)
+	#000106244 in lane_cleanup (=155123712) at lane.c:335
+	#100117385 in obj_pool_cleanup (=155123712) at obj.c:1928
+	#200119024 in pmemobj_close (=155123712) at obj.c:1972
+	#300011973 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:120
+	#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003564 in main (=7, =70550048)
+
+May be masking:
+	ID #274405
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.lane* %12, %struct.lane** %15, align 8, !dbg !8000 (op #0=293888000, op #1=155130576)
+			#000098980 in lane_boot (=155123712) at lane.c:258
+			#100115230 in obj_runtime_init_common (=155123712) at obj.c:835
+			#200114780 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1206
+			#300114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#400113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#500011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#600009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#700009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#800003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#900003564 in main (=7, =70550048)
+	ID #274400
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i64 %41, i64* %43, align 8, !dbg !8032 (op #0=8868574788343802928, op #1=155130584)
+			#000114703 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1181
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #381
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i32 %112, i32* %114, align 8, !dbg !8122 (op #0=0, op #1=155130592)
+			#000114380 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1133
+			#100114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #277296
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i32 %62, i32* %60, !dbg !8026 (op #0=8, op #1=155130564)
+			#000105362 in lane_hold (=155123712, =261615656) at lane.c:520
+			#100099827 in pmalloc_operation_hold_type (=155123712, =1, =1) at pmalloc.c:46
+			#200119489 in pmalloc_operation_hold (=155123712) at pmalloc.c:73
+			#300121949 in obj_alloc_root (=155123712, =24, =0, =0) at obj.c:2829
+			#400121806 in pmemobj_root_construct (=155123712, =24, =0, =0) at obj.c:2887
+			#500122161 in pmemobj_root (=155123712, =24) at obj.c:2912
+			#600011126 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:45
+			#700009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#800009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#900003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#1000003564 in main (=7, =70550048)
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #277292
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.ctl* %12, %struct.ctl** %14, align 8, !dbg !8004 (op #0=248223744, op #1=155130600)
+			#000041309 in obj_ctl_init_and_load (=155123712) at obj.c:157
+			#100114828 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1231
+			#200114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#300113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#400011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#500009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#600009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#700003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#800003564 in main (=7, =70550048)
+	ID #274402
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.stats* %58, %struct.stats** %60, align 8, !dbg !8052 (op #0=734320064, op #1=155130608)
+			#000114727 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1189
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #385
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.pool_set* %164, %struct.pool_set** %166, align 8, !dbg !8141 (op #0=239307008, op #1=155130616)
+			#000114066 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1379
+			#100113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#200011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#600003564 in main (=7, =70550048)
+<not masked by anything>
+
+(47) ID #274402 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1189
+assembly.ll line: 114727
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.stats* %58, %struct.stats** %60, align 8, !dbg !8052 (op #0=734320064, op #1=155130608)
+	#000114727 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1189
+	#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+	#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #385
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store %struct.pool_set* %164, %struct.pool_set** %166, align 8, !dbg !8141 (op #0=239307008, op #1=155130616)
+			#000114066 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1379
+			#100113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#200011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#600003564 in main (=7, =70550048)
+	ID #274400
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i64 %41, i64* %43, align 8, !dbg !8032 (op #0=8868574788343802928, op #1=155130584)
+			#000114703 in obj_runtime_init (=155123712, =0, =1, =1024) at obj.c:1181
+			#100114089 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1388
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+	ID #381
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i32 %112, i32* %114, align 8, !dbg !8122 (op #0=0, op #1=155130592)
+			#000114380 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1133
+			#100114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+May be masked by:
+	ID #283580
+	ID #283578
+	ID #283573
+	ID #283571
+	ID #283568
+	ID #283567
+	ID #283566
+	ID #283563
+	ID #283561
+	ID #283560
+	ID #283558
+	ID #283554
+	ID #283549
+	ID #283547
+	ID #283543
+	ID #283536
+	ID #283493
+	ID #283420
+	ID #283419
+	ID #283398
+	ID #283392
+	ID #283379
+	ID #283373
+	ID #283372
+	ID #283366
+	ID #283364
+	ID #283363
+	ID #283362
+	ID #283361
+	ID #283354
+	ID #283347
+	ID #283345
+	ID #283340
+	ID #283505
+	ID #283338
+	ID #282017
+	ID #281978
+	ID #281962
+	ID #276929
+	ID #276901
+	ID #274768
+	ID #277296
+	ID #279113
+	ID #276913
+	ID #277466
+	ID #283556
+	ID #276876
+	ID #283576
+	ID #275059
+	ID #277666
+	ID #283548
+	ID #276868
+	ID #277468
+	ID #276804
+	ID #277673
+	ID #283552
+	ID #283385
+	ID #275870
+	ID #283403
+	ID #275554
+	ID #277292
+	ID #283358
+	ID #275843
+	ID #275602
+	ID #275598
+	ID #275959
+	ID #283537
+	ID #274853
+	ID #274405
+	ID #279156
+	ID #277486
+	ID #275863
+	ID #274694
+	ID #275040
+	ID #276836
+	ID #275834
+	ID #278757
+	ID #283374
+	ID #282038
+	ID #276861
+	ID #274523
+	ID #277446
+	ID #283375
+	ID #275526
+	ID #275052
+	ID #283337
+	ID #277659
+	ID #274617
+	ID #277461
+	ID #283428
+	ID #275579
+	ID #276935
+	ID #277014
+	ID #277488
+	ID #276763
+	ID #279101
+	ID #275566
+	ID #277482
+	ID #274810
+	ID #276943
+	ID #275587
+	ID #279153
+	ID #277483
+	ID #275949
+	ID #276951
+	ID #276964
+	ID #283544
+	ID #275862
+	ID #277031
+	ID #277136
+	ID #283336
+	ID #276823
+	ID #277157
+	ID #277457
+	ID #277467
+	ID #276957
+	ID #277458
+	ID #277625
+	ID #277476
+	ID #279155
+	ID #277485
+	ID #278749
+	ID #277487
+	ID #277454
+	ID #277621
+	ID #277622
+	ID #278742
+	ID #278759
+	ID #283496
+	ID #279154
+	ID #279098
+	ID #274761
+	ID #279103
+
+(48) ID #380 with 5 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1111
+assembly.ll line: 114302
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 (i8*, i8*, i64, i32)* @obj_norep_flush, i32 (i8*, i8*, i64, i32)** %57, align 8, !dbg !8057 (op #0=<global const>, op #1=155130688)
+	#000114302 in obj_replica_init (=155123712, =239307008, =0, =1) at obj.c:1111
+	#100114017 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1369
+	#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+	#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003564 in main (=7, =70550048)
+
+May be masking:
+	ID #60
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %14, i8* %15, align 1, !dbg !8007 (op #0=0, op #1=155130400)
+			#000010966 in memset (=155130400, =0, =1504) at libc/string/memset.c:28
+			#100114002 in pmemobj_createU (=150304384, =150352672, =8388608, =438) at obj.c:1362
+			#200113793 in pmemobj_create (=150304384, =150352672, =8388608, =438) at obj.c:1423
+			#300011089 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:32
+			#400009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#500009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#600003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#700003564 in main (=7, =70550048)
+<not masked by anything>
+
+(49) ID #278176 with 846 occurences:
+Type of modification: fence (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148150
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !7993 (op #0=<global const>)
+	#000148150 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100164202 in pmem_drain () at pmem.c:189
+	#200116470 in obj_norep_drain (=155123712) at obj.c:492
+	#300101309 in pmemops_drain.1002 (=155130416) at ./pmemops.h:76
+	#400101099 in palloc_exec_actions (=155130416, =746363136, =154951680, =3) at palloc.c:559
+	#500109080 in palloc_publish (=155130416, =154951680, =3, =746363136) at palloc.c:660
+	#600129993 in pmemobj_tx_commit () at tx.c:1009
+	#700130565 in pmemobj_tx_process () at tx.c:1101
+	#800011659 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:84
+	#900009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1000009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1100003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1200003564 in main (=7, =70550048)
+
+<not masking anything>
+<not masked by anything>
+
+(50) ID #277307 with 5 occurences:
+Type of modification: write (unpersisted)
+File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 10927
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8023
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %17, i8* %18, align 1, !dbg !8012 (op #0=1, op #1=158278848)
+	#000010927 in memcpy (=158278848, =297170192, =8) at libc/string/memcpy.c:29
+	#100051436 in huge_write_footer (=158278728, =16) at memblock.c:1136
+	#200052333 in memblock_huge_init (=5331662032, =155130416, =1, =0, =16) at memblock.c:1310
+	#300095907 in heap_split_block (=155130416, =2976482528, =5331660784, =1) at heap.c:961
+	#400095336 in heap_get_bestfit_block (=155130416, =2976482528, =5331660784) at heap.c:995
+	#500095571 in heap_ensure_run_bucket_filled (=155130416, =304870944, =1) at heap.c:884
+	#600095271 in heap_get_bestfit_block (=155130416, =304870944, =150402600) at heap.c:987
+	#700100825 in palloc_reservation_create (=155130416, =24, =96590728, =2973396032, =0, =32768, =0, =0, =150402560) at palloc.c:218
+	#800099976 in palloc_operation (=155130416, =0, =155129856, =24, =96590728, =2973396032, =0, =32768, =0, =0, =152421888) at palloc.c:732
+	#900121968 in obj_alloc_root (=155123712, =24, =0, =0) at obj.c:2833
+	#1000121806 in pmemobj_root_construct (=155123712, =24, =0, =0) at obj.c:2887
+	#1100122161 in pmemobj_root (=155123712, =24) at obj.c:2912
+	#1200011126 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:45
+	#1300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+	#1400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+	#1500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003564 in main (=7, =70550048)
+
+May be masking:
+	ID #277299
+		Current Thread: 1
+		Thread 1, Process 0, enabled
+				PC:   store i8 %17, i8* %18, align 1, !dbg !8012 (op #0=1, op #1=158278848)
+			#000010927 in memcpy (=158278848, =263300784, =8) at libc/string/memcpy.c:29
+			#100051436 in huge_write_footer (=158278720, =17) at memblock.c:1136
+			#200052333 in memblock_huge_init (=5331663328, =155130416, =0, =0, =17) at memblock.c:1310
+			#300046777 in heap_zone_init (=155130416, =0, =0) at heap.c:427
+			#400096082 in heap_populate_bucket (=155130416, =2976482528) at heap.c:659
+			#500095535 in heap_ensure_run_bucket_filled (=155130416, =304870944, =1) at heap.c:871
+			#600095271 in heap_get_bestfit_block (=155130416, =304870944, =150402600) at heap.c:987
+			#700100825 in palloc_reservation_create (=155130416, =24, =96590728, =2973396032, =0, =32768, =0, =0, =150402560) at palloc.c:218
+			#800099976 in palloc_operation (=155130416, =0, =155129856, =24, =96590728, =2973396032, =0, =32768, =0, =0, =152421888) at palloc.c:732
+			#900121968 in obj_alloc_root (=155123712, =24, =0, =0) at obj.c:2833
+			#1000121806 in pmemobj_root_construct (=155123712, =24, =0, =0) at obj.c:2887
+			#1100122161 in pmemobj_root (=155123712, =24) at obj.c:2912
+			#1200011126 in __klee_posix_wrapped_main (=3, =154858848) at nvmbugs/000_pmdk_btree_map/driver.c:45
+			#1300009291 in __klee_posix_ctor_stub_insert_point (=3, =154858848, =70550112) at runtime/POSIX/./klee_init_env.c:491
+			#1400009311 in __user_main (=7, =70550048, =70550112) at runtime/POSIX/./klee_init_env.c:499
+			#1500003397 in __uClibc_main (=43072776, =7, =70550048, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+			#1600003564 in main (=7, =70550048)
+May be masked by:
+	ID #287614
+	ID #287608
+	ID #280255
+	ID #280249
+	ID #279502
+	ID #278115
+	ID #287550
+	ID #287584
+	ID #287601
+	ID #278798
+	ID #287536
+	ID #287586
+	ID #283954
+	ID #287545
+	ID #278168
+	ID #287566
+	ID #287572
+	ID #287588

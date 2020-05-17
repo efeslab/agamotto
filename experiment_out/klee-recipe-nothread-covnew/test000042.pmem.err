@@ -1,0 +1,38 @@
+Error: persistent memory violation!
+File: src/clht_lb_res.c
+Line: 139
+assembly.ll line: 14944
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse2.mfence(), !dbg !10978 (op #0=<global const>)
+	#000014944 in mfence () at src/clht_lb_res.c:139
+	#100013689 in clflush (=244794704, =64, =true) at src/clht_lb_res.c:159
+	#200013261 in clht_put (=244536528, =25, =25) at src/clht_lb_res.c:556
+	#300012688 in _ZZ3runPPcENK3$_0clEv (=365382656) at example-nothread.cpp:109
+	#400012271 in _Z3runPPc (=200155776) at example-nothread.cpp:114
+	#500016765 in __klee_posix_wrapped_main (=2, =200155776) at example-nothread.cpp:204
+	#600010304 in __klee_posix_ctor_stub_insert_point (=2, =200155776, =100913136) at runtime/POSIX/./klee_init_env.c:491
+	#700010324 in __user_main (=5, =100913088, =100913136) at runtime/POSIX/./klee_init_env.c:499
+	#800004410 in __uClibc_main (=34699656, =5, =100913088, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900004577 in main (=5, =100913088)
+Errors: 
+31) File: src/clht_lb_res.c
+Line: 139
+assembly.ll line: 14944
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse2.mfence(), !dbg !10978 (op #0=<global const>)
+	#000014944 in mfence () at src/clht_lb_res.c:139
+	#100013689 in clflush (=244794704, =64, =true) at src/clht_lb_res.c:159
+	#200013261 in clht_put (=244536528, =25, =25) at src/clht_lb_res.c:556
+	#300012688 in _ZZ3runPPcENK3$_0clEv (=365382656) at example-nothread.cpp:109
+	#400012271 in _Z3runPPc (=200155776) at example-nothread.cpp:114
+	#500016765 in __klee_posix_wrapped_main (=2, =200155776) at example-nothread.cpp:204
+	#600010304 in __klee_posix_ctor_stub_insert_point (=2, =200155776, =100913136) at runtime/POSIX/./klee_init_env.c:491
+	#700010324 in __user_main (=5, =100913088, =100913136) at runtime/POSIX/./klee_init_env.c:499
+	#800004410 in __uClibc_main (=34699656, =5, =100913088, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900004577 in main (=5, =100913088)
+

@@ -1,0 +1,38 @@
+Error: persistent memory violation!
+File: runtime/POSIX/./mman.c
+Line: 248
+assembly.ll line: 137687
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @klee_pmem_check_persisted(i8* %130, i64 %131), !dbg !8239 (op #0=<global const>, op #1=164495360, op #2=4096)
+	#000137687 in munmap_sym (=160563200, =8388608, =82756640, =0) at runtime/POSIX/./mman.c:248
+	#100137833 in munmap (=160563200, =8388608) at runtime/POSIX/./mman.c:272
+	#200074523 in util_unmap_part (=58615288) at ../../src/../src/common/set.c:489
+	#300076682 in util_replica_close (=239315360, =0) at ../../src/../src/common/set.c:2913
+	#400076462 in util_poolset_close (=239315360, =0) at ../../src/../src/common/set.c:635
+	#500118740 in obj_pool_cleanup (=160563200) at obj.c:1932
+	#600120371 in pmemobj_close (=160563200) at obj.c:1972
+	#700011826 in __klee_posix_wrapped_main (=3, =156408128) at nvmbugs/003_pmdk_rbtree_map/driver.c:95
+	#800009332 in __klee_posix_ctor_stub_insert_point (=3, =156408128, =50521120) at runtime/POSIX/./klee_init_env.c:491
+	#900009352 in __user_main (=7, =50521056, =50521120) at runtime/POSIX/./klee_init_env.c:499
+	#1000003438 in __uClibc_main (=41696776, =7, =50521056, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1100003605 in main (=7, =50521056)
+Errors: 
+25) File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 10968
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %17, i8* %18, align 1, !dbg !8140 (op #0=54, op #1=164497280)
+	#000010968 in memcpy (=164497280, =1192984816, =16) at libc/string/memcpy.c:29
+	#100013459 in tree_map_insert_bst (=2374202243393975350, =3933776, =2374202243393975350, =3934288) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_buggy.c:174
+	#200012600 in tree_map_insert (=160563200, =2374202243393975350, =3933776, =0, =2374202243393975350, =3934160) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_buggy.c:219
+	#300011639 in __klee_posix_wrapped_main (=3, =156408128) at nvmbugs/003_pmdk_rbtree_map/driver.c:81
+	#400009332 in __klee_posix_ctor_stub_insert_point (=3, =156408128, =50521120) at runtime/POSIX/./klee_init_env.c:491
+	#500009352 in __user_main (=7, =50521056, =50521120) at runtime/POSIX/./klee_init_env.c:499
+	#600003438 in __uClibc_main (=41696776, =7, =50521056, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003605 in main (=7, =50521056)
+
