@@ -2,7 +2,7 @@
 set +x
 
 OUTDIR=../../experiment_out
-
+cp memcached.env ../build/bin
 cd ../build/bin
 ulimit -s unlimited
 
@@ -10,6 +10,7 @@ ulimit -s unlimited
 ./klee --output-dir=$OUTDIR/klee-memcached-static --search=nvm --nvm-heuristic-type=static \
   --custom-checkers=false --max-time=86400 --write-errors-only=true --max-memory=10000  \
   --disable-verify=true --libc=uclibc --link-known-lib=libevent --link-known-lib=libpmem \
+  --calloc-max-unit-size=1024 \
   --posix-runtime \
   --env-file=memcached.env memcached.bc --sym-pmem-delay PMEM 8388608 --sock-handler memcached_rand \
   -m 0 -U 0 -t 1 -A -o pslab_file=PMEM,pslab_size=8,pslab_force &
@@ -18,6 +19,7 @@ ulimit -s unlimited
 ./klee --output-dir=$OUTDIR/klee-memcached-default \
   --custom-checkers=false --max-time=86400 --write-errors-only=true --max-memory=10000  \
   --disable-verify=true --libc=uclibc --link-known-lib=libevent --link-known-lib=libpmem \
+  --calloc-max-unit-size=1024 \
   --posix-runtime \
   --env-file=memcached.env memcached.bc --sym-pmem-delay PMEM 8388608 --sock-handler memcached_rand \
   -m 0 -U 0 -t 1 -A -o pslab_file=PMEM,pslab_size=8,pslab_force &
@@ -26,6 +28,7 @@ ulimit -s unlimited
 ./klee --output-dir=$OUTDIR/klee-memcached-bfs --search=bfs \
   --custom-checkers=false --max-time=86400 --write-errors-only=true --max-memory=10000  \
   --disable-verify=true --libc=uclibc --link-known-lib=libevent --link-known-lib=libpmem \
+  --calloc-max-unit-size=1024 \
   --posix-runtime \
   --env-file=memcached.env memcached.bc --sym-pmem-delay PMEM 8388608 --sock-handler memcached_rand \
   -m 0 -U 0 -t 1 -A -o pslab_file=PMEM,pslab_size=8,pslab_force &
@@ -34,6 +37,7 @@ ulimit -s unlimited
 ./klee --output-dir=$OUTDIR/klee-memcached-dfs --search=dfs \
   --custom-checkers=false --max-time=86400 --write-errors-only=true --max-memory=10000  \
   --disable-verify=true --libc=uclibc --link-known-lib=libevent --link-known-lib=libpmem \
+  --calloc-max-unit-size=1024 \
   --posix-runtime \
   --env-file=memcached.env memcached.bc --sym-pmem-delay PMEM 8388608 --sock-handler memcached_rand \
   -m 0 -U 0 -t 1 -A -o pslab_file=PMEM,pslab_size=8,pslab_force &
@@ -42,6 +46,7 @@ ulimit -s unlimited
 ./klee --output-dir=$OUTDIR/klee-memcached-covnew --search=nurs:covnew \
   --custom-checkers=false --max-time=86400 --write-errors-only=true --max-memory=10000  \
   --disable-verify=true --libc=uclibc --link-known-lib=libevent --link-known-lib=libpmem \
+  --calloc-max-unit-size=1024 \
   --posix-runtime \
   --env-file=memcached.env memcached.bc --sym-pmem-delay PMEM 8388608 --sock-handler memcached_rand \
   -m 0 -U 0 -t 1 -A -o pslab_file=PMEM,pslab_size=8,pslab_force &
