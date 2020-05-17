@@ -1,0 +1,40 @@
+Error: persistent memory violation!
+File: src/clht_lb_res.c
+Line: 154
+assembly.ll line: 13661
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %32, i8* %32), !dbg !11016 (op #0=<global const>, op #1=262887680, op #2=262887680)
+	#000013661 in clflush (=262887568, =128, =false) at src/clht_lb_res.c:154
+	#100014301 in ht_resize_pes (=262886608, =1, =4) at src/clht_lb_res.c:895
+	#200013958 in ht_status (=262886608, =1, =0) at src/clht_lb_res.c:1112
+	#300013346 in clht_put (=262886608, =32, =32) at src/clht_lb_res.c:597
+	#400012688 in _ZZ3runPPcENK3$_0clEv (=386616464) at example-nothread.cpp:109
+	#500012271 in _Z3runPPc (=218508288) at example-nothread.cpp:114
+	#600016765 in __klee_posix_wrapped_main (=2, =218508288) at example-nothread.cpp:204
+	#700010304 in __klee_posix_ctor_stub_insert_point (=2, =218508288, =119263216) at runtime/POSIX/./klee_init_env.c:491
+	#800010324 in __user_main (=5, =119263168, =119263216) at runtime/POSIX/./klee_init_env.c:499
+	#900004410 in __uClibc_main (=53049736, =5, =119263168, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1000004577 in main (=5, =119263168)
+Errors: 
+34) File: src/clht_lb_res.c
+Line: 154
+assembly.ll line: 13661
+ allocated at _block_init_pmem_from_file():  %22 = call i8* @klee_pmem_alloc_pmem(i64 %19, i8* %20, i1 zeroext false, i8* %21), !dbg !11010
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %32, i8* %32), !dbg !11016 (op #0=<global const>, op #1=262887680, op #2=262887680)
+	#000013661 in clflush (=262887568, =128, =false) at src/clht_lb_res.c:154
+	#100014301 in ht_resize_pes (=262886608, =1, =4) at src/clht_lb_res.c:895
+	#200013958 in ht_status (=262886608, =1, =0) at src/clht_lb_res.c:1112
+	#300013346 in clht_put (=262886608, =32, =32) at src/clht_lb_res.c:597
+	#400012688 in _ZZ3runPPcENK3$_0clEv (=386616464) at example-nothread.cpp:109
+	#500012271 in _Z3runPPc (=218508288) at example-nothread.cpp:114
+	#600016765 in __klee_posix_wrapped_main (=2, =218508288) at example-nothread.cpp:204
+	#700010304 in __klee_posix_ctor_stub_insert_point (=2, =218508288, =119263216) at runtime/POSIX/./klee_init_env.c:491
+	#800010324 in __user_main (=5, =119263168, =119263216) at runtime/POSIX/./klee_init_env.c:499
+	#900004410 in __uClibc_main (=53049736, =5, =119263168, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1000004577 in main (=5, =119263168)
+

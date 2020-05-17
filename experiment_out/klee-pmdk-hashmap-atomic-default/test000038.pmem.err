@@ -1,0 +1,46 @@
+Error: persistent memory violation!
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148999
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !8365 (op #0=<global const>)
+	#000148999 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100165051 in pmem_drain () at pmem.c:189
+	#200116668 in obj_norep_drain (=157581312) at obj.c:492
+	#300101507 in pmemops_drain.1002 (=157588016) at ./pmemops.h:76
+	#400101297 in palloc_exec_actions (=157588016, =145757824, =142627840, =1) at palloc.c:559
+	#500100304 in palloc_operation (=157588016, =0, =157587456, =16, =88249352, =236865600, =0, =32768, =0, =0, =145757824) at palloc.c:769
+	#600122166 in obj_alloc_root (=157581312, =16, =0, =0) at obj.c:2833
+	#700122004 in pmemobj_root_construct (=157581312, =16, =0, =0) at obj.c:2887
+	#800122359 in pmemobj_root (=157581312, =16) at obj.c:2912
+	#900014851 in __klee_posix_wrapped_main (=3, =148001856) at nvmbugs/hashmap_atomic/driver.c:136
+	#1000009362 in __klee_posix_ctor_stub_insert_point (=3, =148001856, =62504448) at runtime/POSIX/./klee_init_env.c:491
+	#1100009382 in __user_main (=7, =62504384, =62504448) at runtime/POSIX/./klee_init_env.c:499
+	#1200003468 in __uClibc_main (=34628616, =7, =62504384, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300003635 in main (=7, =62504384)
+Errors: 
+3) File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148999
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !8365 (op #0=<global const>)
+	#000148999 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100165051 in pmem_drain () at pmem.c:189
+	#200116668 in obj_norep_drain (=157581312) at obj.c:492
+	#300101507 in pmemops_drain.1002 (=157588016) at ./pmemops.h:76
+	#400101297 in palloc_exec_actions (=157588016, =145757824, =142627840, =1) at palloc.c:559
+	#500100304 in palloc_operation (=157588016, =0, =157587456, =16, =88249352, =236865600, =0, =32768, =0, =0, =145757824) at palloc.c:769
+	#600122166 in obj_alloc_root (=157581312, =16, =0, =0) at obj.c:2833
+	#700122004 in pmemobj_root_construct (=157581312, =16, =0, =0) at obj.c:2887
+	#800122359 in pmemobj_root (=157581312, =16) at obj.c:2912
+	#900014851 in __klee_posix_wrapped_main (=3, =148001856) at nvmbugs/hashmap_atomic/driver.c:136
+	#1000009362 in __klee_posix_ctor_stub_insert_point (=3, =148001856, =62504448) at runtime/POSIX/./klee_init_env.c:491
+	#1100009382 in __user_main (=7, =62504384, =62504448) at runtime/POSIX/./klee_init_env.c:499
+	#1200003468 in __uClibc_main (=34628616, =7, =62504384, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300003635 in main (=7, =62504384)
+

@@ -1,0 +1,64 @@
+Error: persistent memory violation!
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148999
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !8365 (op #0=<global const>)
+	#000148999 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100165051 in pmem_drain () at pmem.c:189
+	#200165171 in pmem_persist (=161735760, =8) at pmem.c:244
+	#300116605 in obj_norep_persist (=157581312, =161735760, =8, =0) at obj.c:464
+	#400115730 in pmemops_xpersist.865 (=157588280, =161735760, =8, =0) at ./pmemops.h:51
+	#500115255 in pmemops_persist.846 (=157588280, =161735760, =8) at ./pmemops.h:57
+	#600121519 in pmemobj_persist (=157581312, =161735760, =8) at obj.c:2724
+	#700012027 in create_buckets (=157581312, =161735760, =240169136) at nvmbugs/hashmap_atomic/hashmap_atomic.c:120
+	#800119808 in constructor_alloc (=157581312, =161735760, =816, =365664448) at obj.c:2161
+	#900105090 in alloc_prep_block (=157588016, =142627880, =88245128, =365664448, =1001, =0, =142627840) at palloc.c:134
+	#1000101040 in palloc_reservation_create (=157588016, =808, =88245128, =365664448, =1001, =0, =0, =0, =142627840) at palloc.c:222
+	#1100100174 in palloc_operation (=157588016, =0, =161515008, =808, =88245128, =365664448, =1001, =0, =0, =0, =145757824) at palloc.c:732
+	#1200119668 in obj_alloc_construct (=157581312, =161515000, =808, =1001, =0, =43734792, =240169136) at obj.c:2192
+	#1300119502 in pmemobj_alloc (=157581312, =161515000, =808, =1001, =43734792, =240169136) at obj.c:2224
+	#1400014672 in create_hashmap (=157581312, =11534725655730269589, =3933648, =0) at nvmbugs/hashmap_atomic/hashmap_atomic.c:144
+	#1500014524 in hm_atomic_create (=157581312, =161514832, =0) at nvmbugs/hashmap_atomic/hashmap_atomic.c:443
+	#1600011140 in map_hm_atomic_create (=157581312, =161514832, =0) at nvmbugs/hashmap_atomic/map_hashmap_atomic.c:87
+	#1700015506 in map_create (=1149508784, =161514832, =0) at nvmbugs/hashmap_atomic/map.c:84
+	#1800014984 in __klee_posix_wrapped_main (=3, =148001856) at nvmbugs/hashmap_atomic/driver.c:150
+	#1900009362 in __klee_posix_ctor_stub_insert_point (=3, =148001856, =62504448) at runtime/POSIX/./klee_init_env.c:491
+	#2000009382 in __user_main (=7, =62504384, =62504448) at runtime/POSIX/./klee_init_env.c:499
+	#2100003468 in __uClibc_main (=34628616, =7, =62504384, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2200003635 in main (=7, =62504384)
+Errors: 
+6) File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 148999
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !8365 (op #0=<global const>)
+	#000148999 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100165051 in pmem_drain () at pmem.c:189
+	#200165171 in pmem_persist (=161735760, =8) at pmem.c:244
+	#300116605 in obj_norep_persist (=157581312, =161735760, =8, =0) at obj.c:464
+	#400115730 in pmemops_xpersist.865 (=157588280, =161735760, =8, =0) at ./pmemops.h:51
+	#500115255 in pmemops_persist.846 (=157588280, =161735760, =8) at ./pmemops.h:57
+	#600121519 in pmemobj_persist (=157581312, =161735760, =8) at obj.c:2724
+	#700012027 in create_buckets (=157581312, =161735760, =240169136) at nvmbugs/hashmap_atomic/hashmap_atomic.c:120
+	#800119808 in constructor_alloc (=157581312, =161735760, =816, =365664448) at obj.c:2161
+	#900105090 in alloc_prep_block (=157588016, =142627880, =88245128, =365664448, =1001, =0, =142627840) at palloc.c:134
+	#1000101040 in palloc_reservation_create (=157588016, =808, =88245128, =365664448, =1001, =0, =0, =0, =142627840) at palloc.c:222
+	#1100100174 in palloc_operation (=157588016, =0, =161515008, =808, =88245128, =365664448, =1001, =0, =0, =0, =145757824) at palloc.c:732
+	#1200119668 in obj_alloc_construct (=157581312, =161515000, =808, =1001, =0, =43734792, =240169136) at obj.c:2192
+	#1300119502 in pmemobj_alloc (=157581312, =161515000, =808, =1001, =43734792, =240169136) at obj.c:2224
+	#1400014672 in create_hashmap (=157581312, =11534725655730269589, =3933648, =0) at nvmbugs/hashmap_atomic/hashmap_atomic.c:144
+	#1500014524 in hm_atomic_create (=157581312, =161514832, =0) at nvmbugs/hashmap_atomic/hashmap_atomic.c:443
+	#1600011140 in map_hm_atomic_create (=157581312, =161514832, =0) at nvmbugs/hashmap_atomic/map_hashmap_atomic.c:87
+	#1700015506 in map_create (=1149508784, =161514832, =0) at nvmbugs/hashmap_atomic/map.c:84
+	#1800014984 in __klee_posix_wrapped_main (=3, =148001856) at nvmbugs/hashmap_atomic/driver.c:150
+	#1900009362 in __klee_posix_ctor_stub_insert_point (=3, =148001856, =62504448) at runtime/POSIX/./klee_init_env.c:491
+	#2000009382 in __user_main (=7, =62504384, =62504448) at runtime/POSIX/./klee_init_env.c:499
+	#2100003468 in __uClibc_main (=34628616, =7, =62504384, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2200003635 in main (=7, =62504384)
+

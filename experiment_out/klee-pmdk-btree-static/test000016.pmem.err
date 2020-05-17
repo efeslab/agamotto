@@ -1,0 +1,44 @@
+Error: persistent memory violation!
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 149238
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !8113 (op #0=<global const>)
+	#000149238 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100165290 in pmem_drain () at pmem.c:189
+	#200117558 in obj_norep_drain (=304873472) at obj.c:492
+	#300102397 in pmemops_drain.1002 (=304880176) at ./pmemops.h:76
+	#400102187 in palloc_exec_actions (=304880176, =739231488, =904732672, =1) at palloc.c:559
+	#500110168 in palloc_publish (=304880176, =904732672, =1, =739231488) at palloc.c:660
+	#600131081 in pmemobj_tx_commit () at tx.c:1009
+	#700131653 in pmemobj_tx_process () at tx.c:1101
+	#800011963 in __klee_posix_wrapped_main (=3, =177648640) at nvmbugs/000_pmdk_btree_map/driver.c:116
+	#900009332 in __klee_posix_ctor_stub_insert_point (=3, =177648640, =86978880) at runtime/POSIX/./klee_init_env.c:491
+	#1000009352 in __user_main (=7, =86978816, =86978880) at runtime/POSIX/./klee_init_env.c:499
+	#1100003438 in __uClibc_main (=46865672, =7, =86978816, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1200003605 in main (=7, =86978816)
+Errors: 
+25) File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 149238
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !8113 (op #0=<global const>)
+	#000149238 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100165290 in pmem_drain () at pmem.c:189
+	#200117558 in obj_norep_drain (=304873472) at obj.c:492
+	#300102397 in pmemops_drain.1002 (=304880176) at ./pmemops.h:76
+	#400102187 in palloc_exec_actions (=304880176, =739231488, =904732672, =1) at palloc.c:559
+	#500110168 in palloc_publish (=304880176, =904732672, =1, =739231488) at palloc.c:660
+	#600131081 in pmemobj_tx_commit () at tx.c:1009
+	#700131653 in pmemobj_tx_process () at tx.c:1101
+	#800011963 in __klee_posix_wrapped_main (=3, =177648640) at nvmbugs/000_pmdk_btree_map/driver.c:116
+	#900009332 in __klee_posix_ctor_stub_insert_point (=3, =177648640, =86978880) at runtime/POSIX/./klee_init_env.c:491
+	#1000009352 in __user_main (=7, =86978816, =86978880) at runtime/POSIX/./klee_init_env.c:499
+	#1100003438 in __uClibc_main (=46865672, =7, =86978816, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1200003605 in main (=7, =86978816)
+

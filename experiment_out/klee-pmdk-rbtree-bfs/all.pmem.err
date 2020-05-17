@@ -1,0 +1,2006 @@
+Persistent Memory Bugs:
+	Number of bugs: 63
+		Number of unpersisted write bugs (correctness): 13
+		Number of extra flush bugs (performance): 29
+		Number of flushes to untouched memory (performance): 17
+		Number of fences with nothing to commit (performance): 4
+	Overall bug occurences: 1983697
+		Number of unpersisted write occurences (correctness): 13265
+		Number of extra flush occurences (performance): 25062
+		Number of untouched memory flush occurences (performance): 1920030
+		Number of occurence of fences with nothing to commit (performance): 25340
+
+(1) ID #311262127013574248 with 425 occurences:
+Type of modification: write (unpersisted)
+File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 10968
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %17, i8* %18, align 1, !dbg !8140 (op #0=174, op #1=154339200)
+	#000010968 in memcpy (=154339200, =171828144, =16) at libc/string/memcpy.c:29
+	#100013459 in tree_map_insert_bst (=9735031934959137454, =3933776, =9735031934959137454, =3934288) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_buggy.c:174
+	#200012600 in tree_map_insert (=150405120, =9735031934959137454, =3933776, =0, =9735031934959137454, =3934160) at nvmbugs/003_pmdk_rbtree_map/rbtree_map_buggy.c:219
+	#300011639 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:81
+	#400009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#500009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#600003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003605 in main (=7, =49464400)
+
+<not masking anything>
+May be masked by:
+	ID #17104531214597549799
+	ID #5374729047766329100
+	ID #3976653720866189370
+
+(2) ID #12481592103415271085 with 2 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=156708352, op #2=156708352)
+	#000149463 in pmem_clwb (=156708352) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=156708304, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=156708304, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=156708304, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =156708304, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =156708304, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=876777376, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=876777344, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=213615424, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061676 in ravl_foreach_node (=876893312, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061698 in ravl_foreach_node (=779452992, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061639 in ravl_delete_cb (=1050671456, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(3) ID #9522731279162741771 with 4 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154338624, op #2=154338624)
+	#000149463 in pmem_clwb (=154338624) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154338640, =8) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154338640, =8) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154338640, =8) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154338640, =8, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154338640, =8, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=235391136, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=235391104, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=234804992, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061676 in ravl_foreach_node (=187994432, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061676 in ravl_foreach_node (=225088256, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061698 in ravl_foreach_node (=235438848, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1200061639 in ravl_delete_cb (=786867200, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1300131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1400131270 in pmemobj_tx_commit () at tx.c:999
+	#1500131912 in pmemobj_tx_process () at tx.c:1101
+	#1600011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(4) ID #8052410535839127289 with 16 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154273984, op #2=154273984)
+	#000149463 in pmem_clwb (=154273984) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154274000, =80) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154274000, =80) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154274000, =80) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154274000, =80, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154274000, =80, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=839504544, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=839504512, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=234857536, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061698 in ravl_foreach_node (=779642112, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061676 in ravl_foreach_node (=779403136, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061676 in ravl_foreach_node (=779642432, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1200061676 in ravl_foreach_node (=839500096, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1300061639 in ravl_delete_cb (=844909984, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1400131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1500131270 in pmemobj_tx_commit () at tx.c:999
+	#1600131912 in pmemobj_tx_process () at tx.c:1101
+	#1700011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1800009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1900009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#2000003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2100003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(5) ID #8830702143368361913 with 2 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=156968832, op #2=156968832)
+	#000149463 in pmem_clwb (=156968832) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=156968784, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=156968784, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=156968784, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =156968784, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =156968784, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=235397984, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=235397952, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=839563584, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061698 in ravl_foreach_node (=876815424, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061676 in ravl_foreach_node (=839564672, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061676 in ravl_foreach_node (=235375424, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1200061639 in ravl_delete_cb (=1108224480, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1300131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1400131270 in pmemobj_tx_commit () at tx.c:999
+	#1500131912 in pmemobj_tx_process () at tx.c:1101
+	#1600011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(6) ID #9442319789558743715 with 4 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154340416, op #2=154340416)
+	#000149463 in pmem_clwb (=154340416) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154340456, =4) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154340456, =4) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154340456, =4) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154340456, =4, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154340456, =4, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213662624, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213662592, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=213727616, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061698 in ravl_foreach_node (=213603520, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061676 in ravl_foreach_node (=227338752, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061639 in ravl_delete_cb (=788870496, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(7) ID #1874757135250911291 with 4 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154339904, op #2=154339904)
+	#000149463 in pmem_clwb (=154339904) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154339952, =16) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154339952, =16) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154339952, =16) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154339952, =16, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154339952, =16, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213728352, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213728320, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=213727616, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061698 in ravl_foreach_node (=213603520, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061676 in ravl_foreach_node (=227338752, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061639 in ravl_delete_cb (=788870496, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(8) ID #16800753965409669511 with 12 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154339392, op #2=154339392)
+	#000149463 in pmem_clwb (=154339392) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154339408, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154339408, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154339408, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154339408, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154339408, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=726432608, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=726432576, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=726304192, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061639 in ravl_delete_cb (=667928640, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1000131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1100131270 in pmemobj_tx_commit () at tx.c:999
+	#1200131912 in pmemobj_tx_process () at tx.c:1101
+	#1300011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1400009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1500009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1600003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1700003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(9) ID #9855039234720389773 with 2 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=155919744, op #2=155919744)
+	#000149463 in pmem_clwb (=155919744) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=155919696, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=155919696, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=155919696, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =155919696, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =155919696, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=235436192, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=235436160, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=876891072, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061676 in ravl_foreach_node (=222802944, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061676 in ravl_foreach_node (=839696320, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061676 in ravl_foreach_node (=235399104, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1200061639 in ravl_delete_cb (=877359392, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1300131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1400131270 in pmemobj_tx_commit () at tx.c:999
+	#1500131912 in pmemobj_tx_process () at tx.c:1101
+	#1600011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(10) ID #15447023358346506028 with 10 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154085568, op #2=154085568)
+	#000149463 in pmem_clwb (=154085568) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154085608, =4) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154085608, =4) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154085608, =4) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154085608, =4, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154085608, =4, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=234856288, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=234856256, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=235438848, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061676 in ravl_foreach_node (=235318208, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061676 in ravl_foreach_node (=235377536, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061676 in ravl_foreach_node (=192736256, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1200061639 in ravl_delete_cb (=757702944, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1300131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1400131270 in pmemobj_tx_commit () at tx.c:999
+	#1500131912 in pmemobj_tx_process () at tx.c:1101
+	#1600011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(11) ID #3452777698339605173 with 8 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154345280, op #2=154345280)
+	#000149463 in pmem_clwb (=154345280) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154345320, =4) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154345320, =4) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154345320, =4) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154345320, =4, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154345320, =4, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=234799136, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=234799104, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=234824384, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061698 in ravl_foreach_node (=235318208, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061698 in ravl_foreach_node (=192736256, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061698 in ravl_foreach_node (=225088256, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1200061639 in ravl_delete_cb (=786596608, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1300131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1400131270 in pmemobj_tx_commit () at tx.c:999
+	#1500131912 in pmemobj_tx_process () at tx.c:1101
+	#1600011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(12) ID #5456400659679229801 with 8 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=156182272, op #2=156182272)
+	#000149463 in pmem_clwb (=156182272) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=156182224, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=156182224, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=156182224, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =156182224, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =156182224, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=235349344, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=235349312, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=213747328, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061676 in ravl_foreach_node (=213622592, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061676 in ravl_foreach_node (=779457472, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061639 in ravl_delete_cb (=935343776, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(13) ID #1414430070948440151 with 12 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154342208, op #2=154342208)
+	#000149463 in pmem_clwb (=154342208) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154342256, =16) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154342256, =16) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154342256, =16) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154342256, =16, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154342256, =16, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213664864, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213664832, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=229618432, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061676 in ravl_foreach_node (=235318208, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061698 in ravl_foreach_node (=192736256, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061698 in ravl_foreach_node (=225088256, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1200061639 in ravl_delete_cb (=786596608, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1300131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1400131270 in pmemobj_tx_commit () at tx.c:999
+	#1500131912 in pmemobj_tx_process () at tx.c:1101
+	#1600011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(14) ID #14902107436480143772 with 12 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154342208, op #2=154342208)
+	#000149463 in pmem_clwb (=154342208) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154342248, =4) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154342248, =4) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154342248, =4) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154342248, =4, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154342248, =4, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=192867360, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=192867328, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=235425152, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061676 in ravl_foreach_node (=213728320, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061698 in ravl_foreach_node (=213659520, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061639 in ravl_delete_cb (=788271936, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(15) ID #5848604957209899013 with 16 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=155657728, op #2=155657728)
+	#000149463 in pmem_clwb (=155657728) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=155657680, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=155657680, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=155657680, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =155657680, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =155657680, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=809287712, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=809287680, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=839502208, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061676 in ravl_foreach_node (=235351872, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061639 in ravl_delete_cb (=838559808, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1100131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1200131270 in pmemobj_tx_commit () at tx.c:999
+	#1300131912 in pmemobj_tx_process () at tx.c:1101
+	#1400011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(16) ID #11297754735601358336 with 24 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154338624, op #2=154338624)
+	#000149463 in pmem_clwb (=154338624) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154338640, =8) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154338640, =8) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154338640, =8) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154338640, =8, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154338640, =8, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213607328, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213607296, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=234823936, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061698 in ravl_foreach_node (=225824064, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061698 in ravl_foreach_node (=259612480, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061698 in ravl_foreach_node (=222799360, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1200061698 in ravl_foreach_node (=213603008, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1300061639 in ravl_delete_cb (=808964928, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1400131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1500131270 in pmemobj_tx_commit () at tx.c:999
+	#1600131912 in pmemobj_tx_process () at tx.c:1101
+	#1700011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1800009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1900009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#2000003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2100003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(17) ID #16774340345041837293 with 244 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154191488, op #2=154191488)
+	#000149463 in pmem_clwb (=154191488) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154191440, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154191440, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154191440, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154191440, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154191440, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=225824096, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=225824064, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=259612480, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061698 in ravl_foreach_node (=222799360, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061698 in ravl_foreach_node (=213603008, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061639 in ravl_delete_cb (=808964928, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(18) ID #3348264471150357899 with 66 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154343232, op #2=154343232)
+	#000149463 in pmem_clwb (=154343232) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154343272, =4) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154343272, =4) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154343272, =4) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154343272, =4, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154343272, =4, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213694112, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213694080, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=213735808, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061698 in ravl_foreach_node (=235441152, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061698 in ravl_foreach_node (=213669760, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061698 in ravl_foreach_node (=232638144, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1200061639 in ravl_delete_cb (=758279840, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1300131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1400131270 in pmemobj_tx_commit () at tx.c:999
+	#1500131912 in pmemobj_tx_process () at tx.c:1101
+	#1600011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(19) ID #15777481875891545179 with 18 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154343488, op #2=154343488)
+	#000149463 in pmem_clwb (=154343488) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154343528, =4) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154343528, =4) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154343528, =4) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154343528, =4, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154343528, =4, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213666976, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213666944, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=231883328, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061698 in ravl_foreach_node (=213728320, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061698 in ravl_foreach_node (=213659520, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061639 in ravl_delete_cb (=788271936, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(20) ID #3355254281942990563 with 12 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154091136, op #2=154091136)
+	#000149463 in pmem_clwb (=154091136) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154091088, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154091088, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154091088, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154091088, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154091088, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=227343520, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=227343488, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=213669760, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061676 in ravl_foreach_node (=192736256, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061698 in ravl_foreach_node (=213659776, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061639 in ravl_delete_cb (=319440640, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(21) ID #14929361535923535905 with 1710 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154338624, op #2=154338624)
+	#000149463 in pmem_clwb (=154338624) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154338640, =8) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154338640, =8) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154338640, =8) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154338640, =8, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154338640, =8, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213662368, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213662336, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=213724288, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061676 in ravl_foreach_node (=213704128, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061639 in ravl_delete_cb (=364250304, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1100131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1200131270 in pmemobj_tx_commit () at tx.c:999
+	#1300131912 in pmemobj_tx_process () at tx.c:1101
+	#1400011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(22) ID #6877685274914216544 with 46 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154343744, op #2=154343744)
+	#000149463 in pmem_clwb (=154343744) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154343760, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154343760, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154343760, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154343760, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154343760, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213724320, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213724288, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=231883328, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061698 in ravl_foreach_node (=213728320, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061698 in ravl_foreach_node (=213659520, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061639 in ravl_delete_cb (=788271936, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(23) ID #3868914239649697045 with 1070 occurences:
+Type of modification: write (unpersisted)
+File: heap.c
+Line: 1625
+assembly.ll line: 99677
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.heap_rt* null, %struct.heap_rt** %99, align 8, !dbg !8523 (op #0=<global const>, op #1=192920200)
+	#000099677 in heap_cleanup (=192920112) at heap.c:1625
+	#100108140 in palloc_heap_cleanup (=192920112) at palloc.c:1305
+	#200108227 in pmalloc_cleanup (=192913408) at pmalloc.c:204
+	#300108216 in lane_section_cleanup (=192913408) at lane.c:394
+	#400118730 in obj_pool_cleanup (=192913408) at obj.c:1927
+	#500120371 in pmemobj_close (=192913408) at obj.c:1972
+	#600011826 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:95
+	#700009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(24) ID #7824244316639127629 with 44 occurences:
+Type of modification: fence (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 149497
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !8121 (op #0=<global const>)
+	#000149497 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100165549 in pmem_drain () at pmem.c:189
+	#200117817 in obj_norep_drain (=192913408) at obj.c:492
+	#300102656 in pmemops_drain.1002 (=192920112) at ./pmemops.h:76
+	#400102446 in palloc_exec_actions (=192920112, =109251200, =299827200, =5) at palloc.c:559
+	#500110427 in palloc_publish (=192920112, =299827200, =5, =109251200) at palloc.c:660
+	#600131340 in pmemobj_tx_commit () at tx.c:1009
+	#700131912 in pmemobj_tx_process () at tx.c:1101
+	#800011495 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:72
+	#900009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1000009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1100003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1200003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(25) ID #12483012898921382156 with 1070 occurences:
+Type of modification: write (unpersisted)
+File: lane.c
+Line: 335
+assembly.ll line: 107591
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.lane* null, %struct.lane** %30, align 8, !dbg !8149 (op #0=<global const>, op #1=192920272)
+	#000107591 in lane_cleanup (=192913408) at lane.c:335
+	#100118732 in obj_pool_cleanup (=192913408) at obj.c:1928
+	#200120371 in pmemobj_close (=192913408) at obj.c:1972
+	#300011826 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:95
+	#400009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#500009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#600003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(26) ID #8886272550112006805 with 12 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=155666432, op #2=155666432)
+	#000149463 in pmem_clwb (=155666432) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=155666384, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=155666384, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=155666384, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =155666384, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =155666384, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213732576, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213732544, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=779397760, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061698 in ravl_foreach_node (=235460224, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061698 in ravl_foreach_node (=839504832, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061639 in ravl_delete_cb (=841355840, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(27) ID #6219574566353296963 with 1070 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 996
+assembly.ll line: 118225
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 (%struct.pmemobjpool*, i8*, i64, i32, i32)* null, i32 (%struct.pmemobjpool*, i8*, i64, i32, i32)** %16, align 8, !dbg !8135 (op #0=<global const>, op #1=192920560)
+	#000118225 in obj_replica_init_local (=192913408, =1, =8388608) at obj.c:996
+	#100115752 in obj_replica_init (=192913408, =82034944, =0, =1) at obj.c:1139
+	#200115364 in pmemobj_createU (=109178616, =109123168, =8388608, =438) at obj.c:1369
+	#300115140 in pmemobj_create (=109178616, =109123168, =8388608, =438) at obj.c:1423
+	#400011123 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:33
+	#500009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(28) ID #11870671670258172214 with 2640 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=192913600, op #2=192913600)
+	#000149463 in pmem_clwb (=192913600) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=192913408, =4096) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=192913408, =4096) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=192913408, =4096) at pmem.c:232
+	#400165668 in pmem_persist (=192913408, =4096) at pmem.c:243
+	#500082504 in util_persist (=1, =192913408, =4096) at ../common/util_pmem.h:27
+	#600082472 in util_persist_auto (=1, =192913408, =4096) at ../common/util_pmem.h:40
+	#700081992 in util_header_create (=82034944, =0, =0, =65911568, =0) at ../../src/../src/common/set.c:2326
+	#800085210 in util_replica_init_headers_local (=82034944, =0, =1, =65911568) at ../../src/../src/common/set.c:2777
+	#900085084 in util_replica_create_local (=82034944, =0, =1, =65911568) at ../../src/../src/common/set.c:2823
+	#1000083587 in util_pool_create_uuids (=148593392, =109178616, =8388608, =8388608, =2097152, =65911568, =148589040, =1, =0) at ../../src/../src/common/set.c:3313
+	#1100085492 in util_pool_create (=148593392, =109178616, =8388608, =8388608, =2097152, =65911568, =148589040, =1) at ../../src/../src/common/set.c:3356
+	#1200115236 in pmemobj_createU (=109178616, =109123168, =8388608, =438) at obj.c:1343
+	#1300115140 in pmemobj_create (=109178616, =109123168, =8388608, =438) at obj.c:1423
+	#1400011123 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:33
+	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(29) ID #6964340809365577386 with 1070 occurences:
+Type of modification: write (unpersisted)
+File: runtime/POSIX/./threadsync.c
+Line: 155
+assembly.ll line: 138212
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.mutex_data_t* null, %struct.mutex_data_t** %9, align 8, !dbg !8153 (op #0=<global const>, op #1=192920616)
+	#000138212 in pthread_mutex_destroy (=192920616) at runtime/POSIX/./threadsync.c:155
+	#100043231 in os_mutex_destroy (=192920616) at ../../src/../src/core/os_thread_posix.c:85
+	#200116742 in util_mutex_destroy.852 (=192920616) at ../common/sys_util.h:43
+	#300118713 in obj_pool_cleanup (=192913408) at obj.c:1919
+	#400120371 in pmemobj_close (=192913408) at obj.c:1972
+	#500011826 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:95
+	#600009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(30) ID #4932248095466433831 with 20 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154338624, op #2=154338624)
+	#000149463 in pmem_clwb (=154338624) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154338640, =8) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154338640, =8) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154338640, =8) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154338640, =8, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154338640, =8, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=779517536, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=779517504, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=232643264, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061698 in ravl_foreach_node (=192736256, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061698 in ravl_foreach_node (=192735936, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061676 in ravl_foreach_node (=213694144, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1200061676 in ravl_foreach_node (=213705536, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1300061639 in ravl_delete_cb (=797289600, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1400131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1500131270 in pmemobj_tx_commit () at tx.c:999
+	#1600131912 in pmemobj_tx_process () at tx.c:1101
+	#1700011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1800009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1900009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#2000003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2100003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(31) ID #2940008706709212968 with 1070 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1244
+assembly.ll line: 116209
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 0, i32* %140, align 8, !dbg !8276 (op #0=<global const>, op #1=192920664)
+	#000116209 in obj_runtime_init (=192913408, =0, =1, =1024) at obj.c:1244
+	#100115436 in pmemobj_createU (=109178616, =109123168, =8388608, =438) at obj.c:1388
+	#200115140 in pmemobj_create (=109178616, =109123168, =8388608, =438) at obj.c:1423
+	#300011123 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:33
+	#400009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#500009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#600003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(32) ID #14682331279603025353 with 104 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154086528, op #2=154086528)
+	#000149463 in pmem_clwb (=154086528) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154086480, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154086480, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154086480, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154086480, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154086480, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=192736160, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=192736128, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=213694080, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061698 in ravl_foreach_node (=235441152, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061639 in ravl_delete_cb (=786792800, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1100131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1200131270 in pmemobj_tx_commit () at tx.c:999
+	#1300131912 in pmemobj_tx_process () at tx.c:1101
+	#1400011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(33) ID #7627289508127876896 with 1070 occurences:
+Type of modification: write (unpersisted)
+File: libc/string/memset.c
+Line: 28
+assembly.ll line: 11007
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %14, i8* %15, align 1, !dbg !8135 (op #0=0, op #1=192920096)
+	#000011007 in memset (=192920096, =0, =1504) at libc/string/memset.c:28
+	#100115349 in pmemobj_createU (=109178616, =109123168, =8388608, =438) at obj.c:1362
+	#200115140 in pmemobj_create (=109178616, =109123168, =8388608, =438) at obj.c:1423
+	#300011123 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:33
+	#400009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#500009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#600003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003605 in main (=7, =49464400)
+
+<not masking anything>
+May be masked by:
+	ID #5476406703753355378
+	ID #16170078185293683499
+	ID #11404668247774727054
+	ID #13835484200524463561
+	ID #9289803926271419635
+	ID #1277960055546508623
+	ID #1888537660324575815
+	ID #8460927015994435069
+	ID #12674588242844885419
+
+(34) ID #7191172454231198150 with 2 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154097856, op #2=154097856)
+	#000149463 in pmem_clwb (=154097856) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154097896, =4) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154097896, =4) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154097896, =4) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154097896, =4, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154097896, =4, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=225083488, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=225083456, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=231125440, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061698 in ravl_foreach_node (=234784832, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061676 in ravl_foreach_node (=235343232, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061676 in ravl_foreach_node (=234771072, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1200061639 in ravl_delete_cb (=266051424, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1300131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1400131270 in pmemobj_tx_commit () at tx.c:999
+	#1500131912 in pmemobj_tx_process () at tx.c:1101
+	#1600011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(35) ID #2929377864621780506 with 44 occurences:
+Type of modification: fence (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 149497
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !8121 (op #0=<global const>)
+	#000149497 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100165549 in pmem_drain () at pmem.c:189
+	#200117817 in obj_norep_drain (=192913408) at obj.c:492
+	#300102656 in pmemops_drain.1002 (=192920112) at ./pmemops.h:76
+	#400102446 in palloc_exec_actions (=192920112, =109251200, =149583872, =1) at palloc.c:559
+	#500101453 in palloc_operation (=192920112, =0, =192919552, =24, =88725384, =252939904, =0, =32768, =0, =0, =109251200) at palloc.c:769
+	#600123315 in obj_alloc_root (=192913408, =24, =0, =0) at obj.c:2833
+	#700123153 in pmemobj_root_construct (=192913408, =24, =0, =0) at obj.c:2887
+	#800123508 in pmemobj_root (=192913408, =24) at obj.c:2912
+	#900011160 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:46
+	#1000009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1100009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1200003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(36) ID #11404668247774727054 with 1070 occurences:
+Type of modification: write (unpersisted)
+File: sync.c
+Line: 48
+assembly.ll line: 109530
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i64 %32, i64* %26, !dbg !8160 (op #0=1, op #1=192920456)
+	#000109530 in _get_value (=2, =192920456, =192920464, =0, =63512456) at sync.c:48
+	#100109456 in get_mutex (=192913408, =192920456) at sync.c:91
+	#200108588 in pmemobj_mutex_lock (=192913408, =192920456) at sync.c:201
+	#300123223 in pmemobj_mutex_lock_nofail (=192913408, =192920456) at ./sync.h:84
+	#400123140 in pmemobj_root_construct (=192913408, =24, =0, =0) at obj.c:2884
+	#500123508 in pmemobj_root (=192913408, =24) at obj.c:2912
+	#600011160 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:46
+	#700009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(37) ID #17588507729420705197 with 1892352 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=192921728, op #2=192921728)
+	#000149463 in pmem_clwb (=192921728) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=192921600, =3145728) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=192921600, =3145728) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=192921600, =3145728) at pmem.c:232
+	#400165668 in pmem_persist (=192921600, =3145728) at pmem.c:243
+	#500117754 in obj_norep_persist (=192913408, =192921600, =3145728, =2147483648) at obj.c:464
+	#600107541 in pmemops_xpersist.664 (=192920376, =192921600, =3145728, =2147483648) at ./pmemops.h:51
+	#700107514 in lane_init_data (=192913408) at lane.c:320
+	#800115874 in obj_descr_create (=192913408, =109123168, =8388608) at obj.c:887
+	#900115419 in pmemobj_createU (=109178616, =109123168, =8388608, =438) at obj.c:1382
+	#1000115140 in pmemobj_create (=109178616, =109123168, =8388608, =438) at obj.c:1423
+	#1100011123 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:33
+	#1200009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1300009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1400003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(38) ID #981823596458020998 with 1710 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154088640, op #2=154088640)
+	#000149463 in pmem_clwb (=154088640) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154088680, =4) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154088680, =4) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154088680, =4) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154088680, =4, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154088680, =4, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213659808, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213659776, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=235438848, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061676 in ravl_foreach_node (=235318208, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061676 in ravl_foreach_node (=235377536, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061676 in ravl_foreach_node (=192736256, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1200061639 in ravl_delete_cb (=757702944, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1300131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1400131270 in pmemobj_tx_commit () at tx.c:999
+	#1500131912 in pmemobj_tx_process () at tx.c:1101
+	#1600011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(39) ID #15910750273014311483 with 32 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154339904, op #2=154339904)
+	#000149463 in pmem_clwb (=154339904) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154339920, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154339920, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154339920, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154339920, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154339920, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213745696, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213745664, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=213608576, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061698 in ravl_foreach_node (=213613184, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061639 in ravl_delete_cb (=864814208, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1100131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1200131270 in pmemobj_tx_commit () at tx.c:999
+	#1300131912 in pmemobj_tx_process () at tx.c:1101
+	#1400011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(40) ID #2210740433956419999 with 214 occurences:
+Type of modification: fence (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 149497
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !8121 (op #0=<global const>)
+	#000149497 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100165549 in pmem_drain () at pmem.c:189
+	#200165669 in pmem_persist (=192919592, =8) at pmem.c:244
+	#300117754 in obj_norep_persist (=192913408, =192919592, =8, =0) at obj.c:464
+	#400116852 in pmemops_xpersist.1245 (=192920376, =192919592, =8, =0) at ./pmemops.h:51
+	#500116825 in pmemops_persist.1244 (=192920376, =192919592, =8) at ./pmemops.h:57
+	#600116785 in stats_delete (=192913408, =237056896) at stats.c:138
+	#700118718 in obj_pool_cleanup (=192913408) at obj.c:1921
+	#800120371 in pmemobj_close (=192913408) at obj.c:1972
+	#900011826 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:95
+	#1000009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1100009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1200003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(41) ID #14452915127948171466 with 25038 occurences:
+Type of modification: fence (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 149497
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !8121 (op #0=<global const>)
+	#000149497 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100165549 in pmem_drain () at pmem.c:189
+	#200117817 in obj_norep_drain (=150405120) at obj.c:492
+	#300102656 in pmemops_drain.1002 (=150411824) at ./pmemops.h:76
+	#400102446 in palloc_exec_actions (=150411824, =243357312, =742735872, =3) at palloc.c:559
+	#500110427 in palloc_publish (=150411824, =742735872, =3, =243357312) at palloc.c:660
+	#600131340 in pmemobj_tx_commit () at tx.c:1009
+	#700131912 in pmemobj_tx_process () at tx.c:1101
+	#800011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#900009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1000009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1100003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1200003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(42) ID #7369954187215837870 with 1070 occurences:
+Type of modification: write (unpersisted)
+File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 10968
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %17, i8* %18, align 1, !dbg !8140 (op #0=1, op #1=196068544)
+	#000010968 in memcpy (=196068544, =148593992, =8) at libc/string/memcpy.c:29
+	#100052783 in huge_write_footer (=196068424, =16) at memblock.c:1136
+	#200053680 in memblock_huge_init (=356985808, =192920112, =1, =0, =16) at memblock.c:1310
+	#300097254 in heap_split_block (=192920112, =238338880, =356941504, =1) at heap.c:961
+	#400096683 in heap_get_bestfit_block (=192920112, =238338880, =356941504) at heap.c:995
+	#500096918 in heap_ensure_run_bucket_filled (=192920112, =252976800, =1) at heap.c:884
+	#600096618 in heap_get_bestfit_block (=192920112, =252976800, =149583912) at heap.c:987
+	#700102172 in palloc_reservation_create (=192920112, =24, =88725384, =252939904, =0, =32768, =0, =0, =149583872) at palloc.c:218
+	#800101323 in palloc_operation (=192920112, =0, =192919552, =24, =88725384, =252939904, =0, =32768, =0, =0, =109251200) at palloc.c:732
+	#900123315 in obj_alloc_root (=192913408, =24, =0, =0) at obj.c:2833
+	#1000123153 in pmemobj_root_construct (=192913408, =24, =0, =0) at obj.c:2887
+	#1100123508 in pmemobj_root (=192913408, =24) at obj.c:2912
+	#1200011160 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:46
+	#1300009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1400009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1500003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003605 in main (=7, =49464400)
+
+<not masking anything>
+May be masked by:
+	ID #13827910338368141294
+
+(43) ID #7200529692428552390 with 22 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154241216, op #2=154241216)
+	#000149463 in pmem_clwb (=154241216) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154241232, =80) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154241232, =80) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154241232, =80) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154241232, =80, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154241232, =80, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=779512352, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=779512320, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=231122048, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061676 in ravl_foreach_node (=779642112, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061676 in ravl_foreach_node (=779403136, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061676 in ravl_foreach_node (=779642432, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1200061676 in ravl_foreach_node (=839500096, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1300061639 in ravl_delete_cb (=844909984, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1400131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1500131270 in pmemobj_tx_commit () at tx.c:999
+	#1600131912 in pmemobj_tx_process () at tx.c:1101
+	#1700011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1800009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1900009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#2000003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2100003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(44) ID #3209047047813100511 with 1070 occurences:
+Type of modification: write (unpersisted)
+File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 10968
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %17, i8* %18, align 1, !dbg !8140 (op #0=1, op #1=196854848)
+	#000010968 in memcpy (=196854848, =356985808, =40) at libc/string/memcpy.c:29
+	#100093721 in container_ravl_insert_block (=299883232, =356985808) at container_ravl.c:60
+	#200048337 in bucket_insert_block (=238338880, =356985808) at bucket.c:75
+	#300097256 in heap_split_block (=192920112, =238338880, =356941504, =1) at heap.c:964
+	#400096683 in heap_get_bestfit_block (=192920112, =238338880, =356941504) at heap.c:995
+	#500096918 in heap_ensure_run_bucket_filled (=192920112, =252976800, =1) at heap.c:884
+	#600096618 in heap_get_bestfit_block (=192920112, =252976800, =149583912) at heap.c:987
+	#700102172 in palloc_reservation_create (=192920112, =24, =88725384, =252939904, =0, =32768, =0, =0, =149583872) at palloc.c:218
+	#800101323 in palloc_operation (=192920112, =0, =192919552, =24, =88725384, =252939904, =0, =32768, =0, =0, =109251200) at palloc.c:732
+	#900123315 in obj_alloc_root (=192913408, =24, =0, =0) at obj.c:2833
+	#1000123153 in pmemobj_root_construct (=192913408, =24, =0, =0) at obj.c:2887
+	#1100123508 in pmemobj_root (=192913408, =24) at obj.c:2912
+	#1200011160 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:46
+	#1300009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1400009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1500003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(45) ID #2162218833994667839 with 1070 occurences:
+Type of modification: write (unpersisted)
+File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 10968
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %17, i8* %18, align 1, !dbg !8140 (op #0=8, op #1=192920112)
+	#000010968 in memcpy (=192920112, =192920376, =80) at libc/string/memcpy.c:29
+	#100098811 in heap_boot (=192920112, =196067328, =5234688, =192919584, =192913408, =192920376, =237056896, =82034944) at heap.c:1499
+	#200108120 in palloc_boot (=192920112, =196067328, =5234688, =192919584, =192913408, =192920376, =237056896, =82034944) at palloc.c:1248
+	#300107982 in pmalloc_boot (=192913408) at pmalloc.c:179
+	#400107766 in lane_recover_and_section_boot (=192913408) at lane.c:370
+	#500116592 in obj_runtime_init_common (=192913408) at obj.c:840
+	#600116127 in obj_runtime_init (=192913408, =0, =1, =1024) at obj.c:1206
+	#700115436 in pmemobj_createU (=109178616, =109123168, =8388608, =438) at obj.c:1388
+	#800115140 in pmemobj_create (=109178616, =109123168, =8388608, =438) at obj.c:1423
+	#900011123 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:33
+	#1000009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1100009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1200003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(46) ID #12151327463559559417 with 214 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=192919552, op #2=192919552)
+	#000149463 in pmem_clwb (=192919552) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=192919592, =8) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=192919592, =8) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=192919592, =8) at pmem.c:232
+	#400165668 in pmem_persist (=192919592, =8) at pmem.c:243
+	#500117754 in obj_norep_persist (=192913408, =192919592, =8, =0) at obj.c:464
+	#600116852 in pmemops_xpersist.1245 (=192920376, =192919592, =8, =0) at ./pmemops.h:51
+	#700116825 in pmemops_persist.1244 (=192920376, =192919592, =8) at ./pmemops.h:57
+	#800116785 in stats_delete (=192913408, =237056896) at stats.c:138
+	#900118718 in obj_pool_cleanup (=192913408) at obj.c:1921
+	#1000120371 in pmemobj_close (=192913408) at obj.c:1972
+	#1100011826 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:95
+	#1200009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1300009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1400003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(47) ID #5046076839406146805 with 234 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154339328, op #2=154339328)
+	#000149463 in pmem_clwb (=154339328) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154339280, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154339280, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154339280, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154339280, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154339280, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=726304224, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=726304192, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061639 in ravl_delete_cb (=667928640, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#900131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1000131270 in pmemobj_tx_commit () at tx.c:999
+	#1100131912 in pmemobj_tx_process () at tx.c:1101
+	#1200011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1300009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1400009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1500003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(48) ID #4047045153684783192 with 1070 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1007
+assembly.ll line: 118253
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store void (i8*, i64)* @pmem_persist, void (i8*, i64)** %33, align 8, !dbg !8150 (op #0=<global const>, op #1=192920328)
+	#000118253 in obj_replica_init_local (=192913408, =1, =8388608) at obj.c:1007
+	#100115752 in obj_replica_init (=192913408, =82034944, =0, =1) at obj.c:1139
+	#200115364 in pmemobj_createU (=109178616, =109123168, =8388608, =438) at obj.c:1369
+	#300115140 in pmemobj_create (=109178616, =109123168, =8388608, =438) at obj.c:1423
+	#400011123 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:33
+	#500009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(49) ID #18243070818422631082 with 3766 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154338624, op #2=154338624)
+	#000149463 in pmem_clwb (=154338624) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154338640, =8) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154338640, =8) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154338640, =8) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154338640, =8, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154338640, =8, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=726481376, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=726481344, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=726304192, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061639 in ravl_delete_cb (=667928640, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1000131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1100131270 in pmemobj_tx_commit () at tx.c:999
+	#1200131912 in pmemobj_tx_process () at tx.c:1101
+	#1300011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1400009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1500009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1600003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1700003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(50) ID #18232690277837103020 with 18584 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154339840, op #2=154339840)
+	#000149463 in pmem_clwb (=154339840) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154339792, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154339792, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154339792, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154339792, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154339792, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213608608, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213608576, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=213613184, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061639 in ravl_delete_cb (=864814208, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1000131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1100131270 in pmemobj_tx_commit () at tx.c:999
+	#1200131912 in pmemobj_tx_process () at tx.c:1101
+	#1300011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1400009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1500009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1600003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1700003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(51) ID #743972506871767850 with 11308 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154339904, op #2=154339904)
+	#000149463 in pmem_clwb (=154339904) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154339944, =4) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154339944, =4) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154339944, =4) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154339944, =4, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154339944, =4, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=229614880, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=229614848, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=213724224, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061676 in ravl_foreach_node (=213704640, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061639 in ravl_delete_cb (=790309920, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1100131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1200131270 in pmemobj_tx_commit () at tx.c:999
+	#1300131912 in pmemobj_tx_process () at tx.c:1101
+	#1400011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(52) ID #12674588242844885419 with 1070 occurences:
+Type of modification: write (unpersisted)
+File: obj.c
+Line: 1111
+assembly.ll line: 115649
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 (i8*, i8*, i64, i32)* @obj_norep_flush, i32 (i8*, i8*, i64, i32)** %57, align 8, !dbg !8185 (op #0=<global const>, op #1=192920384)
+	#000115649 in obj_replica_init (=192913408, =82034944, =0, =1) at obj.c:1111
+	#100115364 in pmemobj_createU (=109178616, =109123168, =8388608, =438) at obj.c:1369
+	#200115140 in pmemobj_create (=109178616, =109123168, =8388608, =438) at obj.c:1423
+	#300011123 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:33
+	#400009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#500009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#600003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(53) ID #14671336662072906383 with 378 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154338624, op #2=154338624)
+	#000149463 in pmem_clwb (=154338624) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154338640, =8) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154338640, =8) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154338640, =8) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154338640, =8, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154338640, =8, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213658336, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213658304, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=213700224, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061676 in ravl_foreach_node (=213603520, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061676 in ravl_foreach_node (=227338752, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061639 in ravl_delete_cb (=788870496, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(54) ID #2712103077505120524 with 5606 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154340160, op #2=154340160)
+	#000149463 in pmem_clwb (=154340160) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154340200, =4) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154340200, =4) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154340200, =4) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154340200, =4, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154340200, =4, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=192739936, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=192739904, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=213728320, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061676 in ravl_foreach_node (=213659520, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061676 in ravl_foreach_node (=231883328, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061639 in ravl_delete_cb (=784939424, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(55) ID #16062432900210078751 with 10 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154342976, op #2=154342976)
+	#000149463 in pmem_clwb (=154342976) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154343016, =4) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154343016, =4) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154343016, =4) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154343016, =4, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154343016, =4, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213674144, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213674112, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=235425152, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061676 in ravl_foreach_node (=213728320, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061698 in ravl_foreach_node (=213659520, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1100061639 in ravl_delete_cb (=788271936, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(56) ID #5282619164930876239 with 12 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154084736, op #2=154084736)
+	#000149463 in pmem_clwb (=154084736) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154084688, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154084688, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154084688, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154084688, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154084688, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213674144, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213674112, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=192867328, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061676 in ravl_foreach_node (=235403584, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1000061639 in ravl_delete_cb (=785387968, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1100131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1200131270 in pmemobj_tx_commit () at tx.c:999
+	#1300131912 in pmemobj_tx_process () at tx.c:1101
+	#1400011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(57) ID #7447905357624386933 with 4 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=158016896, op #2=158016896)
+	#000149463 in pmem_clwb (=158016896) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=158016848, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=158016848, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=158016848, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =158016848, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =158016848, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=839500768, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=839500736, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=878742272, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061698 in ravl_foreach_node (=839503680, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061676 in ravl_foreach_node (=876822144, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061639 in ravl_delete_cb (=1338705632, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(58) ID #17732430566145554966 with 5792 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154343680, op #2=154343680)
+	#000149463 in pmem_clwb (=154343680) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154343632, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154343632, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154343632, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154343632, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154343632, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=231883360, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=231883328, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=213728320, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061698 in ravl_foreach_node (=213659520, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061639 in ravl_delete_cb (=788271936, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1100131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1200131270 in pmemobj_tx_commit () at tx.c:999
+	#1300131912 in pmemobj_tx_process () at tx.c:1101
+	#1400011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(59) ID #9166661455169508144 with 12 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154339264, op #2=154339264)
+	#000149463 in pmem_clwb (=154339264) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154339280, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154339280, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154339280, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154339280, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154339280, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=726304224, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=726304192, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061639 in ravl_delete_cb (=667928640, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#900131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1000131270 in pmemobj_tx_commit () at tx.c:999
+	#1100131912 in pmemobj_tx_process () at tx.c:1101
+	#1200011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1300009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1400009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1500003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1600003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(60) ID #3442937965914949438 with 10 occurences:
+Type of modification: flush (never modified)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154085504, op #2=154085504)
+	#000149463 in pmem_clwb (=154085504) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154085456, =112) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154085456, =112) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154085456, =112) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154085456, =112, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154085456, =112, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=235436128, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=235436096, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=192867008, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061639 in ravl_delete_cb (=787047488, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1000131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1100131270 in pmemobj_tx_commit () at tx.c:999
+	#1200131912 in pmemobj_tx_process () at tx.c:1101
+	#1300011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1400009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1500009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1600003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1700003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(61) ID #6394525055852695319 with 10 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154339648, op #2=154339648)
+	#000149463 in pmem_clwb (=154339648) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154339664, =80) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154339664, =80) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154339664, =80) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154339664, =80, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154339664, =80, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=213660000, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=213659968, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=213608576, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061698 in ravl_foreach_node (=213613184, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061639 in ravl_delete_cb (=864814208, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1100131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1200131270 in pmemobj_tx_commit () at tx.c:999
+	#1300131912 in pmemobj_tx_process () at tx.c:1101
+	#1400011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(62) ID #2886124801342255213 with 6 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154343232, op #2=154343232)
+	#000149463 in pmem_clwb (=154343232) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154343248, =80) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154343248, =80) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154343248, =80) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154343248, =80, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154343248, =80, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=235377568, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=235377536, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=232638144, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#900061698 in ravl_foreach_node (=187994432, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061676 in ravl_foreach_node (=225088256, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061698 in ravl_foreach_node (=235438848, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1200061639 in ravl_delete_cb (=786867200, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1300131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1400131270 in pmemobj_tx_commit () at tx.c:999
+	#1500131912 in pmemobj_tx_process () at tx.c:1101
+	#1600011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>
+
+(63) ID #17874170271791458146 with 20 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=154344768, op #2=154344768)
+	#000149463 in pmem_clwb (=154344768) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=154344816, =16) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=154344816, =16) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=154344816, =16) at pmem.c:232
+	#400117792 in obj_norep_flush (=150405120, =154344816, =16, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=150412088, =154344816, =16, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=229619232, =150405120) at tx.c:403
+	#700061687 in ravl_foreach_node (=229619200, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:81
+	#800061698 in ravl_foreach_node (=232638144, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#900061698 in ravl_foreach_node (=187994432, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1000061676 in ravl_foreach_node (=225088256, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:79
+	#1100061698 in ravl_foreach_node (=235438848, =88735112, =150405120, =1) at ../../src/../src/common/ravl.c:82
+	#1200061639 in ravl_delete_cb (=786867200, =88735112, =150405120) at ../../src/../src/common/ravl.c:104
+	#1300131384 in tx_pre_commit (=83324432) at tx.c:432
+	#1400131270 in pmemobj_tx_commit () at tx.c:999
+	#1500131912 in pmemobj_tx_process () at tx.c:1101
+	#1600011688 in __klee_posix_wrapped_main (=3, =150247744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1700009332 in __klee_posix_ctor_stub_insert_point (=3, =150247744, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1800009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1900003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2000003605 in main (=7, =49464400)
+
+<not masking anything>
+<not masked by anything>

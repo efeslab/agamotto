@@ -1,0 +1,38 @@
+Error: persistent memory violation!
+File: src/clht_lb_res.c
+Line: 139
+assembly.ll line: 14944
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse2.mfence(), !dbg !10978 (op #0=<global const>)
+	#000014944 in mfence () at src/clht_lb_res.c:139
+	#100013636 in clflush (=530806424, =8, =true) at src/clht_lb_res.c:146
+	#200013332 in clht_put (=530805968, =1, =1) at src/clht_lb_res.c:589
+	#300012688 in _ZZ3runPPcENK3$_0clEv (=291644592) at example-nothread.cpp:109
+	#400012271 in _Z3runPPc (=400716384) at example-nothread.cpp:114
+	#500016765 in __klee_posix_wrapped_main (=2, =400716384) at example-nothread.cpp:204
+	#600010304 in __klee_posix_ctor_stub_insert_point (=2, =400716384, =49624624) at runtime/POSIX/./klee_init_env.c:491
+	#700010324 in __user_main (=5, =49624576, =49624624) at runtime/POSIX/./klee_init_env.c:499
+	#800004410 in __uClibc_main (=49076616, =5, =49624576, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900004577 in main (=5, =49624576)
+Errors: 
+26) File: src/clht_lb_res.c
+Line: 139
+assembly.ll line: 14944
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse2.mfence(), !dbg !10978 (op #0=<global const>)
+	#000014944 in mfence () at src/clht_lb_res.c:139
+	#100013636 in clflush (=530806424, =8, =true) at src/clht_lb_res.c:146
+	#200013332 in clht_put (=530805968, =1, =1) at src/clht_lb_res.c:589
+	#300012688 in _ZZ3runPPcENK3$_0clEv (=291644592) at example-nothread.cpp:109
+	#400012271 in _Z3runPPc (=400716384) at example-nothread.cpp:114
+	#500016765 in __klee_posix_wrapped_main (=2, =400716384) at example-nothread.cpp:204
+	#600010304 in __klee_posix_ctor_stub_insert_point (=2, =400716384, =49624624) at runtime/POSIX/./klee_init_env.c:491
+	#700010324 in __user_main (=5, =49624576, =49624624) at runtime/POSIX/./klee_init_env.c:499
+	#800004410 in __uClibc_main (=49076616, =5, =49624576, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900004577 in main (=5, =49624576)
+

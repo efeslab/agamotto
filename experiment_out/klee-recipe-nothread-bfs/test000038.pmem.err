@@ -1,0 +1,42 @@
+Error: persistent memory violation!
+File: src/clht_lb_res.c
+Line: 139
+assembly.ll line: 14944
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse2.mfence(), !dbg !10978 (op #0=<global const>)
+	#000014944 in mfence () at src/clht_lb_res.c:139
+	#100013636 in clflush (=189174992, =8, =true) at src/clht_lb_res.c:146
+	#200014345 in ht_resize_pes (=189174992, =1, =4) at src/clht_lb_res.c:941
+	#300013958 in ht_status (=189174992, =1, =0) at src/clht_lb_res.c:1112
+	#400013346 in clht_put (=189174992, =32, =32) at src/clht_lb_res.c:597
+	#500012688 in _ZZ3runPPcENK3$_0clEv (=226559776) at example-nothread.cpp:109
+	#600012271 in _Z3runPPc (=184900992) at example-nothread.cpp:114
+	#700016765 in __klee_posix_wrapped_main (=2, =184900992) at example-nothread.cpp:204
+	#800010304 in __klee_posix_ctor_stub_insert_point (=2, =184900992, =33537360) at runtime/POSIX/./klee_init_env.c:491
+	#900010324 in __user_main (=5, =33537312, =33537360) at runtime/POSIX/./klee_init_env.c:499
+	#1000004410 in __uClibc_main (=32299400, =5, =33537312, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1100004577 in main (=5, =33537312)
+Errors: 
+34) File: src/clht_lb_res.c
+Line: 139
+assembly.ll line: 14944
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse2.mfence(), !dbg !10978 (op #0=<global const>)
+	#000014944 in mfence () at src/clht_lb_res.c:139
+	#100013636 in clflush (=189174992, =8, =true) at src/clht_lb_res.c:146
+	#200014345 in ht_resize_pes (=189174992, =1, =4) at src/clht_lb_res.c:941
+	#300013958 in ht_status (=189174992, =1, =0) at src/clht_lb_res.c:1112
+	#400013346 in clht_put (=189174992, =32, =32) at src/clht_lb_res.c:597
+	#500012688 in _ZZ3runPPcENK3$_0clEv (=226559776) at example-nothread.cpp:109
+	#600012271 in _Z3runPPc (=184900992) at example-nothread.cpp:114
+	#700016765 in __klee_posix_wrapped_main (=2, =184900992) at example-nothread.cpp:204
+	#800010304 in __klee_posix_ctor_stub_insert_point (=2, =184900992, =33537360) at runtime/POSIX/./klee_init_env.c:491
+	#900010324 in __user_main (=5, =33537312, =33537360) at runtime/POSIX/./klee_init_env.c:499
+	#1000004410 in __uClibc_main (=32299400, =5, =33537312, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1100004577 in main (=5, =33537312)
+
