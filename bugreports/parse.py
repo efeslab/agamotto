@@ -74,17 +74,47 @@ DIAGNOSED_PMDK = {
 
     'transient use 1 [libpmemobj] (mutex in pmem)': [
         'obj_pool_cleanup at obj.c:1919',
-        'pmemobj_mutex_lock at sync.c:201'
+        'pmemobj_mutex_lock at sync.c:201',
+        'obj_runtime_init at obj.c:1201', # mutex head
     ],
     'transient use 2 [libpmemobj] (operation lanes)': [
         'lane_hold at lane.c:520',
-        'lane_cleanup at lane.c:335'
+        'lane_cleanup at lane.c:335',
+        'lane_boot at lane.c:258'
     ],
     'transient use 3 [libpmemobj] (heap)': [
         'heap_cleanup at heap.c:1625',
         'heap_split_block at heap.c:964',
         'heap_split_block at heap.c:961',
-        'heap_zone_init at heap.c:427'
+        'heap_zone_init at heap.c:427',
+        'heap_boot at heap.c:1500',
+        'heap_boot at heap.c:1499'
+    ],
+    # -- found by RECIPE
+    'transuent use 4 [libpmemobj] (replicas)': [
+        'obj_replica_init at obj.c:1133',
+        'obj_replicas_init at obj.c:1628',
+        'obj_replica_init_local at obj.c:993',
+        'obj_replicas_init at obj.c:1626',
+        'obj_replicas_init at obj.c:1627',
+        'obj_replica_init_local at obj.c:996',
+        'obj_replicas_init at obj.c:1624',
+    ],
+    'transient use 5 [libpmemobj] (pop meta)': [
+        'obj_ctl_init_and_load at obj.c:157',
+        'obj_runtime_init at obj.c:1189',
+        'obj_runtime_init at obj.c:1181',
+        'obj_runtime_init at obj.c:1185',
+        'obj_runtime_init at obj.c:1179',
+        'obj_open_common at obj.c:1737',
+        'obj_runtime_init at obj.c:1236',
+        'obj_runtime_init at obj.c:1193',
+        'obj_runtime_init at obj.c:1244'
+    ],
+    'transient use 6 [libpmemobj] (fn pointers)': [
+        'obj_replica_init at obj.c:1111',
+        'obj_replica_init at obj.c:1110',
+        'obj_replica_init_local at obj.c:1007'
     ],
 
     # Examples: hashmap
@@ -97,9 +127,9 @@ DIAGNOSED_PMDK = {
     # This bug means that the hashmap atomic isn't really, because it wants
     # to persist nbuckets after 
     # consequence of universal perf #2
-    'semantic correctness 1 [hashmap_atomic] (nbuckets flushed with buckets)': [
-        'create_buckets at nvmbugs/hashmap_atomic/hashmap_atomic.c:118',
-    ],
+    # 'semantic correctness 1 [hashmap_atomic] (nbuckets flushed with buckets)': [
+    #     'create_buckets at nvmbugs/hashmap_atomic/hashmap_atomic.c:118',
+    # ],
 
     # Examples: rbtree
     'universal correctness 1 [rbtree] (dst not backed up)': [
@@ -126,8 +156,28 @@ DIAGNOSED_PMDK = {
         'clht_create at src/clht_lb_res.c:319'
     ],
 
-    'transient use 1 [recipe] (tmp table)': [
-        'ht_resize_pes at src/clht_lb_res.c:843'
+    'universal correctness 1 [recipe] (lack of flush due to API confusion)': [
+        'clht_put at src/clht_lb_res.c:583'
+    ],
+
+    'transient use 1 [recipe] (tmp table for resizing)': [
+        'ht_resize_pes at src/clht_lb_res.c:843',
+        'ht_resize_pes at src/clht_lb_res.c:973',
+    ],
+    'transient use 2 [recipe] (next off)': [
+        'clht_put at src/clht_lb_res.c:557'
+    ],
+    'transient use 3 [recipe] (locks)': [
+        'lock_acq_resize at include/clht_lb_res.h:352',
+        'clht_put at src/clht_lb_res.c:592',
+        'ht_resize_pes at src/clht_lb_res.c:974',
+        'ht_status at src/clht_lb_res.c:1042' # status lock
+    ], 
+    'transient use 4 [recipe] (stats)': [
+        'clht_bucket_create_stats at src/clht_lb_res.c:245'
+    ],
+    'transient use 5 [recipe] (versioning)': [
+        'clht_gc_thread_init at src/clht_gc.c:58'
     ]
 }
 
@@ -163,6 +213,8 @@ def main():
     pdf = df[df['Type'] != CORRECTNESS]
 
     embed() 
+
+    print(f'Total diagnosed: {len(DIAGNOSED_MEMCACHED) + len(DIAGNOSED_PMDK)}')
 
 if __name__ == '__main__':
     main()
