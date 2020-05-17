@@ -4,6 +4,7 @@ set +x
 OUTDIR=../../experiment_out
 
 cp clht-nothread-sym-friendly.bc ../build/bin
+cp pmdk.env ../build/bin
 cd ../build/bin
 ulimit -s unlimited
 
