@@ -3,6 +3,9 @@ set +x
 
 OUTDIR=../../experiment_out
 
+cd ../build/bin
+ulimit -s unlimited
+
 # 1. Agamotto
 ./klee --output-dir=$OUTDIR/klee-pmdk-btree-static --search=nvm --nvm-heuristic-type=static \
   --custom-checkers=false --max-time=86400 --write-errors-only=true --max-memory=10000  \

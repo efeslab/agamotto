@@ -1,3 +1,4 @@
 klee-*/*
+bak/
 !**/*.pmem.err
 !**/*.csv
