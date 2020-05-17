@@ -1,0 +1,50 @@
+Error: persistent memory violation!
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149204
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8116 (op #0=<global const>, op #1=159211648, op #2=159211648)
+	#000149204 in pmem_clwb (=159211648) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149188 in flush_clwb_nolog (=159211520, =3145728) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149021 in flush_clwb (=159211520, =3145728) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165383 in pmem_flush (=159211520, =3145728) at pmem.c:232
+	#400165409 in pmem_persist (=159211520, =3145728) at pmem.c:243
+	#500117495 in obj_norep_persist (=159203328, =159211520, =3145728, =2147483648) at obj.c:464
+	#600107282 in pmemops_xpersist.664 (=159210296, =159211520, =3145728, =2147483648) at ./pmemops.h:51
+	#700107255 in lane_init_data (=159203328) at lane.c:320
+	#800115615 in obj_descr_create (=159203328, =147292304, =8388608) at obj.c:887
+	#900115160 in pmemobj_createU (=144141792, =147292304, =8388608, =438) at obj.c:1382
+	#1000114881 in pmemobj_create (=144141792, =147292304, =8388608, =438) at obj.c:1423
+	#1100011130 in __klee_posix_wrapped_main (=3, =149615104) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#1200009332 in __klee_posix_ctor_stub_insert_point (=3, =149615104, =76418272) at runtime/POSIX/./klee_init_env.c:491
+	#1300009352 in __user_main (=7, =76418208, =76418272) at runtime/POSIX/./klee_init_env.c:499
+	#1400003438 in __uClibc_main (=36306184, =7, =76418208, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500003605 in main (=7, =76418208)
+Errors: 
+2) File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149204
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8143
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8116 (op #0=<global const>, op #1=159211648, op #2=159211648)
+	#000149204 in pmem_clwb (=159211648) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149188 in flush_clwb_nolog (=159211520, =3145728) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149021 in flush_clwb (=159211520, =3145728) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165383 in pmem_flush (=159211520, =3145728) at pmem.c:232
+	#400165409 in pmem_persist (=159211520, =3145728) at pmem.c:243
+	#500117495 in obj_norep_persist (=159203328, =159211520, =3145728, =2147483648) at obj.c:464
+	#600107282 in pmemops_xpersist.664 (=159210296, =159211520, =3145728, =2147483648) at ./pmemops.h:51
+	#700107255 in lane_init_data (=159203328) at lane.c:320
+	#800115615 in obj_descr_create (=159203328, =147292304, =8388608) at obj.c:887
+	#900115160 in pmemobj_createU (=144141792, =147292304, =8388608, =438) at obj.c:1382
+	#1000114881 in pmemobj_create (=144141792, =147292304, =8388608, =438) at obj.c:1423
+	#1100011130 in __klee_posix_wrapped_main (=3, =149615104) at nvmbugs/000_pmdk_btree_map/driver.c:32
+	#1200009332 in __klee_posix_ctor_stub_insert_point (=3, =149615104, =76418272) at runtime/POSIX/./klee_init_env.c:491
+	#1300009352 in __user_main (=7, =76418208, =76418272) at runtime/POSIX/./klee_init_env.c:499
+	#1400003438 in __uClibc_main (=36306184, =7, =76418208, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500003605 in main (=7, =76418208)
+

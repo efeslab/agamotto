@@ -1,0 +1,58 @@
+Error: persistent memory violation!
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=146843840, op #2=146843840)
+	#000149463 in pmem_clwb (=146843840) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=146843856, =80) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=146843856, =80) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=146843856, =80) at pmem.c:232
+	#400117792 in obj_norep_flush (=143163392, =146843856, =80, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=143170360, =146843856, =80, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=347094176, =143163392) at tx.c:403
+	#700061687 in ravl_foreach_node (=347094144, =87104904, =143163392, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=167911296, =87104904, =143163392, =1) at ../../src/../src/common/ravl.c:79
+	#900061676 in ravl_foreach_node (=166575936, =87104904, =143163392, =1) at ../../src/../src/common/ravl.c:79
+	#1000061676 in ravl_foreach_node (=199347584, =87104904, =143163392, =1) at ../../src/../src/common/ravl.c:79
+	#1100061639 in ravl_delete_cb (=358781504, =87104904, =143163392) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=76492880) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =285172608) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =285172608, =74949664) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =74949600, =74949664) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=33676808, =7, =74949600, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =74949600)
+Errors: 
+37) File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 149463
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !8151
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=147096896, op #2=147096896)
+	#000149463 in pmem_clwb (=147096896) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=147096912, =8) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=147096912, =8) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=147096912, =8) at pmem.c:232
+	#400117792 in obj_norep_flush (=143163392, =147096912, =8, =2147483648) at obj.c:478
+	#500131504 in pmemops_xflush.1191 (=143170360, =147096912, =8, =2147483648) at ./pmemops.h:64
+	#600131458 in tx_flush_range (=323550496, =143163392) at tx.c:403
+	#700061687 in ravl_foreach_node (=323550464, =87104904, =143163392, =1) at ../../src/../src/common/ravl.c:81
+	#800061676 in ravl_foreach_node (=323550144, =87104904, =143163392, =1) at ../../src/../src/common/ravl.c:79
+	#900061676 in ravl_foreach_node (=323220800, =87104904, =143163392, =1) at ../../src/../src/common/ravl.c:79
+	#1000061676 in ravl_foreach_node (=322715904, =87104904, =143163392, =1) at ../../src/../src/common/ravl.c:79
+	#1100061639 in ravl_delete_cb (=321183008, =87104904, =143163392) at ../../src/../src/common/ravl.c:104
+	#1200131384 in tx_pre_commit (=76492880) at tx.c:432
+	#1300131270 in pmemobj_tx_commit () at tx.c:999
+	#1400131912 in pmemobj_tx_process () at tx.c:1101
+	#1500011688 in __klee_posix_wrapped_main (=3, =143031744) at nvmbugs/003_pmdk_rbtree_map/driver.c:83
+	#1600009332 in __klee_posix_ctor_stub_insert_point (=3, =143031744, =74949664) at runtime/POSIX/./klee_init_env.c:491
+	#1700009352 in __user_main (=7, =74949600, =74949664) at runtime/POSIX/./klee_init_env.c:499
+	#1800003438 in __uClibc_main (=33676808, =7, =74949600, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1900003605 in main (=7, =74949600)
+
