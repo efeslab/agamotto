@@ -65,6 +65,9 @@ namespace klee {
     std::list<RootCauseStackFrame> stack;
     RootCauseReason reason;
 
+    // So we can track when this bug occurred.
+    uint64_t timestamp;
+
     /**
      * We maintain our own stack to check the absolute location,
      * but the stack description from ExecutionState contains argument values
@@ -109,7 +112,7 @@ namespace klee {
    */
   class RootCauseManager {
     private:
-      uint64_t nextId = 1lu;
+      std::unordered_set<uint64_t> usedIds;
 
       struct RootCauseInfo {
         RootCauseLocation rootCause;
@@ -127,6 +130,12 @@ namespace klee {
 
       size_t largestStack = 0;
 
+      /**
+       * So IDs will be (mostly) deterministic.
+       */
+      uint64_t getNewId(const ExecutionState &state, 
+                        const RootCauseLocation &rcl);
+
     public:
       RootCauseManager() {}
 
@@ -140,6 +149,7 @@ namespace klee {
                                       const KInstruction *pc,
                                       RootCauseReason r, 
                                       const std::unordered_set<uint64_t> &ids);
+
       
       void markAsBug(uint64_t id);
 

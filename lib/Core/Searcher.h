@@ -231,29 +231,28 @@ namespace klee {
      * redundant to run, so it will be suspended until the current generation
      * is over.
      */
-    typedef std::tuple<ExecutionState*, size_t, size_t> priority_tuple;
+    struct StatePriority {
+      ExecutionState *state;
+      size_t generation;
+      size_t priority;
+
+      StatePriority(ExecutionState *s, size_t g, size_t p) :
+          state(s), generation(g), priority(p) {}
+      /**
+       * Determine if LHS < RHS
+       * If the generation of rhs is higher, it has lower priority. If it has
+       * the same generation, the priority is lower by standard rules.
+       * To break ties, newer states have lower priority.
+       */
+      bool operator<(const StatePriority &other) const;
+    };
 
     /**
      * This is updated whenever we select a state.
      */
     size_t currentGen = 0;
 
-    /**
-     * Determine if LHS < RHS
-     * If the generation of rhs is higher, it has lower priority. If it has
-     * the same generation, the priority is lower by standard rules.
-     * To break ties, newer states have lower priority.
-     */
-    struct priority_less : public std::less<priority_tuple> {
-      bool operator()(const priority_tuple &lhs, const priority_tuple &rhs);
-    };
-
-    // C++ doesn't let us override only part of the template defaults, or if
-    // we do, must be right to left. Oh well.
-    // https://stackoverflow.com/questions/31840974/c-templates-override-some-but-not-all-default-arguments
-    std::priority_queue<priority_tuple,
-                        std::vector<priority_tuple>,
-                        priority_less> states;
+    std::priority_queue<StatePriority> statePriorities;
 
     std::unordered_set<ExecutionState*> removed;
     ExecutionState *lastState;
@@ -262,11 +261,14 @@ namespace klee {
     std::unordered_set<const llvm::BasicBlock*> covered;
 
     /**
-     * Given the recently-run or newly created state, either run it or kill
-     * it depending on whether or not it has any remaining interesting states.
-     *
+     * Add execState to the queue. current used for generation calc.
      */
-    bool addOrKillState(ExecutionState *, ExecutionState *);
+    void addState(ExecutionState *current, ExecutionState *execState);
+
+    /**
+     * Removes removed states from the queue only if they are selected as the 
+     * next state to run. Lazy removal.
+     */
     ExecutionState* filterState(ExecutionState *);
 
     /**
