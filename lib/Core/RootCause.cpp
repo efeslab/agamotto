@@ -33,7 +33,7 @@ RootCauseLocation::RootCauseLocation(const ExecutionState &state,
   : allocSite(allocationSite), 
     inst(pc),
     reason(r) {
-  timestamp = time::getUserTime().toMicroseconds();
+  timestamp = time::getUserTime().toMicroseconds() - stats::nvmOfflineTime;
   for (const klee::StackFrame &sf : state.stack()) {
     stack.emplace_back(sf.caller, sf.kf);
   }
