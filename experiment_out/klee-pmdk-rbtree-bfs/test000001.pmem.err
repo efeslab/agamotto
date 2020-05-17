@@ -5,26 +5,26 @@ assembly.ll line: 149463
 Stack: 
 Current Thread: 1
 Thread 1, Process 0, enabled
-		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=204685504, op #2=204685504)
-	#000149463 in pmem_clwb (=204685504) at ../../src/../src/libpmem2/x86_64/flush.h:48
-	#100149447 in flush_clwb_nolog (=204685312, =4096) at ../../src/../src/libpmem2/x86_64/flush.h:104
-	#200149280 in flush_clwb (=204685312, =4096) at ../../src/../src/libpmem2/x86_64/init.c:60
-	#300165642 in pmem_flush (=204685312, =4096) at pmem.c:232
-	#400165668 in pmem_persist (=204685312, =4096) at pmem.c:243
-	#500082504 in util_persist (=1, =204685312, =4096) at ../common/util_pmem.h:27
-	#600082472 in util_persist_auto (=1, =204685312, =4096) at ../common/util_pmem.h:40
-	#700081992 in util_header_create (=93790464, =0, =0, =77667088, =0) at ../../src/../src/common/set.c:2326
-	#800085210 in util_replica_init_headers_local (=93790464, =0, =1, =77667088) at ../../src/../src/common/set.c:2777
-	#900085084 in util_replica_create_local (=93790464, =0, =1, =77667088) at ../../src/../src/common/set.c:2823
-	#1000083587 in util_pool_create_uuids (=160365296, =120950520, =8388608, =8388608, =2097152, =77667088, =160360944, =1, =0) at ../../src/../src/common/set.c:3313
-	#1100085492 in util_pool_create (=160365296, =120950520, =8388608, =8388608, =2097152, =77667088, =160360944, =1) at ../../src/../src/common/set.c:3356
-	#1200115236 in pmemobj_createU (=120950520, =120895072, =8388608, =438) at obj.c:1343
-	#1300115140 in pmemobj_create (=120950520, =120895072, =8388608, =438) at obj.c:1423
-	#1400011123 in __klee_posix_wrapped_main (=3, =162020800) at nvmbugs/003_pmdk_rbtree_map/driver.c:33
-	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =162020800, =61219984) at runtime/POSIX/./klee_init_env.c:491
-	#1600009352 in __user_main (=7, =61219920, =61219984) at runtime/POSIX/./klee_init_env.c:499
-	#1700003438 in __uClibc_main (=52379144, =7, =61219920, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
-	#1800003605 in main (=7, =61219920)
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=192913600, op #2=192913600)
+	#000149463 in pmem_clwb (=192913600) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=192913408, =4096) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=192913408, =4096) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=192913408, =4096) at pmem.c:232
+	#400165668 in pmem_persist (=192913408, =4096) at pmem.c:243
+	#500082504 in util_persist (=1, =192913408, =4096) at ../common/util_pmem.h:27
+	#600082472 in util_persist_auto (=1, =192913408, =4096) at ../common/util_pmem.h:40
+	#700081992 in util_header_create (=82034944, =0, =0, =65911568, =0) at ../../src/../src/common/set.c:2326
+	#800085210 in util_replica_init_headers_local (=82034944, =0, =1, =65911568) at ../../src/../src/common/set.c:2777
+	#900085084 in util_replica_create_local (=82034944, =0, =1, =65911568) at ../../src/../src/common/set.c:2823
+	#1000083587 in util_pool_create_uuids (=148593392, =109178616, =8388608, =8388608, =2097152, =65911568, =148589040, =1, =0) at ../../src/../src/common/set.c:3313
+	#1100085492 in util_pool_create (=148593392, =109178616, =8388608, =8388608, =2097152, =65911568, =148589040, =1) at ../../src/../src/common/set.c:3356
+	#1200115236 in pmemobj_createU (=109178616, =109123168, =8388608, =438) at obj.c:1343
+	#1300115140 in pmemobj_create (=109178616, =109123168, =8388608, =438) at obj.c:1423
+	#1400011123 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:33
+	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003605 in main (=7, =49464400)
 Errors: 
 1) File: ../../src/../src/libpmem2/x86_64/flush.h
 Line: 48
@@ -33,24 +33,24 @@ assembly.ll line: 149463
 Stack: 
 Current Thread: 1
 Thread 1, Process 0, enabled
-		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=204685504, op #2=204685504)
-	#000149463 in pmem_clwb (=204685504) at ../../src/../src/libpmem2/x86_64/flush.h:48
-	#100149447 in flush_clwb_nolog (=204685312, =4096) at ../../src/../src/libpmem2/x86_64/flush.h:104
-	#200149280 in flush_clwb (=204685312, =4096) at ../../src/../src/libpmem2/x86_64/init.c:60
-	#300165642 in pmem_flush (=204685312, =4096) at pmem.c:232
-	#400165668 in pmem_persist (=204685312, =4096) at pmem.c:243
-	#500082504 in util_persist (=1, =204685312, =4096) at ../common/util_pmem.h:27
-	#600082472 in util_persist_auto (=1, =204685312, =4096) at ../common/util_pmem.h:40
-	#700081992 in util_header_create (=93790464, =0, =0, =77667088, =0) at ../../src/../src/common/set.c:2326
-	#800085210 in util_replica_init_headers_local (=93790464, =0, =1, =77667088) at ../../src/../src/common/set.c:2777
-	#900085084 in util_replica_create_local (=93790464, =0, =1, =77667088) at ../../src/../src/common/set.c:2823
-	#1000083587 in util_pool_create_uuids (=160365296, =120950520, =8388608, =8388608, =2097152, =77667088, =160360944, =1, =0) at ../../src/../src/common/set.c:3313
-	#1100085492 in util_pool_create (=160365296, =120950520, =8388608, =8388608, =2097152, =77667088, =160360944, =1) at ../../src/../src/common/set.c:3356
-	#1200115236 in pmemobj_createU (=120950520, =120895072, =8388608, =438) at obj.c:1343
-	#1300115140 in pmemobj_create (=120950520, =120895072, =8388608, =438) at obj.c:1423
-	#1400011123 in __klee_posix_wrapped_main (=3, =162020800) at nvmbugs/003_pmdk_rbtree_map/driver.c:33
-	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =162020800, =61219984) at runtime/POSIX/./klee_init_env.c:491
-	#1600009352 in __user_main (=7, =61219920, =61219984) at runtime/POSIX/./klee_init_env.c:499
-	#1700003438 in __uClibc_main (=52379144, =7, =61219920, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
-	#1800003605 in main (=7, =61219920)
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !8124 (op #0=<global const>, op #1=192913600, op #2=192913600)
+	#000149463 in pmem_clwb (=192913600) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100149447 in flush_clwb_nolog (=192913408, =4096) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200149280 in flush_clwb (=192913408, =4096) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300165642 in pmem_flush (=192913408, =4096) at pmem.c:232
+	#400165668 in pmem_persist (=192913408, =4096) at pmem.c:243
+	#500082504 in util_persist (=1, =192913408, =4096) at ../common/util_pmem.h:27
+	#600082472 in util_persist_auto (=1, =192913408, =4096) at ../common/util_pmem.h:40
+	#700081992 in util_header_create (=82034944, =0, =0, =65911568, =0) at ../../src/../src/common/set.c:2326
+	#800085210 in util_replica_init_headers_local (=82034944, =0, =1, =65911568) at ../../src/../src/common/set.c:2777
+	#900085084 in util_replica_create_local (=82034944, =0, =1, =65911568) at ../../src/../src/common/set.c:2823
+	#1000083587 in util_pool_create_uuids (=148593392, =109178616, =8388608, =8388608, =2097152, =65911568, =148589040, =1, =0) at ../../src/../src/common/set.c:3313
+	#1100085492 in util_pool_create (=148593392, =109178616, =8388608, =8388608, =2097152, =65911568, =148589040, =1) at ../../src/../src/common/set.c:3356
+	#1200115236 in pmemobj_createU (=109178616, =109123168, =8388608, =438) at obj.c:1343
+	#1300115140 in pmemobj_create (=109178616, =109123168, =8388608, =438) at obj.c:1423
+	#1400011123 in __klee_posix_wrapped_main (=3, =150248896) at nvmbugs/003_pmdk_rbtree_map/driver.c:33
+	#1500009332 in __klee_posix_ctor_stub_insert_point (=3, =150248896, =49464464) at runtime/POSIX/./klee_init_env.c:491
+	#1600009352 in __user_main (=7, =49464400, =49464464) at runtime/POSIX/./klee_init_env.c:499
+	#1700003438 in __uClibc_main (=40640008, =7, =49464400, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1800003605 in main (=7, =49464400)
 
