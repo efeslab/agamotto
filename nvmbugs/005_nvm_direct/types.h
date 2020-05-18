@@ -17,9 +17,6 @@
 /* the number of log records in a log region */
 #define logsz  1024
 
-/* the number of pointers in the application managed extent of pointers */
-#define ptrs 2
-
 /*
  * The test repeatedly allocates and deallocates random sized instances
  * of the persistent struct branch. They are allocated from the heap extent.
