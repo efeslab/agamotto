@@ -1,0 +1,181 @@
+Error: persistent memory violation!
+File: runtime/POSIX/./mman.c
+Line: 248
+assembly.ll line: 58160
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @klee_pmem_check_persisted(i8* %130, i64 %131), !dbg !5692 (op #0=<global const>, op #1=119586816, op #2=4096)
+	#000058160 in munmap_sym (=119586816, =8388608, =113633728, =0) at runtime/POSIX/./mman.c:248
+	#100058306 in munmap (=119586816, =8388608) at runtime/POSIX/./mman.c:272
+	#200030163 in nvms_close_region (=198749728) at nvmbugs/005_nvm_direct/no_fc_lib/nvms_region.c:310
+	#300033207 in nvm_unmap_region (=1) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:3581
+	#400033073 in nvm_detach_region (=1) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:1477
+	#500037846 in __klee_posix_wrapped_main (=3, =113453088) at nvmbugs/005_nvm_direct/allocs.c:298
+	#600007625 in __klee_posix_ctor_stub_insert_point (=3, =113453088, =57177280) at runtime/POSIX/./klee_init_env.c:491
+	#700007645 in __user_main (=7, =57177216, =57177280) at runtime/POSIX/./klee_init_env.c:499
+	#800001731 in __uClibc_main (=52653064, =7, =57177216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900001898 in main (=7, =57177216)
+Errors: 
+116) File: nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap0.h
+Line: 89
+assembly.ll line: 20942
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !5604
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i64 %15, i64* %16, align 8, !dbg !5575 (op #0=1059776, op #1=119588416)
+	#000020942 in nvm_blk_set (=119588416, =120648192) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap0.h:89
+	#100021441 in nvm_freelist_link (=119587840, =120648192) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:2939
+	#200025875 in nvm_alloc_blk (=119587840, =2048, =16) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:3318
+	#300024865 in nvm_alloc (=119587840, =89031712, =64) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:1631
+	#400023817 in nvm_add_extent (=123781120, =131072) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:2133
+	#500037312 in __klee_posix_wrapped_main (=3, =113453088) at nvmbugs/005_nvm_direct/allocs.c:100
+	#600007625 in __klee_posix_ctor_stub_insert_point (=3, =113453088, =57177280) at runtime/POSIX/./klee_init_env.c:491
+	#700007645 in __user_main (=7, =57177216, =57177280) at runtime/POSIX/./klee_init_env.c:499
+	#800001731 in __uClibc_main (=52653064, =7, =57177216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900001898 in main (=7, =57177216)
+
+117) File: nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c
+Line: 5333
+assembly.ll line: 31170
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !5604
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 0, i8* %146, align 1, !dbg !5748 (op #0=<global const>, op #1=119589075)
+	#000031170 in nvm_recover (=1) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5333
+	#100029825 in nvm_create_region (=0, =111281352, =111519552, =0, =8388608, =2097152, =511) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:609
+	#200037240 in __klee_posix_wrapped_main (=3, =113453088) at nvmbugs/005_nvm_direct/allocs.c:72
+	#300007625 in __klee_posix_ctor_stub_insert_point (=3, =113453088, =57177280) at runtime/POSIX/./klee_init_env.c:491
+	#400007645 in __user_main (=7, =57177216, =57177280) at runtime/POSIX/./klee_init_env.c:499
+	#500001731 in __uClibc_main (=52653064, =7, =57177216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#600001898 in main (=7, =57177216)
+
+118) File: nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c
+Line: 874
+assembly.ll line: 15949
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !5604
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %167, i8* %169, align 2, !dbg !5725 (op #0=0, op #1=119592914)
+	#000015949 in nvm_txend () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:874
+	#100037843 in __klee_posix_wrapped_main (=3, =113453088) at nvmbugs/005_nvm_direct/allocs.c:295
+	#200007625 in __klee_posix_ctor_stub_insert_point (=3, =113453088, =57177280) at runtime/POSIX/./klee_init_env.c:491
+	#300007645 in __user_main (=7, =57177216, =57177280) at runtime/POSIX/./klee_init_env.c:499
+	#400001731 in __uClibc_main (=52653064, =7, =57177216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#500001898 in main (=7, =57177216)
+
+119) File: nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c
+Line: 5301
+assembly.ll line: 31118
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !5604
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 %113, i32* %115, align 8, !dbg !5711 (op #0=1, op #1=119589128)
+	#000031118 in nvm_recover (=1) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5301
+	#100029825 in nvm_create_region (=0, =111281352, =111519552, =0, =8388608, =2097152, =511) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:609
+	#200037240 in __klee_posix_wrapped_main (=3, =113453088) at nvmbugs/005_nvm_direct/allocs.c:72
+	#300007625 in __klee_posix_ctor_stub_insert_point (=3, =113453088, =57177280) at runtime/POSIX/./klee_init_env.c:491
+	#400007645 in __user_main (=7, =57177216, =57177280) at runtime/POSIX/./klee_init_env.c:499
+	#500001731 in __uClibc_main (=52653064, =7, =57177216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#600001898 in main (=7, =57177216)
+
+120) File: nvmbugs/005_nvm_direct/no_fc_lib/nvm_data0.h
+Line: 99
+assembly.ll line: 14264
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !5604
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i64 %15, i64* %16, align 8, !dbg !5575 (op #0=1, op #1=119597136)
+	#000014264 in nvm_undo_blk_set (=119597136, =0) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_data0.h:99
+	#100031283 in nvm_recover (=1) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5384
+	#200029825 in nvm_create_region (=0, =111281352, =111519552, =0, =8388608, =2097152, =511) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:609
+	#300037240 in __klee_posix_wrapped_main (=3, =113453088) at nvmbugs/005_nvm_direct/allocs.c:72
+	#400007625 in __klee_posix_ctor_stub_insert_point (=3, =113453088, =57177280) at runtime/POSIX/./klee_init_env.c:491
+	#500007645 in __user_main (=7, =57177216, =57177280) at runtime/POSIX/./klee_init_env.c:499
+	#600001731 in __uClibc_main (=52653064, =7, =57177216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700001898 in main (=7, =57177216)
+
+121) File: nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c
+Line: 5325
+assembly.ll line: 31148
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !5604
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i32 0, i32* %130, align 4, !dbg !5727 (op #0=<global const>, op #1=119589132)
+	#000031148 in nvm_recover (=1) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5325
+	#100029825 in nvm_create_region (=0, =111281352, =111519552, =0, =8388608, =2097152, =511) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:609
+	#200037240 in __klee_posix_wrapped_main (=3, =113453088) at nvmbugs/005_nvm_direct/allocs.c:72
+	#300007625 in __klee_posix_ctor_stub_insert_point (=3, =113453088, =57177280) at runtime/POSIX/./klee_init_env.c:491
+	#400007645 in __user_main (=7, =57177216, =57177280) at runtime/POSIX/./klee_init_env.c:499
+	#500001731 in __uClibc_main (=52653064, =7, =57177216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#600001898 in main (=7, =57177216)
+
+122) File: nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c
+Line: 5351
+assembly.ll line: 31205
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !5604
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 0, i8* %170, align 1, !dbg !5774 (op #0=<global const>, op #1=119593171)
+	#000031205 in nvm_recover (=1) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5351
+	#100029825 in nvm_create_region (=0, =111281352, =111519552, =0, =8388608, =2097152, =511) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:609
+	#200037240 in __klee_posix_wrapped_main (=3, =113453088) at nvmbugs/005_nvm_direct/allocs.c:72
+	#300007625 in __klee_posix_ctor_stub_insert_point (=3, =113453088, =57177280) at runtime/POSIX/./klee_init_env.c:491
+	#400007645 in __user_main (=7, =57177216, =57177280) at runtime/POSIX/./klee_init_env.c:499
+	#500001731 in __uClibc_main (=52653064, =7, =57177216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#600001898 in main (=7, =57177216)
+
+123) File: nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c
+Line: 884
+assembly.ll line: 15967
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !5604
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.nvm_transaction* %180, %struct.nvm_transaction** %182, align 8, !dbg !5739 (op #0=119592768, op #1=119593000)
+	#000015967 in nvm_txend () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:884
+	#100037843 in __klee_posix_wrapped_main (=3, =113453088) at nvmbugs/005_nvm_direct/allocs.c:295
+	#200007625 in __klee_posix_ctor_stub_insert_point (=3, =113453088, =57177280) at runtime/POSIX/./klee_init_env.c:491
+	#300007645 in __user_main (=7, =57177216, =57177280) at runtime/POSIX/./klee_init_env.c:499
+	#400001731 in __uClibc_main (=52653064, =7, =57177216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#500001898 in main (=7, =57177216)
+
+124) File: nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c
+Line: 889
+assembly.ll line: 15977
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !5604
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.nvm_transaction* null, %struct.nvm_transaction** %188, align 8, !dbg !5748 (op #0=<global const>, op #1=119593128)
+	#000015977 in nvm_txend () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:889
+	#100029857 in nvm_create_region (=0, =111281352, =111519552, =0, =8388608, =2097152, =511) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:626
+	#200037240 in __klee_posix_wrapped_main (=3, =113453088) at nvmbugs/005_nvm_direct/allocs.c:72
+	#300007625 in __klee_posix_ctor_stub_insert_point (=3, =113453088, =57177280) at runtime/POSIX/./klee_init_env.c:491
+	#400007645 in __user_main (=7, =57177216, =57177280) at runtime/POSIX/./klee_init_env.c:499
+	#500001731 in __uClibc_main (=52653064, =7, =57177216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#600001898 in main (=7, =57177216)
+
+125) File: nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c
+Line: 874
+assembly.ll line: 15949
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !5604
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %167, i8* %169, align 2, !dbg !5725 (op #0=7, op #1=119593042)
+	#000015949 in nvm_txend () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:874
+	#100029857 in nvm_create_region (=0, =111281352, =111519552, =0, =8388608, =2097152, =511) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:626
+	#200037240 in __klee_posix_wrapped_main (=3, =113453088) at nvmbugs/005_nvm_direct/allocs.c:72
+	#300007625 in __klee_posix_ctor_stub_insert_point (=3, =113453088, =57177280) at runtime/POSIX/./klee_init_env.c:491
+	#400007645 in __user_main (=7, =57177216, =57177280) at runtime/POSIX/./klee_init_env.c:499
+	#500001731 in __uClibc_main (=52653064, =7, =57177216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#600001898 in main (=7, =57177216)
+

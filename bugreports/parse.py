@@ -17,6 +17,13 @@ FALSE_POS = {
 }
 
 # Bug name => list of locations
+DIAGNOSED_NVMDIRECT = {
+    'universal correctness 1 (unflushed link)': [
+        'nvm_txend at nvm_transaction.c:872',
+        'nvm_txend at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:884',
+    ]
+}
+
 DIAGNOSED_MEMCACHED = {
     'transient use 1 (item free list)': [
         'do_item_crawl_q at items.c:1880',
@@ -31,6 +38,9 @@ DIAGNOSED_MEMCACHED = {
         'do_item_crawl_q at items.c:1871',
         'do_item_crawl_q at items.c:1872',
         'do_item_unlink_q at items.c:470',
+        'do_item_unlinktail_q at items.c:1831',
+        'do_item_crawl_q at items.c:1851',
+        'do_item_unlinktail_q at items.c:1832',
     ],
     'transient use 2 (refcount)': [
         'do_item_remove at items.c:591',
@@ -202,25 +212,30 @@ def remove_diagnosed(df, diagnosed):
 def main():
     parser = ArgumentParser()
     parser.add_argument('system', type=str, help='which system',
-                        choices=['memcached', 'pmdk', 'recipe'])
+                        choices=['memcached', 'pmdk', 'recipe', 'nvm-direct'])
     parser.add_argument('file_path', type=Path, help='CSV file to open')
 
     args = parser.parse_args()
     assert(args.file_path.exists())
 
     df = pd.read_csv(args.file_path)
+
+    df = remove_diagnosed(df, FALSE_POS)
+
     # df = remove_known_volatile_usages(df)
     if (args.system == 'memcached'):
         df = remove_diagnosed(df, DIAGNOSED_MEMCACHED)
     elif (args.system == 'pmdk' or args.system == 'recipe'):
         df = remove_diagnosed(df, DIAGNOSED_PMDK)
+    elif args.system == 'nvm-direct':
+        df = remove_diagnosed(df, DIAGNOSED_NVMDIRECT)
 
     cdf = df[df['Type'] == CORRECTNESS]
     pdf = df[df['Type'] != CORRECTNESS]
 
     embed() 
 
-    print(f'Total diagnosed: {len(DIAGNOSED_MEMCACHED) + len(DIAGNOSED_PMDK)}')
+    print(f'Total diagnosed: {len(DIAGNOSED_MEMCACHED) + len(DIAGNOSED_PMDK) + len(DIAGNOSED_NVMDIRECT)}')
 
 if __name__ == '__main__':
     main()
