@@ -732,6 +732,39 @@ int __fd_openat(int basefd, const char *pathname, int flags, mode_t mode) {
   return fd;
 }
 
+int __fd_faccessat(int basefd, const char *pathname, int mode, int flags) {
+  if (basefd != AT_FDCWD) {
+    fd_entry_t *bf = __get_fd(basefd);
+
+    if (!bf || !(bf->attr & eIsFile)) {
+      errno = EBADF;
+      return -1;
+    }
+    file_t *bfile = (file_t*)(bf->io_object);
+    if (!_file_is_concrete(bfile)) {
+      klee_warning("symbolic file descriptor, ignoring (ENOENT)");
+      errno = ENOENT;
+      return -1;
+    }
+    basefd = bfile->concrete_fd;
+  }
+
+  if (__get_sym_file(pathname)) {
+    if (flags != 0) {
+      // XXX TODO
+      klee_warning("flags not yet supported for faccessat");
+      errno = EINVAL;
+      return -1;
+    }
+    /* for a symbolic file, it doesn't matter if/where it exists on disk */
+    return access(pathname, mode);
+  }
+
+  int ret = CALL_UNDERLYING(faccessat, basefd, __concretize_string(pathname), mode, flags);
+  if (ret == -1) errno = klee_get_errno();
+  return ret;
+}
+
 DEFINE_MODEL(int, creat, const char *pathname, mode_t mode) {
   return open(pathname, O_CREAT | O_WRONLY | O_TRUNC, mode);
 }

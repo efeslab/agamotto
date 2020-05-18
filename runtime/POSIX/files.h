@@ -65,6 +65,7 @@ static inline int _file_is_concrete(file_t *file) {
 
 int __fd_open(const char *pathname, int flags, mode_t mode);
 int __fd_openat(int basefd, const char *pathname, int flags, mode_t mode);
+int __fd_faccessat(int basefd, const char *pathname, int mode, int flags);
 off64_t __fd_lseek64(int fd, off64_t offset, int whence);
 int __fd_stat(const char *path, struct stat64 *buf);
 int __fd_lstat(const char *path, struct stat64 *buf);
