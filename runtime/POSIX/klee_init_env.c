@@ -66,6 +66,14 @@ static int __streq(const char *a, const char *b) {
   return 0;
 }
 
+static int __strlen(const char *s) {
+  int i = 0;
+  while (*s++) {
+    i++;
+  }
+  return i;
+}
+
 static char *__get_sym_str(int numChars, char *name) {
   int i;
   char *s = malloc(numChars+1);
@@ -131,8 +139,11 @@ static char help_msg[] =
 "  -tcp-client-file <NAME> <PORT> <FILE>\n"
 "                            - Creates a simulated TCP client that connects to\n"
 "                              localhost:<PORT>, sends the data contained in\n"
-"                              <FILE>, then closes\n"
+"                              <FILE>, then closes.\n"
 "  -sock-handler <NAME>      - Use predefined socket handler\n"
+"  -sock-args <N> <PARAM...> - Can be supplied after -sock-handler\n"
+"                              to provide <N> implementation-specific\n"
+"                              configuration parameters <PARAM...>.\n"
 "  -symbolic-sock-handler    - Inform socket handler that it is used during a\n"
 "                              symbolic replay. (default=false)\n"
 "\n"
@@ -167,6 +178,37 @@ static void __add_symfs_file(fs_init_descriptor_t *fid,
   sfd->pmem_type = pmem_type;
   sfd->file_path = file_path;
   sfd->file_size = file_size;
+}
+
+static int __parse_optional_sock_handler_args(int argc, char **argv, int k,
+                                              socket_event_handler_t *handler) {
+  if (__streq(argv[k], "--sock-args") ||
+      __streq(argv[k], "-sock-args")) {
+    const char *msg = "--sock-args expects a non-zero integer argument <argc> "
+      "followed by <argc> string arguments";
+
+    int shargc = 0;
+    char **shargv = NULL;
+    
+    if (++k >= argc) {
+      __emit_error(msg);
+    }
+
+    shargc = __str_to_int(argv[k++], msg);
+    shargv = malloc(shargc * sizeof(char *));
+    int s= 0;
+    while (s < shargc) {
+      if (k >= argc) {
+        __emit_error(msg);
+      }
+      shargv[s++] = argv[k++];
+    }
+
+    handler->argc = shargc;
+    handler->argv = (const char **)shargv;
+  }
+
+  return k;
 }
 
 static void __add_socket_handler(socksim_init_descriptor_t *ssid,
@@ -382,7 +424,7 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
       const char *name = argv[k++];
       int port = (int)__str_to_int(argv[k++], msg);
       const char *text = argv[k++];
-      handler = create_simple_text_client(name, port, text, strlen(text));
+      handler = create_simple_text_client(name, port, text, __strlen(text));
       __add_socket_handler(&ssid, handler);
     } else if (__streq(argv[k], "--tcp-client-sym") ||
                __streq(argv[k], "-tcp-client-sym")) {
@@ -401,15 +443,14 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
     } else if (__streq(argv[k], "--sock-handler") ||
                __streq(argv[k], "-sock-handler")) {
       const char *msg = "--sock-handler expects one string <NAME>";
-      if (k + 1 >= argc)
+      if (++k >= argc)
         __emit_error(msg);
-      k++;
       const char *name = argv[k++];
       socket_event_handler_t *handler = get_predefined_socket_handler(name);
       if (handler == NULL)
-        posix_debug_msg("Ignore unknown socket handler %s\n", name);
-      else
-        __add_socket_handler(&ssid, handler);
+        __emit_error("Unknown socket handler");
+      k = __parse_optional_sock_handler_args(argc, argv, k, handler);
+      __add_socket_handler(&ssid, handler);
     } else if (__streq(argv[k], "--tcp-client-file") ||
                __streq(argv[k], "-tcp-client-file")) {
       const char *msg = "--tcp-client-file expects three arguments: "

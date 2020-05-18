@@ -38,6 +38,8 @@ typedef struct {
 #define SIMULATED_CLIENT_HANDLER(_name, _port, _func) {    \
   .__base = {                                              \
     .name = _name,                                         \
+    .argc = 0,                                             \
+    .argv = NULL,                                          \
     .init = simulated_client_handler_init,                 \
     .post_bind = simulated_client_handler_post_bind,       \
     .post_listen = simulated_client_handler_post_listen,   \

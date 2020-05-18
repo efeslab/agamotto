@@ -9,6 +9,8 @@ extern char useSymbolicHandler;
 // customized structure
 typedef struct {
   const char *name;
+  int argc;
+  const char **argv;
   void (*init)(void *self);
   void (*post_bind)(void *self, socket_t *sock,
                            const struct sockaddr *addr, socklen_t addrlen);
@@ -32,7 +34,8 @@ void register_socket_handler(socket_event_handler_t *hdl);
 // To see an example of a predefined handler, see memcached.h, memcached.c,
 // and predefined_handlers inside sockets_simulator.c.
 // @return NULL if no predefined handler for given name
-socket_event_handler_t * get_predefined_socket_handler(const char *name);
+socket_event_handler_t *
+get_predefined_socket_handler(const char *name);
 
 #define TRIGGER_SOCKET_HANDLER(handle, ...)                                    \
   do {                                                                         \
