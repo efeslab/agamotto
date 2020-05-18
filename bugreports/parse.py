@@ -91,7 +91,7 @@ DIAGNOSED_PMDK = {
         'heap_boot at heap.c:1499'
     ],
     # -- found by RECIPE
-    'transuent use 4 [libpmemobj] (replicas)': [
+    'transient use 4 [libpmemobj] (replicas)': [
         'obj_replica_init at obj.c:1133',
         'obj_replicas_init at obj.c:1628',
         'obj_replica_init_local at obj.c:993',
@@ -127,9 +127,9 @@ DIAGNOSED_PMDK = {
     # This bug means that the hashmap atomic isn't really, because it wants
     # to persist nbuckets after 
     # consequence of universal perf #2
-    # 'semantic correctness 1 [hashmap_atomic] (nbuckets flushed with buckets)': [
-    #     'create_buckets at nvmbugs/hashmap_atomic/hashmap_atomic.c:118',
-    # ],
+    'semantic correctness 1 [hashmap_atomic] (nbuckets flushed with buckets)': [
+        'create_buckets at nvmbugs/hashmap_atomic/hashmap_atomic.c:118',
+    ],
 
     # Examples: rbtree
     'universal correctness 1 [rbtree] (dst not backed up)': [

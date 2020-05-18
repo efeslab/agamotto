@@ -40,7 +40,9 @@ namespace klee {
     PM_Unpersisted,
     PM_UnnecessaryFlush,
     PM_FlushOnUnmodified,
-    PM_UnnecessaryFence
+    PM_UnnecessaryFence,
+    PM_SemanticPerformance,
+    PM_SemanticCorrectness
   };
 
   struct RootCauseLocation {
