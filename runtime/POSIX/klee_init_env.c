@@ -91,17 +91,22 @@ static void __add_arg(int *argc, char **argv, char *arg, int argcMax) {
 static char help_msg[] = 
 "klee_init_env\n\n"
 "usage: (klee_init_env) [options] [program arguments]\n"
-/* General symfs stuff */
-"  -sym-arg <N>              - Replace by a symbolic argument with length N\n"
-"  -sym-args <MIN> <MAX> <N> - Replace by at least MIN arguments and at most\n"
-"                              MAX arguments, each with maximum length N\n"
-"  -sym-files <NUM> <N>      - Make NUM symbolic files ('A', 'B', 'C', etc.),\n"
-"                              each with size N. (type: PURE_SYMBOLIC)\n"
-"  -sym-file <FILE>          - Make a symbolic file based on the name, stats, \n"
-"                              size of the given <FILE>. (type: SYMBOLIC).\n"
-"  -con-file <FILE>          - Import a concrete file to the symbolic file \n"
-"                              system. (type: CONCRETE)\n"
-/* Persistent Memory stuff */
+"\n"
+" General symfs stuff\n"
+"  -sym-arg <N>               - Replace by a symbolic argument with length N\n"
+"  -sym-args <MIN> <MAX> <N>  - Replace by at least MIN arguments and at most\n"
+"                               MAX arguments, each with maximum length N\n"
+"  -sym-files <NUM> <N>       - Make NUM symbolic files ('A', 'B', 'C', etc.),\n"
+"                               each with size N. (type: PURE_SYMBOLIC)\n"
+"  -sym-file <FILE>           - Make a symbolic file based on the name, stats, \n"
+"                               size of the given <FILE>. (type: SYMBOLIC).\n"
+"  -con-file <FILE>\n"
+"  -con-file-max <FILE> <MAX> - Import a concrete file to the symbolic file \n"
+"                               system. If <MAX> is provided, file can grow\n"
+"                               in size to be larger than the original <FILE>,\n"
+"                               up to <MAX> bytes total (type: CONCRETE)\n"
+"\n"
+" Persistent Memory stuff\n"
 "  -sym-pmem <FILE> <N>      - Provide a symbolic persistent memory file and size.\n"
 "  -sym-pmem-init-from <INIT_FILE_PATH>\n"
 "                            - Initialize the persistent memory file to\n"
@@ -114,7 +119,8 @@ static char help_msg[] =
 "                              rather than on environment init. Essentially, this allows\n"
 "                              us to create a new file which we know to mark symbolic.\n"
 "                              Implies that the file will be created with zeroed memory.\n"
-/* Sockets */
+"\n"
+" Sockets\n"
 "  -tcp-client-text <NAME> <PORT> <TEXT>\n"
 "                            - Creates a simulated TCP client that connects to\n"
 "                              localhost:<PORT>, sends <TEXT>, then closes.\n"
@@ -129,7 +135,8 @@ static char help_msg[] =
 "  -sock-handler <NAME>      - Use predefined socket handler\n"
 "  -symbolic-sock-handler    - Inform socket handler that it is used during a\n"
 "                              symbolic replay. (default=false)\n"
-/* Other */
+"\n"
+" Other\n"
 "  -sym-stdin <N>            - Make stdin symbolic with size N.\n"
 "  -sym-file-stdin           - Make symbolic stdin behave like piped in from\n"
 "                              a file if set.\n"
@@ -297,15 +304,31 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
       const char *file_path = argv[k++];
       __add_symfs_file(&fid, SYMBOLIC, NOT_PMEM, file_path, 0);
     } else if (__streq(argv[k], "--con-file") ||
-               __streq(argv[k], "-con-file")) {
-      const char *msg = "--con-file expect one argument "
-                        "<backend-file-path>";
+               __streq(argv[k], "-con-file") ||
+               __streq(argv[k], "--con-file-max") ||
+               __streq(argv[k], "-con-file-max")) {
+      int has_maxlen = __strlen(argv[k]) > __strlen("--con-file");
 
-      if (++k >= argc)
+      const char *msg;
+      if (has_maxlen) {
+        msg = "--con-file-max expects one string argument <backend-file-path> "
+              "and one integer argument <max-size>";
+      } else {
+        msg = "--con-file expects one string argument <backend-file-path>";
+      }
+
+      if (k + 1 + has_maxlen >= argc)
         __emit_error(msg);
+      k++;
 
-      const char *file_path = argv[k++];
-      __add_symfs_file(&fid, CONCRETE, NOT_PMEM, file_path, 0);
+      const char *file_path;
+      long maxlen = 0;
+
+      file_path = argv[k++];
+      if (has_maxlen) {
+        maxlen = __str_to_int(argv[k++], msg);
+      }
+      __add_symfs_file(&fid, CONCRETE, NOT_PMEM, file_path, maxlen);
     } else if (__streq(argv[k], "--sym-pmem") || __streq(argv[k], "-sym-pmem")) {
       const char *msg = "--sym-pmem expects one string argument "
                 "<sym-pmem-filename> and one integer argument <sym-pmem-size>";

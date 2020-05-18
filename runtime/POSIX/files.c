@@ -204,31 +204,22 @@ ssize_t _write_file(file_t *file, const void *buf, size_t count, off64_t offset)
   posix_debug_msg("Writing symbolically %d bytes...\n", count);
 
   if (file->storage->ops.write) {
-    size_t actual_count = 0;
-    size_t symf_size = file->storage->size;
-    if (file->offset + count <= symf_size) {
-      actual_count = count;
-    } else {
+    ssize_t res = file->storage->ops.write(
+        file->storage, buf, count, offset >= 0 ? offset : file->offset);
+
+    if (count != res) {
       if (__exe_env.save_all_writes)
         assert(0);
-      else {
-        if (file->offset < (off64_t)symf_size)
-          actual_count = symf_size - file->offset;
-      }
+      posix_debug_msg("write() ignores bytes: %lu->%lu\n", count, res);
     }
-    if (count != actual_count) {
-      posix_debug_msg("write() ignores bytes: %lu->%lu\n", count, actual_count);
-    }
-    if (file->storage == __sym_fs.sym_stdout)
-      __sym_fs.stdout_writes += actual_count;
-
-    ssize_t res = file->storage->ops.write(
-        file->storage, buf, actual_count, offset >= 0 ? offset : file->offset);
 
     if (res < 0) {
       errno = EINVAL;
       return -1;
     }
+
+    if (file->storage == __sym_fs.sym_stdout)
+      __sym_fs.stdout_writes += res;
 
     if (offset < 0) {
       // not positional write

@@ -223,18 +223,18 @@ static void _init_pure_symbolic_buffer(disk_file_t *dfile, size_t maxsize,
 }
 
 static void _init_dual_buffer(disk_file_t *dfile, const char *origpath,
-    size_t size, const char *symname, int make_symbolic) {
+    size_t size, size_t maxsize, const char *symname, int make_symbolic) {
 
   block_buffer_t *buff = &dfile->bbuf;
-  _block_init(buff, size);
+  _block_init(buff, maxsize);
   buff->size = size;
 
   if (make_symbolic) {
     static char namebuf[64];
     strcpy(namebuf, symname);
 
-    klee_make_symbolic(buff->contents, size, namebuf);
-    klee_make_shared(buff->contents, size);
+    klee_make_symbolic(buff->contents, maxsize, namebuf);
+    klee_make_shared(buff->contents, maxsize);
   } else {
     _read_file_contents(origpath, size, buff->contents);
   }
@@ -274,7 +274,7 @@ static void _init_pmem_from_real(disk_file_t *dfile, const char *origpath,
 
 // NOTE: the SYMBOLIC file has the same file name as the given file (origname)
 static disk_file_t *_create_dual_file(disk_file_t *dfile, const char *origpath,
-    int make_symbolic) {
+    int make_symbolic, size_t maxsize) {
   struct stat64 s;
   int res = CALL_UNDERLYING(stat, origpath, &s);
   assert(res == 0 && "Could not get the stat of the original file.");
@@ -287,7 +287,15 @@ static disk_file_t *_create_dual_file(disk_file_t *dfile, const char *origpath,
   }
 
   _init_file_name(dfile, symname);
-  _init_dual_buffer(dfile, origpath, s.st_size, symname, make_symbolic);
+
+  size_t size = s.st_size;
+  if (maxsize == 0)
+    maxsize = size;
+  if (maxsize < size) {
+    klee_warning("Truncating concrete file");
+    size = maxsize;
+  }
+  _init_dual_buffer(dfile, origpath, size, maxsize, symname, make_symbolic);
 
   dfile->stat = (struct stat64*)malloc(sizeof(struct stat64));
   memcpy(dfile->stat, &s, sizeof(struct stat64));
@@ -464,11 +472,13 @@ void klee_init_symfs(fs_init_descriptor_t *fid) {
         break;
       case SYMBOLIC:
         _create_dual_file(dfile, fid->sym_files[i].file_path,
-                          /*make stats symbolic?*/ 1);
+                          /*make stats symbolic?*/ 1,
+                          /* maxsize */ fid->sym_files[i].file_size);
         break;
       case CONCRETE:
         _create_dual_file(dfile, fid->sym_files[i].file_path,
-                          /*make stats symbolic?*/ 0);
+                          /*make stats symbolic?*/ 0,
+                          /* maxsize */ fid->sym_files[i].file_size);
         break;
     }
   }
