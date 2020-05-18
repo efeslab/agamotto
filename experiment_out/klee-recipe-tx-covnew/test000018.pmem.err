@@ -1,0 +1,29 @@
+Error: persistent memory violation!
+File: libc/stdlib/_atexit.c
+Line: 336
+assembly.ll line: 11893
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @_exit(i32 %11) #48, !dbg !10986 (op #0=<global const>, op #1=0)
+	#000011893 in exit (=0) at libc/stdlib/_atexit.c:336
+	#100004404 in __uClibc_main (=28662152, =5, =82188064, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#200004570 in main (=5, =82188064)
+Errors: 
+28) File: src/clht_lb_res.c
+Line: 592
+assembly.ll line: 13330
+ allocated at _block_init_pmem_from_file():  %22 = call i8* @klee_pmem_alloc_pmem(i64 %19, i8* %20, i1 zeroext false, i8* %21), !dbg !11004
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store volatile i8 0, i8* %218, align 1, !dbg !11182 (op #0=<global const>, op #1=279639696)
+	#000013330 in clht_put (=279639248, =1, =1) at src/clht_lb_res.c:592
+	#100012681 in _ZZ3runPPcENK3$_0clEv (=360939104) at example-nothread.cpp:109
+	#200012264 in _Z3runPPc (=193675008) at example-nothread.cpp:114
+	#300016758 in __klee_posix_wrapped_main (=2, =193675008) at example-nothread.cpp:204
+	#400010297 in __klee_posix_ctor_stub_insert_point (=2, =193675008, =82188112) at runtime/POSIX/./klee_init_env.c:491
+	#500010317 in __user_main (=5, =82188064, =82188112) at runtime/POSIX/./klee_init_env.c:499
+	#600004403 in __uClibc_main (=28662152, =5, =82188064, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700004570 in main (=5, =82188064)
+

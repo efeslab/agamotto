@@ -1,0 +1,70 @@
+Error: persistent memory violation!
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 156030
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !10978 (op #0=<global const>, op #1=203777088, op #2=203777088)
+	#000156030 in pmem_clwb (=203777088) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100156014 in flush_clwb_nolog (=203777104, =0) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200155847 in flush_clwb (=203777104, =0) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300172193 in pmem_flush (=203777104, =0) at pmem.c:227
+	#400172216 in pmem_persist (=203777104, =0) at pmem.c:238
+	#500126317 in obj_norep_persist (=200622080, =203777104, =0, =0) at obj.c:464
+	#600062045 in pmemops_xpersist.747 (=200628784, =203777104, =0, =0) at ./pmemops.h:51
+	#700062018 in pmemops_persist.720 (=200628784, =203777104, =0) at ./pmemops.h:57
+	#800106364 in memblock_run_init (=326616144, =200628784, =1, =0, =243854648) at memblock.c:1388
+	#900105997 in heap_run_create (=200628784, =241964672, =272748624) at heap.c:454
+	#1000105487 in heap_ensure_run_bucket_filled (=200628784, =241964672, =1) at heap.c:883
+	#1100105143 in heap_get_bestfit_block (=200628784, =241964672, =330940584) at heap.c:984
+	#1200110697 in palloc_reservation_create (=200628784, =64, =125768200, =331241088, =2, =0, =0, =0, =330940544) at palloc.c:218
+	#1300118347 in palloc_reserve (=200628784, =64, =125768200, =331241088, =2, =0, =0, =0, =330940544) at palloc.c:597
+	#1400142632 in tx_alloc_common (=93626800, =64, =2, =125768200, =331241088) at tx.c:587
+	#1500142367 in pmemobj_tx_alloc (=64, =2) at tx.c:1564
+	#1600016087 in clht_bucket_create () at src/clht_lb_res.c:212
+	#1700013575 in clht_bucket_create_stats (=204559760, =439015240) at src/clht_lb_res.c:243
+	#1800013236 in clht_put (=204559568, =25, =25) at src/clht_lb_res.c:544
+	#1900012681 in _ZZ3runPPcENK3$_0clEv (=199206928) at example-nothread.cpp:109
+	#2000012264 in _Z3runPPc (=246768480) at example-nothread.cpp:114
+	#2100016758 in __klee_posix_wrapped_main (=2, =246768480) at example-nothread.cpp:204
+	#2200010297 in __klee_posix_ctor_stub_insert_point (=2, =246768480, =113310288) at runtime/POSIX/./klee_init_env.c:491
+	#2300010317 in __user_main (=5, =113310240, =113310288) at runtime/POSIX/./klee_init_env.c:499
+	#2400004403 in __uClibc_main (=47774088, =5, =113310240, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2500004570 in main (=5, =113310240)
+Errors: 
+29) File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 156030
+ allocated at _block_init_pmem_from_file():  %22 = call i8* @klee_pmem_alloc_pmem(i64 %19, i8* %20, i1 zeroext false, i8* %21), !dbg !11004
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !10978 (op #0=<global const>, op #1=203777088, op #2=203777088)
+	#000156030 in pmem_clwb (=203777088) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100156014 in flush_clwb_nolog (=203777104, =0) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200155847 in flush_clwb (=203777104, =0) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300172193 in pmem_flush (=203777104, =0) at pmem.c:227
+	#400172216 in pmem_persist (=203777104, =0) at pmem.c:238
+	#500126317 in obj_norep_persist (=200622080, =203777104, =0, =0) at obj.c:464
+	#600062045 in pmemops_xpersist.747 (=200628784, =203777104, =0, =0) at ./pmemops.h:51
+	#700062018 in pmemops_persist.720 (=200628784, =203777104, =0) at ./pmemops.h:57
+	#800106364 in memblock_run_init (=326616144, =200628784, =1, =0, =243854648) at memblock.c:1388
+	#900105997 in heap_run_create (=200628784, =241964672, =272748624) at heap.c:454
+	#1000105487 in heap_ensure_run_bucket_filled (=200628784, =241964672, =1) at heap.c:883
+	#1100105143 in heap_get_bestfit_block (=200628784, =241964672, =330940584) at heap.c:984
+	#1200110697 in palloc_reservation_create (=200628784, =64, =125768200, =331241088, =2, =0, =0, =0, =330940544) at palloc.c:218
+	#1300118347 in palloc_reserve (=200628784, =64, =125768200, =331241088, =2, =0, =0, =0, =330940544) at palloc.c:597
+	#1400142632 in tx_alloc_common (=93626800, =64, =2, =125768200, =331241088) at tx.c:587
+	#1500142367 in pmemobj_tx_alloc (=64, =2) at tx.c:1564
+	#1600016087 in clht_bucket_create () at src/clht_lb_res.c:212
+	#1700013575 in clht_bucket_create_stats (=204559760, =439015240) at src/clht_lb_res.c:243
+	#1800013236 in clht_put (=204559568, =25, =25) at src/clht_lb_res.c:544
+	#1900012681 in _ZZ3runPPcENK3$_0clEv (=199206928) at example-nothread.cpp:109
+	#2000012264 in _Z3runPPc (=246768480) at example-nothread.cpp:114
+	#2100016758 in __klee_posix_wrapped_main (=2, =246768480) at example-nothread.cpp:204
+	#2200010297 in __klee_posix_ctor_stub_insert_point (=2, =246768480, =113310288) at runtime/POSIX/./klee_init_env.c:491
+	#2300010317 in __user_main (=5, =113310240, =113310288) at runtime/POSIX/./klee_init_env.c:499
+	#2400004403 in __uClibc_main (=47774088, =5, =113310240, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2500004570 in main (=5, =113310240)
+

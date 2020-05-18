@@ -1,0 +1,36 @@
+Error: persistent memory violation!
+File: src/clht_lb_res.c
+Line: 154
+assembly.ll line: 13654
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %32, i8* %32), !dbg !11010 (op #0=<global const>, op #1=204817728, op #2=204817728)
+	#000013654 in clflush (=204817744, =64, =true) at src/clht_lb_res.c:154
+	#100013254 in clht_put (=204559568, =25, =25) at src/clht_lb_res.c:556
+	#200012681 in _ZZ3runPPcENK3$_0clEv (=199206928) at example-nothread.cpp:109
+	#300012264 in _Z3runPPc (=246768480) at example-nothread.cpp:114
+	#400016758 in __klee_posix_wrapped_main (=2, =246768480) at example-nothread.cpp:204
+	#500010297 in __klee_posix_ctor_stub_insert_point (=2, =246768480, =113310288) at runtime/POSIX/./klee_init_env.c:491
+	#600010317 in __user_main (=5, =113310240, =113310288) at runtime/POSIX/./klee_init_env.c:499
+	#700004403 in __uClibc_main (=47774088, =5, =113310240, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004570 in main (=5, =113310240)
+Errors: 
+32) File: src/clht_lb_res.c
+Line: 154
+assembly.ll line: 13654
+ allocated at _block_init_pmem_from_file():  %22 = call i8* @klee_pmem_alloc_pmem(i64 %19, i8* %20, i1 zeroext false, i8* %21), !dbg !11004
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %32, i8* %32), !dbg !11010 (op #0=<global const>, op #1=204817728, op #2=204817728)
+	#000013654 in clflush (=204817744, =64, =true) at src/clht_lb_res.c:154
+	#100013254 in clht_put (=204559568, =25, =25) at src/clht_lb_res.c:556
+	#200012681 in _ZZ3runPPcENK3$_0clEv (=199206928) at example-nothread.cpp:109
+	#300012264 in _Z3runPPc (=246768480) at example-nothread.cpp:114
+	#400016758 in __klee_posix_wrapped_main (=2, =246768480) at example-nothread.cpp:204
+	#500010297 in __klee_posix_ctor_stub_insert_point (=2, =246768480, =113310288) at runtime/POSIX/./klee_init_env.c:491
+	#600010317 in __user_main (=5, =113310240, =113310288) at runtime/POSIX/./klee_init_env.c:499
+	#700004403 in __uClibc_main (=47774088, =5, =113310240, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004570 in main (=5, =113310240)
+
