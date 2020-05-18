@@ -1,0 +1,133 @@
+Error: persistent memory violation!
+File: libc/stdlib/_atexit.c
+Line: 336
+assembly.ll line: 11893
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @_exit(i32 %11) #48, !dbg !10986 (op #0=<global const>, op #1=0)
+	#000011893 in exit (=0) at libc/stdlib/_atexit.c:336
+	#100004404 in __uClibc_main (=36395400, =5, =40241216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#200004570 in main (=5, =40241216)
+Errors: 
+50) File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 11933
+ allocated at _block_init_pmem_from_file():  %22 = call i8* @klee_pmem_alloc_pmem(i64 %19, i8* %20, i1 zeroext false, i8* %21), !dbg !11004
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %17, i8* %18, align 1, !dbg !10992 (op #0=1, op #1=517719488)
+	#000011933 in memcpy (=517719488, =1567811032, =8) at libc/string/memcpy.c:29
+	#100061439 in huge_write_footer (=517719128, =46) at memblock.c:1143
+	#200062336 in memblock_huge_init (=298534400, =514570800, =3, =0, =46) at memblock.c:1317
+	#300105781 in heap_split_block (=514570800, =1350103424, =215629696, =1) at heap.c:958
+	#400105208 in heap_get_bestfit_block (=514570800, =1350103424, =215629696) at heap.c:992
+	#500105443 in heap_ensure_run_bucket_filled (=514570800, =742608448, =3) at heap.c:881
+	#600105143 in heap_get_bestfit_block (=514570800, =742608448, =1558134952) at heap.c:984
+	#700110697 in palloc_reservation_create (=514570800, =2048, =114389512, =1636563392, =2, =0, =0, =0, =1558134912) at palloc.c:218
+	#800118347 in palloc_reserve (=514570800, =2048, =114389512, =1636563392, =2, =0, =0, =0, =1558134912) at palloc.c:597
+	#900142632 in tx_alloc_common (=102879328, =2048, =2, =114389512, =1636563392) at tx.c:587
+	#1000142842 in pmemobj_tx_zalloc (=2048, =2) at tx.c:1595
+	#1100014622 in clht_hashtable_create (=32) at src/clht_lb_res.c:365
+	#1200014155 in ht_resize_pes (=518501584, =1, =4) at src/clht_lb_res.c:839
+	#1300013951 in ht_status (=518501584, =1, =0) at src/clht_lb_res.c:1112
+	#1400013339 in clht_put (=518501584, =32, =32) at src/clht_lb_res.c:597
+	#1500012681 in _ZZ3runPPcENK3$_0clEv (=212969968) at example-nothread.cpp:109
+	#1600012264 in _Z3runPPc (=214982496) at example-nothread.cpp:114
+	#1700016758 in __klee_posix_wrapped_main (=2, =214982496) at example-nothread.cpp:204
+	#1800010297 in __klee_posix_ctor_stub_insert_point (=2, =214982496, =40241264) at runtime/POSIX/./klee_init_env.c:491
+	#1900010317 in __user_main (=5, =40241216, =40241264) at runtime/POSIX/./klee_init_env.c:499
+	#2000004403 in __uClibc_main (=36395400, =5, =40241216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2100004570 in main (=5, =40241216)
+
+51) File: include/clht_lb_res.h
+Line: 352
+assembly.ll line: 15661
+ allocated at _block_init_pmem_from_file():  %22 = call i8* @klee_pmem_alloc_pmem(i64 %19, i8* %20, i1 zeroext false, i8* %21), !dbg !11004
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %9, i8* %6, !dbg !10980 (op #0=2, op #1=518501968)
+	#000015661 in lock_acq_resize (=518501968) at include/clht_lb_res.h:352
+	#100014848 in bucket_cpy (=518501584, =518501968, =518502544) at src/clht_lb_res.c:726
+	#200014204 in ht_resize_pes (=518501584, =1, =4) at src/clht_lb_res.c:849
+	#300013951 in ht_status (=518501584, =1, =0) at src/clht_lb_res.c:1112
+	#400013339 in clht_put (=518501584, =32, =32) at src/clht_lb_res.c:597
+	#500012681 in _ZZ3runPPcENK3$_0clEv (=212969968) at example-nothread.cpp:109
+	#600012264 in _Z3runPPc (=214982496) at example-nothread.cpp:114
+	#700016758 in __klee_posix_wrapped_main (=2, =214982496) at example-nothread.cpp:204
+	#800010297 in __klee_posix_ctor_stub_insert_point (=2, =214982496, =40241264) at runtime/POSIX/./klee_init_env.c:491
+	#900010317 in __user_main (=5, =40241216, =40241264) at runtime/POSIX/./klee_init_env.c:499
+	#1000004403 in __uClibc_main (=36395400, =5, =40241216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1100004570 in main (=5, =40241216)
+
+52) File: src/clht_lb_res.c
+Line: 974
+assembly.ll line: 14349
+ allocated at _block_init_pmem_from_file():  %22 = call i8* @klee_pmem_alloc_pmem(i64 %19, i8* %20, i1 zeroext false, i8* %21), !dbg !11004
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store volatile i8 0, i8* %227, align 8, !dbg !11168 (op #0=<global const>, op #1=518501672)
+	#000014349 in ht_resize_pes (=518501584, =1, =4) at src/clht_lb_res.c:974
+	#100013951 in ht_status (=518501584, =1, =0) at src/clht_lb_res.c:1112
+	#200013339 in clht_put (=518501584, =32, =32) at src/clht_lb_res.c:597
+	#300012681 in _ZZ3runPPcENK3$_0clEv (=212969968) at example-nothread.cpp:109
+	#400012264 in _Z3runPPc (=214982496) at example-nothread.cpp:114
+	#500016758 in __klee_posix_wrapped_main (=2, =214982496) at example-nothread.cpp:204
+	#600010297 in __klee_posix_ctor_stub_insert_point (=2, =214982496, =40241264) at runtime/POSIX/./klee_init_env.c:491
+	#700010317 in __user_main (=5, =40241216, =40241264) at runtime/POSIX/./klee_init_env.c:499
+	#800004403 in __uClibc_main (=36395400, =5, =40241216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900004570 in main (=5, =40241216)
+
+53) File: src/clht_lb_res.c
+Line: 973
+assembly.ll line: 14344
+ allocated at _block_init_pmem_from_file():  %22 = call i8* @klee_pmem_alloc_pmem(i64 %19, i8* %20, i1 zeroext false, i8* %21), !dbg !11004
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.clht_hashtable_s* %219, %struct.clht_hashtable_s** %223, align 16, !dbg !11167 (op #0=518502544, op #1=518501856)
+	#000014344 in ht_resize_pes (=518501584, =1, =4) at src/clht_lb_res.c:973
+	#100013951 in ht_status (=518501584, =1, =0) at src/clht_lb_res.c:1112
+	#200013339 in clht_put (=518501584, =32, =32) at src/clht_lb_res.c:597
+	#300012681 in _ZZ3runPPcENK3$_0clEv (=212969968) at example-nothread.cpp:109
+	#400012264 in _Z3runPPc (=214982496) at example-nothread.cpp:114
+	#500016758 in __klee_posix_wrapped_main (=2, =214982496) at example-nothread.cpp:204
+	#600010297 in __klee_posix_ctor_stub_insert_point (=2, =214982496, =40241264) at runtime/POSIX/./klee_init_env.c:491
+	#700010317 in __user_main (=5, =40241216, =40241264) at runtime/POSIX/./klee_init_env.c:499
+	#800004403 in __uClibc_main (=36395400, =5, =40241216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900004570 in main (=5, =40241216)
+
+54) File: libc/string/memcpy.c
+Line: 29
+assembly.ll line: 11933
+ allocated at _block_init_pmem_from_file():  %22 = call i8* @klee_pmem_alloc_pmem(i64 %19, i8* %20, i1 zeroext false, i8* %21), !dbg !11004
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store i8 %17, i8* %18, align 1, !dbg !10992 (op #0=3, op #1=519029824)
+	#000011933 in memcpy (=519029824, =298534400, =48) at libc/string/memcpy.c:29
+	#100102246 in container_ravl_insert_block (=452537408, =298534400) at container_ravl.c:60
+	#200056966 in bucket_insert_block (=1350103424, =298534400) at bucket.c:75
+	#300105783 in heap_split_block (=514570800, =1350103424, =215629696, =1) at heap.c:961
+	#400105208 in heap_get_bestfit_block (=514570800, =1350103424, =215629696) at heap.c:992
+	#500105443 in heap_ensure_run_bucket_filled (=514570800, =742608448, =3) at heap.c:881
+	#600105143 in heap_get_bestfit_block (=514570800, =742608448, =1558134952) at heap.c:984
+	#700110697 in palloc_reservation_create (=514570800, =2048, =114389512, =1636563392, =2, =0, =0, =0, =1558134912) at palloc.c:218
+	#800118347 in palloc_reserve (=514570800, =2048, =114389512, =1636563392, =2, =0, =0, =0, =1558134912) at palloc.c:597
+	#900142632 in tx_alloc_common (=102879328, =2048, =2, =114389512, =1636563392) at tx.c:587
+	#1000142842 in pmemobj_tx_zalloc (=2048, =2) at tx.c:1595
+	#1100014622 in clht_hashtable_create (=32) at src/clht_lb_res.c:365
+	#1200014155 in ht_resize_pes (=518501584, =1, =4) at src/clht_lb_res.c:839
+	#1300013951 in ht_status (=518501584, =1, =0) at src/clht_lb_res.c:1112
+	#1400013339 in clht_put (=518501584, =32, =32) at src/clht_lb_res.c:597
+	#1500012681 in _ZZ3runPPcENK3$_0clEv (=212969968) at example-nothread.cpp:109
+	#1600012264 in _Z3runPPc (=214982496) at example-nothread.cpp:114
+	#1700016758 in __klee_posix_wrapped_main (=2, =214982496) at example-nothread.cpp:204
+	#1800010297 in __klee_posix_ctor_stub_insert_point (=2, =214982496, =40241264) at runtime/POSIX/./klee_init_env.c:491
+	#1900010317 in __user_main (=5, =40241216, =40241264) at runtime/POSIX/./klee_init_env.c:499
+	#2000004403 in __uClibc_main (=36395400, =5, =40241216, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#2100004570 in main (=5, =40241216)
+

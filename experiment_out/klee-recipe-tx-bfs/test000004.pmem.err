@@ -1,0 +1,50 @@
+Error: persistent memory violation!
+File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 156064
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !10975 (op #0=<global const>)
+	#000156064 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100172116 in pmem_drain () at pmem.c:189
+	#200126380 in obj_norep_drain (=264601600) at obj.c:492
+	#300111181 in pmemops_drain.993 (=264608304) at ./pmemops.h:76
+	#400110971 in palloc_exec_actions (=264608304, =180132608, =420536320, =2) at palloc.c:559
+	#500118990 in palloc_publish (=264608304, =420536320, =2, =180132608) at palloc.c:660
+	#600139905 in pmemobj_tx_commit () at tx.c:1009
+	#700140477 in pmemobj_tx_process () at tx.c:1101
+	#800014792 in clht_hashtable_create (=8) at src/clht_lb_res.c:413
+	#900012389 in clht_create (=8) at src/clht_lb_res.c:298
+	#1000012190 in _Z3runPPc (=180583872) at example-nothread.cpp:81
+	#1100016758 in __klee_posix_wrapped_main (=2, =180583872) at example-nothread.cpp:204
+	#1200010297 in __klee_posix_ctor_stub_insert_point (=2, =180583872, =93452688) at runtime/POSIX/./klee_init_env.c:491
+	#1300010317 in __user_main (=5, =93452640, =93452688) at runtime/POSIX/./klee_init_env.c:499
+	#1400004403 in __uClibc_main (=27900296, =5, =93452640, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500004570 in main (=5, =93452640)
+Errors: 
+4) File: ../../src/../src/libpmem2/x86_64/init.c
+Line: 27
+assembly.ll line: 156064
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !10975 (op #0=<global const>)
+	#000156064 in memory_barrier () at ../../src/../src/libpmem2/x86_64/init.c:27
+	#100172116 in pmem_drain () at pmem.c:189
+	#200126380 in obj_norep_drain (=264601600) at obj.c:492
+	#300111181 in pmemops_drain.993 (=264608304) at ./pmemops.h:76
+	#400110971 in palloc_exec_actions (=264608304, =180132608, =420536320, =2) at palloc.c:559
+	#500118990 in palloc_publish (=264608304, =420536320, =2, =180132608) at palloc.c:660
+	#600139905 in pmemobj_tx_commit () at tx.c:1009
+	#700140477 in pmemobj_tx_process () at tx.c:1101
+	#800014792 in clht_hashtable_create (=8) at src/clht_lb_res.c:413
+	#900012389 in clht_create (=8) at src/clht_lb_res.c:298
+	#1000012190 in _Z3runPPc (=180583872) at example-nothread.cpp:81
+	#1100016758 in __klee_posix_wrapped_main (=2, =180583872) at example-nothread.cpp:204
+	#1200010297 in __klee_posix_ctor_stub_insert_point (=2, =180583872, =93452688) at runtime/POSIX/./klee_init_env.c:491
+	#1300010317 in __user_main (=5, =93452640, =93452688) at runtime/POSIX/./klee_init_env.c:499
+	#1400004403 in __uClibc_main (=27900296, =5, =93452640, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500004570 in main (=5, =93452640)
+

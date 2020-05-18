@@ -1,0 +1,38 @@
+Error: persistent memory violation!
+File: src/clht_lb_res.c
+Line: 139
+assembly.ll line: 14937
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse2.mfence(), !dbg !10972 (op #0=<global const>)
+	#000014937 in mfence () at src/clht_lb_res.c:139
+	#100013682 in clflush (=376760504, =8, =true) at src/clht_lb_res.c:159
+	#200013278 in clht_put (=279639248, =25, =25) at src/clht_lb_res.c:559
+	#300012681 in _ZZ3runPPcENK3$_0clEv (=360939104) at example-nothread.cpp:109
+	#400012264 in _Z3runPPc (=193675008) at example-nothread.cpp:114
+	#500016758 in __klee_posix_wrapped_main (=2, =193675008) at example-nothread.cpp:204
+	#600010297 in __klee_posix_ctor_stub_insert_point (=2, =193675008, =82188112) at runtime/POSIX/./klee_init_env.c:491
+	#700010317 in __user_main (=5, =82188064, =82188112) at runtime/POSIX/./klee_init_env.c:499
+	#800004403 in __uClibc_main (=28662152, =5, =82188064, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900004570 in main (=5, =82188064)
+Errors: 
+35) File: src/clht_lb_res.c
+Line: 139
+assembly.ll line: 14937
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse2.mfence(), !dbg !10972 (op #0=<global const>)
+	#000014937 in mfence () at src/clht_lb_res.c:139
+	#100013682 in clflush (=376760504, =8, =true) at src/clht_lb_res.c:159
+	#200013278 in clht_put (=279639248, =25, =25) at src/clht_lb_res.c:559
+	#300012681 in _ZZ3runPPcENK3$_0clEv (=360939104) at example-nothread.cpp:109
+	#400012264 in _Z3runPPc (=193675008) at example-nothread.cpp:114
+	#500016758 in __klee_posix_wrapped_main (=2, =193675008) at example-nothread.cpp:204
+	#600010297 in __klee_posix_ctor_stub_insert_point (=2, =193675008, =82188112) at runtime/POSIX/./klee_init_env.c:491
+	#700010317 in __user_main (=5, =82188064, =82188112) at runtime/POSIX/./klee_init_env.c:499
+	#800004403 in __uClibc_main (=28662152, =5, =82188064, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900004570 in main (=5, =82188064)
+
