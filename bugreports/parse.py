@@ -71,11 +71,15 @@ DIAGNOSED_PMDK = {
     'universal performance 5 [libpmemobj] (unnecessary fence)': [
         'pmemobj_tx_commit at tx.c:1001'
     ],
+    'universal performance 6 [libpmemobj] (unnecessary flush)': [
+        'memblock_run_init at memblock.c:1388'
+    ],
 
     'transient use 1 [libpmemobj] (mutex in pmem)': [
         'obj_pool_cleanup at obj.c:1919',
         'pmemobj_mutex_lock at sync.c:201',
         'obj_runtime_init at obj.c:1201', # mutex head
+        'obj_runtime_init at obj.c:1206',
     ],
     'transient use 2 [libpmemobj] (operation lanes)': [
         'lane_hold at lane.c:520',
@@ -88,7 +92,9 @@ DIAGNOSED_PMDK = {
         'heap_split_block at heap.c:961',
         'heap_zone_init at heap.c:427',
         'heap_boot at heap.c:1500',
-        'heap_boot at heap.c:1499'
+        'heap_boot at heap.c:1499',
+        'memblock_huge_init at memblock.c:1317',
+        'heap_boot at heap.c:1496'
     ],
     # -- found by RECIPE
     'transient use 4 [libpmemobj] (replicas)': [
