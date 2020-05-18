@@ -1,0 +1,2125 @@
+Persistent Memory Bugs:
+	Number of bugs: 26
+		Number of unpersisted write bugs (correctness): 25
+		Number of extra flush bugs (performance): 1
+		Number of flushes to untouched memory (performance): 0
+		Number of fences with nothing to commit (performance): 0
+	Overall bug occurences: 5247551
+		Number of unpersisted write occurences (correctness): 5165716
+		Number of extra flush occurences (performance): 81835
+		Number of untouched memory flush occurences (performance): 0
+		Number of occurence of fences with nothing to commit (performance): 0
+
+(1) ID #791394697909871120 with 3505 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 1832
+assembly.ll line: 153756
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 5
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145111712) at runtime/POSIX/./threadsync.c:229
+	#200123713 in STATS_UNLOCK () at thread.c:651
+	#300169410 in logger_thread_sum_stats (=146870368) at logger.c:497
+	#400168794 in logger_thread (=0) at logger.c:538
+Thread 3, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=10)
+	#000197258 in __thread_sleep.1175 (=10) at runtime/POSIX/./multiprocess.h:190
+	#100197204 in _atomic_mutex_lock (=179478176, =0) at runtime/POSIX/./threadsync.c:171
+	#200197113 in pthread_mutex_lock (=145113168) at runtime/POSIX/./threadsync.c:186
+	#300132756 in item_link_q (=155006532) at items.c:441
+	#400139933 in do_item_link (=155006532, =2172355143) at items.c:540
+	#500138651 in do_store_item (=155006532, =2, =43960320, =2172355143) at memcached.c:2945
+	#600138168 in store_item (=155006532, =2, =43960320) at thread.c:639
+	#700133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#800127724 in complete_nread (=43960320) at memcached.c:2700
+	#900125688 in drive_machine (=43960320) at memcached.c:5566
+	#1000156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#1100065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1200064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1300064701 in event_process_active (=147684480) at event.c:1805
+	#1400063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1500167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, enabled
+		PC:   store %struct._stritem* %57, %struct._stritem** %61, align 8, !dbg !13459, !tbaa !13399 (op #0=155020548, op #1=155020452)
+	#000153756 in do_item_unlinktail_q (=145227920) at items.c:1832
+	#100153175 in lru_crawler_class_done (=2) at crawler.c:346
+	#200152902 in item_crawler_thread (=0) at crawler.c:392
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145117288) at runtime/POSIX/./threadsync.c:189
+	#200130603 in lru_pull_tail (=41, =64, =0, =2, =0, =0) at items.c:1155
+	#300166169 in lru_maintainer_juggle (=41) at items.c:1470
+	#400165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =10619180016, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =9844529408, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =9844529408, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =9844529408, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =9844529408, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =198) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+<not masked by anything>
+
+(2) ID #12469727036436296675 with 1888 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 1851
+assembly.ll line: 153263
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 5
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145106000) at runtime/POSIX/./threadsync.c:229
+	#200168757 in logger_thread (=0) at logger.c:525
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145113168) at runtime/POSIX/./threadsync.c:229
+	#200132764 in item_link_q (=155006820) at items.c:443
+	#300139933 in do_item_link (=155006820, =246481765) at items.c:540
+	#400138651 in do_store_item (=155006820, =2, =43960320, =246481765) at memcached.c:2945
+	#500138168 in store_item (=155006820, =2, =43960320) at thread.c:639
+	#600133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#700127724 in complete_nread (=43960320) at memcached.c:2700
+	#800125688 in drive_machine (=43960320) at memcached.c:5566
+	#900156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#1000065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1100064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1200064701 in event_process_active (=147684480) at event.c:1805
+	#1300063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1400167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, enabled
+		PC:   store %struct._stritem* null, %struct._stritem** %36, align 8, !dbg !13435, !tbaa !13399 (op #0=<global const>, op #1=155023628)
+	#000153263 in do_item_crawl_q (=145237136) at items.c:1851
+	#100152863 in item_crawler_thread (=0) at crawler.c:387
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145087472) at runtime/POSIX/./threadsync.c:189
+	#200166756 in slabs_available_chunks (=35, =0, =2379434168, =6731507272) at slabs.c:802
+	#300166046 in lru_maintainer_juggle (=35) at items.c:1438
+	#400165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =455528208, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =6728478464, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =6728478464, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =6728478464, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =6728478464, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =195) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+<not masked by anything>
+
+(3) ID #603756697797231975 with 1379 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 1880
+assembly.ll line: 153360
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 5
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=147357024) at runtime/POSIX/./threadsync.c:189
+	#200168835 in logger_thread_read (=147357008, =146870368) at logger.c:345
+	#300168745 in logger_thread (=0) at logger.c:521
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145113168) at runtime/POSIX/./threadsync.c:229
+	#200132764 in item_link_q (=155007780) at items.c:443
+	#300139933 in do_item_link (=155007780, =3249162641) at items.c:540
+	#400138651 in do_store_item (=155007780, =2, =43960320, =3249162641) at memcached.c:2945
+	#500138168 in store_item (=155007780, =2, =43960320) at thread.c:639
+	#600133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#700127724 in complete_nread (=43960320) at memcached.c:2700
+	#800125688 in drive_machine (=43960320) at memcached.c:5566
+	#900156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#1000065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1100064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1200064701 in event_process_active (=147684480) at event.c:1805
+	#1300063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1400167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, enabled
+		PC:   store %struct._stritem* %99, %struct._stritem** %103, align 8, !dbg !13504, !tbaa !13399 (op #0=145237136, op #1=155025452)
+	#000153360 in do_item_crawl_q (=145237136) at items.c:1880
+	#100152863 in item_crawler_thread (=0) at crawler.c:387
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145113528) at runtime/POSIX/./threadsync.c:229
+	#200131160 in lru_pull_tail (=11, =0, =0, =2, =0, =0) at items.c:1296
+	#300166161 in lru_maintainer_juggle (=11) at items.c:1469
+	#400165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =6516763072, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =9844529024, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =9844529024, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =9844529024, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =9844529024, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =185) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #781184257979101029
+	ID #12469727036436296675
+
+(4) ID #1924472215649196774 with 30234 occurences:
+Type of modification: write (unpersisted)
+File: crawler.c
+Line: 404
+assembly.ll line: 152946
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 5
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145106000) at runtime/POSIX/./threadsync.c:229
+	#200168757 in logger_thread (=0) at logger.c:525
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145111712) at runtime/POSIX/./threadsync.c:229
+	#200123713 in STATS_UNLOCK () at thread.c:651
+	#300139901 in do_item_link (=155012580, =819935825) at items.c:535
+	#400138651 in do_store_item (=155012580, =2, =43960320, =819935825) at memcached.c:2945
+	#500138168 in store_item (=155012580, =2, =43960320) at thread.c:639
+	#600133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#700127724 in complete_nread (=43960320) at memcached.c:2700
+	#800125688 in drive_machine (=43960320) at memcached.c:5566
+	#900156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#1000065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1100064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1200064701 in event_process_active (=147684480) at event.c:1805
+	#1300063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1400167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, enabled
+		PC:   store i16 %132, i16* %130, align 4, !dbg !13540, !tbaa !13542 (op #0=2, op #1=155023656)
+	#000152946 in item_crawler_thread (=0) at crawler.c:404
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145118208) at runtime/POSIX/./threadsync.c:189
+	#200122336 in fill_item_stats_automove (=147473944) at items.c:727
+	#300121945 in slab_automove_run (=147472384, =147230704, =147230712) at slab_automove.c:85
+	#400165850 in lru_maintainer_thread (=0) at items.c:1719
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =796383952, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =7417802880, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =7417802880, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =7417802880, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =7417802880, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =135) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #138728365217585325
+
+(5) ID #17973565644410868391 with 11235 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 1883
+assembly.ll line: 153373
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 5
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=147357024) at runtime/POSIX/./threadsync.c:229
+	#200168843 in logger_thread_read (=147357008, =146870368) at logger.c:347
+	#300168745 in logger_thread (=0) at logger.c:521
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145111712) at runtime/POSIX/./threadsync.c:189
+	#200123707 in STATS_LOCK () at thread.c:647
+	#300139866 in do_item_link (=155012580, =819935825) at items.c:531
+	#400138651 in do_store_item (=155012580, =2, =43960320, =819935825) at memcached.c:2945
+	#500138168 in store_item (=155012580, =2, =43960320) at thread.c:639
+	#600133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#700127724 in complete_nread (=43960320) at memcached.c:2700
+	#800125688 in drive_machine (=43960320) at memcached.c:5566
+	#900156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#1000065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1100064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1200064701 in event_process_active (=147684480) at event.c:1805
+	#1300063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1400167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, enabled
+		PC:   store %struct._stritem* %109, %struct._stritem** %113, align 8, !dbg !13514, !tbaa !13399 (op #0=145227920, op #1=155023524)
+	#000153373 in do_item_crawl_q (=145227920) at items.c:1883
+	#100152863 in item_crawler_thread (=0) at crawler.c:387
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145113088) at runtime/POSIX/./threadsync.c:229
+	#200122329 in fill_item_stats_automove (=147473944) at items.c:723
+	#300121945 in slab_automove_run (=147472384, =147230704, =147230712) at slab_automove.c:85
+	#400165850 in lru_maintainer_thread (=0) at items.c:1719
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =796383952, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =7417802880, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =7417802880, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =7417802880, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =7417802880, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =135) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #791394697909871120
+	ID #8676857201792611027
+
+(6) ID #8230872243377842232 with 7634 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 1808
+assembly.ll line: 154248
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 6
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=250529888) at runtime/POSIX/./threadsync.c:189
+	#200168835 in logger_thread_read (=250529872, =146870368) at logger.c:345
+	#300168745 in logger_thread (=0) at logger.c:521
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=147653440) at runtime/POSIX/./threadsync.c:229
+	#200129315 in item_unlock (=1870694216) at thread.c:115
+	#300138171 in store_item (=155018052, =2, =43960320) at thread.c:640
+	#400133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#500127724 in complete_nread (=43960320) at memcached.c:2700
+	#600125688 in drive_machine (=43960320) at memcached.c:5566
+	#700156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#800065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#900064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1000064701 in event_process_active (=147684480) at event.c:1805
+	#1100063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1200167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   store %struct._stritem* %28, %struct._stritem** %32, align 8, !dbg !13433, !tbaa !13399 (op #0=145227920, op #1=155023620)
+	#000154248 in do_item_linktail_q (=145227920) at items.c:1808
+	#100154171 in do_lru_crawler_start (=2, =33) at crawler.c:538
+	#200153973 in lru_crawler_start (=1041713152, =33, =0, =250388480, =0, =0) at crawler.c:612
+	#300166726 in lru_maintainer_crawler_check (=250388480, =250529872) at items.c:1587
+	#400165804 in lru_maintainer_thread (=0) at items.c:1708
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =2317169920, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =2316341632, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =2316341632, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =2316341632, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =2316341632, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =78) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #6915979088707589560
+
+(7) ID #781184257979101029 with 3505 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 1831
+assembly.ll line: 153738
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 5
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145111712) at runtime/POSIX/./threadsync.c:229
+	#200123713 in STATS_UNLOCK () at thread.c:651
+	#300169410 in logger_thread_sum_stats (=146870368) at logger.c:497
+	#400168794 in logger_thread (=0) at logger.c:538
+Thread 3, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=10)
+	#000197258 in __thread_sleep.1175 (=10) at runtime/POSIX/./multiprocess.h:190
+	#100197204 in _atomic_mutex_lock (=179478176, =0) at runtime/POSIX/./threadsync.c:171
+	#200197113 in pthread_mutex_lock (=145113168) at runtime/POSIX/./threadsync.c:186
+	#300132756 in item_link_q (=155006532) at items.c:441
+	#400139933 in do_item_link (=155006532, =2172355143) at items.c:540
+	#500138651 in do_store_item (=155006532, =2, =43960320, =2172355143) at memcached.c:2945
+	#600138168 in store_item (=155006532, =2, =43960320) at thread.c:639
+	#700133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#800127724 in complete_nread (=43960320) at memcached.c:2700
+	#900125688 in drive_machine (=43960320) at memcached.c:5566
+	#1000156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#1100065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1200064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1300064701 in event_process_active (=147684480) at event.c:1805
+	#1400063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1500167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, enabled
+		PC:   store %struct._stritem* %44, %struct._stritem** %48, align 8, !dbg !13449, !tbaa !13399 (op #0=155020452, op #1=155020556)
+	#000153738 in do_item_unlinktail_q (=145227920) at items.c:1831
+	#100153175 in lru_crawler_class_done (=2) at crawler.c:346
+	#200152902 in item_crawler_thread (=0) at crawler.c:392
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145117288) at runtime/POSIX/./threadsync.c:189
+	#200130603 in lru_pull_tail (=41, =64, =0, =2, =0, =0) at items.c:1155
+	#300166169 in lru_maintainer_juggle (=41) at items.c:1470
+	#400165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =10619180016, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =9844529408, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =9844529408, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =9844529408, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =9844529408, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =198) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+<not masked by anything>
+
+(8) ID #15488724746921140370 with 21678 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 591
+assembly.ll line: 123190
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 3
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=1)
+	#000176885 in __thread_preempt (=1) at runtime/POSIX/./multiprocess.h:177
+	#100176855 in _yield_sleep (=0, =512561) at runtime/POSIX/./misc.c:59
+	#200176899 in usleep (=512561) at runtime/POSIX/./misc.c:68
+	#300168729 in logger_thread (=0) at logger.c:515
+Thread 3, Process 0, enabled
+		PC:   store i16 %6, i16* %4, align 4, !dbg !13401, !tbaa !13403 (op #0=1, op #1=155023656)
+	#000123190 in do_item_remove (=155023620) at items.c:591
+	#100129163 in item_remove (=155023620) at thread.c:589
+	#200133554 in complete_nread_ascii (=43960320) at memcached.c:1251
+	#300127724 in complete_nread (=43960320) at memcached.c:2700
+	#400125688 in drive_machine (=43960320) at memcached.c:5566
+	#500156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#600065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#700064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#800064701 in event_process_active (=147684480) at event.c:1805
+	#900063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1000167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145113168) at runtime/POSIX/./threadsync.c:229
+	#200131160 in lru_pull_tail (=2, =0, =955, =2, =0, =0) at items.c:1296
+	#300166161 in lru_maintainer_juggle (=2) at items.c:1469
+	#400165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =6879923408, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =2389244160, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =2389244160, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =2389244160, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =2389244160, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =20) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+<not masked by anything>
+
+(9) ID #6915979088707589560 with 69 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 1875
+assembly.ll line: 153337
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 5
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=147357024) at runtime/POSIX/./threadsync.c:229
+	#200168843 in logger_thread_read (=147357008, =146870368) at logger.c:347
+	#300168745 in logger_thread (=0) at logger.c:521
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145111712) at runtime/POSIX/./threadsync.c:189
+	#200123707 in STATS_LOCK () at thread.c:647
+	#300139866 in do_item_link (=155012580, =819935825) at items.c:531
+	#400138651 in do_store_item (=155012580, =2, =43960320, =819935825) at memcached.c:2945
+	#500138168 in store_item (=155012580, =2, =43960320) at thread.c:639
+	#600133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#700127724 in complete_nread (=43960320) at memcached.c:2700
+	#800125688 in drive_machine (=43960320) at memcached.c:5566
+	#900156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#1000065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1100064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1200064701 in event_process_active (=147684480) at event.c:1805
+	#1300063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1400167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, enabled
+		PC:   store %struct._stritem* null, %struct._stritem** %85, align 8, !dbg !13488, !tbaa !13399 (op #0=<global const>, op #1=155023620)
+	#000153337 in do_item_crawl_q (=145227920) at items.c:1875
+	#100152863 in item_crawler_thread (=0) at crawler.c:387
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145113088) at runtime/POSIX/./threadsync.c:229
+	#200122329 in fill_item_stats_automove (=147473944) at items.c:723
+	#300121945 in slab_automove_run (=147472384, =147230704, =147230712) at slab_automove.c:85
+	#400165850 in lru_maintainer_thread (=0) at items.c:1719
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =796383952, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =7417802880, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =7417802880, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =7417802880, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =7417802880, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =135) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #1924472215649196774
+
+(10) ID #16272834917620530174 with 2363228 occurences:
+Type of modification: write (unpersisted)
+File: slabs.c
+Line: 550
+assembly.ll line: 123371
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 3
+Thread 1, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1322)
+	#000007240 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:190
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=250529888) at runtime/POSIX/./threadsync.c:229
+	#200168843 in logger_thread_read (=250529872, =146870368) at logger.c:347
+	#300168745 in logger_thread (=0) at logger.c:521
+Thread 3, Process 0, enabled
+		PC:   store %struct._stritem* %61, %struct._stritem** %65, align 8, !dbg !13473, !tbaa !13401 (op #0=153977220, op #1=153977132)
+	#000123371 in do_slabs_free (=153977220, =0, =2) at slabs.c:550
+	#100131908 in split_slab_page_into_freelist (=153977124, =2) at slabs.c:262
+	#200131693 in do_slabs_newslab_from_pmem (=2) at slabs.c:344
+	#300131489 in do_slabs_newslab (=2) at slabs.c:376
+	#400131367 in do_slabs_alloc (=73, =2, =147229528, =0) at slabs.c:406
+	#500131251 in slabs_alloc (=73, =2, =147229528, =0) at slabs.c:747
+	#600130394 in do_item_alloc_pull (=73, =2) at items.c:204
+	#700137479 in do_item_alloc (=257759236, =5, =1, =0, =7) at items.c:312
+	#800137329 in item_alloc (=257759236, =5, =1, =0, =7) at thread.c:538
+	#900150019 in process_update_command (=43960320, =96489856, =6, =2, =false) at memcached.c:4081
+	#1000147885 in process_command (=43960320, =257759232) at memcached.c:4678
+	#1100127623 in try_read_command (=43960320) at memcached.c:5077
+	#1200125607 in drive_machine (=43960320) at memcached.c:5528
+	#1300156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#1400065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1500064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1600064701 in event_process_active (=147684480) at event.c:1805
+	#1700063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1800167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145113288) at runtime/POSIX/./threadsync.c:189
+	#200122317 in fill_item_stats_automove (=147472408) at items.c:721
+	#300121850 in slab_automove_init (=110344544) at slab_automove.c:48
+	#400165563 in lru_maintainer_thread (=0) at items.c:1638
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =258412752, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =71714176, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =71714176, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =71714176, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =71714176, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =0) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #8551260842053614844
+	ID #14713743465775561238
+	ID #4265594671814330446
+
+(11) ID #3024029108645249233 with 52948 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 423
+assembly.ll line: 132811
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 3
+Thread 1, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1322)
+	#000007240 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:190
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145111712) at runtime/POSIX/./threadsync.c:229
+	#200123713 in STATS_UNLOCK () at thread.c:651
+	#300169410 in logger_thread_sum_stats (=146870368) at logger.c:497
+	#400168794 in logger_thread (=0) at logger.c:538
+Thread 3, Process 0, enabled
+		PC:   store %struct._stritem* %28, %struct._stritem** %32, align 8, !dbg !13432, !tbaa !13399 (op #0=155025444, op #1=155025548)
+	#000132811 in do_item_link_q (=155025444) at items.c:423
+	#100132758 in item_link_q (=155025444) at items.c:442
+	#200139933 in do_item_link (=155025444, =1707756238) at items.c:540
+	#300138651 in do_store_item (=155025444, =2, =43960320, =1707756238) at memcached.c:2945
+	#400138168 in store_item (=155025444, =2, =43960320) at thread.c:639
+	#500133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#600127724 in complete_nread (=43960320) at memcached.c:2700
+	#700125688 in drive_machine (=43960320) at memcached.c:5566
+	#800156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#900065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1000064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1100064701 in event_process_active (=147684480) at event.c:1805
+	#1200063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1300167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145113608) at runtime/POSIX/./threadsync.c:189
+	#200122317 in fill_item_stats_automove (=147472408) at items.c:721
+	#300121850 in slab_automove_init (=110344544) at slab_automove.c:48
+	#400165563 in lru_maintainer_thread (=0) at items.c:1638
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =263892368, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =96773888, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =96773888, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =96773888, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =96773888, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =1) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #17973565644410868391
+	ID #7767963871302899135
+	ID #12138216673800957385
+
+(12) ID #12600831045018632749 with 32 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 538
+assembly.ll line: 139925
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 3
+Thread 1, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1322)
+	#000007240 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:190
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=250529888) at runtime/POSIX/./threadsync.c:229
+	#200168843 in logger_thread_read (=250529872, =146870368) at logger.c:347
+	#300168745 in logger_thread (=0) at logger.c:521
+Thread 3, Process 0, enabled
+		PC:   store i64 %112, i64* %116, align 8, !dbg !13453, !tbaa !13408 (op #0=1, op #1=155025588)
+	#000139925 in do_item_link (=155025540, =1357352656) at items.c:538
+	#100138651 in do_store_item (=155025540, =2, =43960320, =1357352656) at memcached.c:2945
+	#200138168 in store_item (=155025540, =2, =43960320) at thread.c:639
+	#300133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#400127724 in complete_nread (=43960320) at memcached.c:2700
+	#500125688 in drive_machine (=43960320) at memcached.c:5566
+	#600156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#700065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#800064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#900064701 in event_process_active (=147684480) at event.c:1805
+	#1000063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1100167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145113368) at runtime/POSIX/./threadsync.c:229
+	#200122329 in fill_item_stats_automove (=147472408) at items.c:723
+	#300121850 in slab_automove_init (=110344544) at slab_automove.c:48
+	#400165563 in lru_maintainer_thread (=0) at items.c:1638
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =258412752, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =71714176, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =71714176, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =71714176, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =71714176, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =0) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #8498725997477166068
+	ID #3024029108645249233
+
+(13) ID #12815746056867821011 with 55791 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 591
+assembly.ll line: 123190
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 6
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=147357024) at runtime/POSIX/./threadsync.c:189
+	#200168835 in logger_thread_read (=147357008, =146870368) at logger.c:345
+	#300168745 in logger_thread (=0) at logger.c:521
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=142270608) at runtime/POSIX/./threadsync.c:229
+	#200127067 in try_read_network (=43971072) at memcached.c:5178
+	#300125577 in drive_machine (=43971072) at memcached.c:5509
+	#400156278 in event_handler (=6, =2, =43971072) at memcached.c:5825
+	#500065845 in event_persist_closure (=147684480, =43971104) at event.c:1645
+	#600064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#700064701 in event_process_active (=147684480) at event.c:1805
+	#800063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#900167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   store i16 %6, i16* %4, align 4, !dbg !13401, !tbaa !13403 (op #0=1, op #1=155025480)
+	#000123190 in do_item_remove (=155025444) at items.c:591
+	#100131201 in lru_pull_tail (=2, =0, =955, =2, =0, =0) at items.c:1305
+	#200166161 in lru_maintainer_juggle (=2) at items.c:1469
+	#300165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =455528752, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =56928512, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =13) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #8230872243377842232
+
+(14) ID #3007475314521651563 with 29012 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 1176
+assembly.ll line: 130705
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 6
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145111712) at runtime/POSIX/./threadsync.c:189
+	#200123707 in STATS_LOCK () at thread.c:647
+	#300169385 in logger_thread_sum_stats (=146870368) at logger.c:492
+	#400168794 in logger_thread (=0) at logger.c:538
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=142270608) at runtime/POSIX/./threadsync.c:189
+	#200133345 in complete_nread_ascii (=43971072) at memcached.c:1165
+	#300127724 in complete_nread (=43971072) at memcached.c:2700
+	#400125688 in drive_machine (=43971072) at memcached.c:5566
+	#500156278 in event_handler (=6, =2, =43971072) at memcached.c:5825
+	#600065845 in event_persist_closure (=147684480, =43971104) at event.c:1645
+	#700064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#800064701 in event_process_active (=147684480) at event.c:1805
+	#900063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1000167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   store i16 %118, i16* %116, align 4, !dbg !13518, !tbaa !13520 (op #0=2, op #1=155025576)
+	#000130705 in lru_pull_tail (=2, =128, =955, =2, =0, =0) at items.c:1176
+	#100166187 in lru_maintainer_juggle (=2) at items.c:1474
+	#200165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =455528752, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =56928512, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =13) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+<not masked by anything>
+
+(15) ID #10113731369833069162 with 81835 occurences:
+Type of modification: flush (unnecessary)
+File: ../../src/../src/libpmem2/x86_64/flush.h
+Line: 48
+assembly.ll line: 211117
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 3
+Thread 1, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1322)
+	#000007240 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:190
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145111712) at runtime/POSIX/./threadsync.c:189
+	#200123707 in STATS_LOCK () at thread.c:647
+	#300169385 in logger_thread_sum_stats (=146870368) at logger.c:492
+	#400168794 in logger_thread (=0) at logger.c:538
+Thread 3, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %3, i8* %3), !dbg !13398 (op #0=<global const>, op #1=155025536, op #2=155025536)
+	#000211117 in pmem_clwb (=155025536) at ../../src/../src/libpmem2/x86_64/flush.h:48
+	#100211101 in flush_clwb_nolog (=155025588, =25) at ../../src/../src/libpmem2/x86_64/flush.h:104
+	#200210934 in flush_clwb (=155025588, =25) at ../../src/../src/libpmem2/x86_64/init.c:60
+	#300235695 in pmem_flush (=155025588, =25) at pmem.c:227
+	#400139830 in do_item_link (=155025540, =1357352656) at items.c:516
+	#500138651 in do_store_item (=155025540, =2, =43960320, =1357352656) at memcached.c:2945
+	#600138168 in store_item (=155025540, =2, =43960320) at thread.c:639
+	#700133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#800127724 in complete_nread (=43960320) at memcached.c:2700
+	#900125688 in drive_machine (=43960320) at memcached.c:5566
+	#1000156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#1100065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1200064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1300064701 in event_process_active (=147684480) at event.c:1805
+	#1400063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1500167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145113328) at runtime/POSIX/./threadsync.c:189
+	#200122317 in fill_item_stats_automove (=147472408) at items.c:721
+	#300121850 in slab_automove_init (=110344544) at slab_automove.c:48
+	#400165563 in lru_maintainer_thread (=0) at items.c:1638
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =258412752, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =71714176, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =71714176, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =71714176, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =71714176, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =0) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+<not masked by anything>
+
+(16) ID #8498725997477166068 with 53181 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 541
+assembly.ll line: 139938
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 3
+Thread 1, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1322)
+	#000007240 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:190
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=1)
+	#000176885 in __thread_preempt (=1) at runtime/POSIX/./multiprocess.h:177
+	#100176855 in _yield_sleep (=0, =3242) at runtime/POSIX/./misc.c:59
+	#200176899 in usleep (=3242) at runtime/POSIX/./misc.c:68
+	#300168729 in logger_thread (=0) at logger.c:515
+Thread 3, Process 0, enabled
+		PC:   store i16 %125, i16* %123, align 4, !dbg !13464, !tbaa !13465 (op #0=2, op #1=155025480)
+	#000139938 in do_item_link (=155025444, =1707756238) at items.c:541
+	#100138651 in do_store_item (=155025444, =2, =43960320, =1707756238) at memcached.c:2945
+	#200138168 in store_item (=155025444, =2, =43960320) at thread.c:639
+	#300133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#400127724 in complete_nread (=43960320) at memcached.c:2700
+	#500125688 in drive_machine (=43960320) at memcached.c:5566
+	#600156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#700065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#800064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#900064701 in event_process_active (=147684480) at event.c:1805
+	#1000063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1100167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145113608) at runtime/POSIX/./threadsync.c:229
+	#200122329 in fill_item_stats_automove (=147472408) at items.c:723
+	#300121850 in slab_automove_init (=110344544) at slab_automove.c:48
+	#400165563 in lru_maintainer_thread (=0) at items.c:1638
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =263892368, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =96773888, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =96773888, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =96773888, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =96773888, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =1) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #15488724746921140370
+
+(17) ID #12138216673800957385 with 10722 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 470
+assembly.ll line: 123966
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 6
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=1)
+	#000176885 in __thread_preempt (=1) at runtime/POSIX/./multiprocess.h:177
+	#100176855 in _yield_sleep (=0, =54686) at runtime/POSIX/./misc.c:59
+	#200176899 in usleep (=54686) at runtime/POSIX/./misc.c:68
+	#300168729 in logger_thread (=0) at logger.c:515
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145111712) at runtime/POSIX/./threadsync.c:229
+	#200123713 in STATS_UNLOCK () at thread.c:651
+	#300139901 in do_item_link (=155024388, =2129698688) at items.c:535
+	#400138651 in do_store_item (=155024388, =2, =43971072, =2129698688) at memcached.c:2945
+	#500138168 in store_item (=155024388, =2, =43971072) at thread.c:639
+	#600133514 in complete_nread_ascii (=43971072) at memcached.c:1200
+	#700127724 in complete_nread (=43971072) at memcached.c:2700
+	#800125688 in drive_machine (=43971072) at memcached.c:5566
+	#900156278 in event_handler (=6, =2, =43971072) at memcached.c:5825
+	#1000065845 in event_persist_closure (=147684480, =43971104) at event.c:1645
+	#1100064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1200064701 in event_process_active (=147684480) at event.c:1805
+	#1300063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1400167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   store %struct._stritem* %57, %struct._stritem** %61, align 8, !dbg !13459, !tbaa !13399 (op #0=0, op #1=155025444)
+	#000123966 in do_item_unlink_q (=155025540) at items.c:470
+	#100130929 in lru_pull_tail (=2, =0, =955, =2, =0, =0) at items.c:1242
+	#200166161 in lru_maintainer_juggle (=2) at items.c:1469
+	#300165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =455529168, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =44149760, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =44149760, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =44149760, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =44149760, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =12) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #1524351447874958568
+
+(18) ID #138728365217585325 with 24977 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 1872
+assembly.ll line: 153330
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 5
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=147357024) at runtime/POSIX/./threadsync.c:189
+	#200168835 in logger_thread_read (=147357008, =146870368) at logger.c:345
+	#300168745 in logger_thread (=0) at logger.c:521
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145113168) at runtime/POSIX/./threadsync.c:229
+	#200132764 in item_link_q (=155007780) at items.c:443
+	#300139933 in do_item_link (=155007780, =3249162641) at items.c:540
+	#400138651 in do_store_item (=155007780, =2, =43960320, =3249162641) at memcached.c:2945
+	#500138168 in store_item (=155007780, =2, =43960320) at thread.c:639
+	#600133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#700127724 in complete_nread (=43960320) at memcached.c:2700
+	#800125688 in drive_machine (=43960320) at memcached.c:5566
+	#900156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#1000065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1100064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1200064701 in event_process_active (=147684480) at event.c:1805
+	#1300063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1400167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, enabled
+		PC:   store %struct._stritem* %77, %struct._stritem** %81, align 8, !dbg !13483, !tbaa !13399 (op #0=155025444, op #1=155025548)
+	#000153330 in do_item_crawl_q (=145237136) at items.c:1872
+	#100152863 in item_crawler_thread (=0) at crawler.c:387
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145113528) at runtime/POSIX/./threadsync.c:229
+	#200131160 in lru_pull_tail (=11, =0, =0, =2, =0, =0) at items.c:1296
+	#300166161 in lru_maintainer_juggle (=11) at items.c:1469
+	#400165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =6516763072, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =9844529024, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =9844529024, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =9844529024, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =9844529024, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =185) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+<not masked by anything>
+
+(19) ID #8551260842053614844 with 36975 occurences:
+Type of modification: write (unpersisted)
+File: slabs.c
+Line: 413
+assembly.ll line: 131401
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 3
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145111712) at runtime/POSIX/./threadsync.c:229
+	#200123713 in STATS_UNLOCK () at thread.c:651
+	#300169410 in logger_thread_sum_stats (=146870368) at logger.c:497
+	#400168794 in logger_thread (=0) at logger.c:538
+Thread 3, Process 0, enabled
+		PC:   store %struct._stritem* null, %struct._stritem** %69, align 8, !dbg !13481, !tbaa !13411 (op #0=<global const>, op #1=155025260)
+	#000131401 in do_slabs_alloc (=73, =2, =401282600, =0) at slabs.c:413
+	#100131251 in slabs_alloc (=73, =2, =401282600, =0) at slabs.c:747
+	#200130394 in do_item_alloc_pull (=73, =2) at items.c:204
+	#300137479 in do_item_alloc (=257759236, =5, =1, , =7) at items.c:312
+	#400137329 in item_alloc (=257759236, =5, =1, , =7) at thread.c:538
+	#500150019 in process_update_command (=43960320, =83452416, =6, =2, =false) at memcached.c:4081
+	#600147885 in process_command (=43960320, =257759232) at memcached.c:4678
+	#700127623 in try_read_command (=43960320) at memcached.c:5077
+	#800125607 in drive_machine (=43960320) at memcached.c:5528
+	#900156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#1000065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1100064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1200064701 in event_process_active (=147684480) at event.c:1805
+	#1300063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1400167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145113688) at runtime/POSIX/./threadsync.c:229
+	#200122329 in fill_item_stats_automove (=147472408) at items.c:723
+	#300121850 in slab_automove_init (=110344544) at slab_automove.c:48
+	#400165563 in lru_maintainer_thread (=0) at items.c:1638
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =455530624, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =95468416, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =95468416, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =95468416, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =95468416, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =2) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+<not masked by anything>
+
+(20) ID #3817639673906879476 with 4842 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 1300
+assembly.ll line: 131179
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 6
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145106000) at runtime/POSIX/./threadsync.c:189
+	#200168733 in logger_thread (=0) at logger.c:518
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145309088) at runtime/POSIX/./threadsync.c:189
+	#200137925 in get_cas_id () at items.c:122
+	#300139916 in do_item_link (=155024388, =2129698688) at items.c:538
+	#400138651 in do_store_item (=155024388, =2, =43971072, =2129698688) at memcached.c:2945
+	#500138168 in store_item (=155024388, =2, =43971072) at thread.c:639
+	#600133514 in complete_nread_ascii (=43971072) at memcached.c:1200
+	#700127724 in complete_nread (=43971072) at memcached.c:2700
+	#800125688 in drive_machine (=43971072) at memcached.c:5566
+	#900156278 in event_handler (=6, =2, =43971072) at memcached.c:5825
+	#1000065845 in event_persist_closure (=147684480, =43971104) at event.c:1645
+	#1100064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1200064701 in event_process_active (=147684480) at event.c:1805
+	#1300063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1400167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   store i8 %434, i8* %436, align 8, !dbg !13839, !tbaa !13434 (op #0=2, op #1=155025580)
+	#000131179 in lru_pull_tail (=2, =0, =955, =2, =0, =0) at items.c:1300
+	#100166161 in lru_maintainer_juggle (=2) at items.c:1469
+	#200165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =455529168, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =44149760, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =44149760, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =44149760, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =44149760, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =12) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #16779301745861054515
+
+(21) ID #18367871180502644955 with 17955 occurences:
+Type of modification: write (unpersisted)
+File: assoc.c
+Line: 167
+assembly.ll line: 140006
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 3
+Thread 1, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1322)
+	#000007240 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:190
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=147357024) at runtime/POSIX/./threadsync.c:229
+	#200168843 in logger_thread_read (=147357008, =146870368) at logger.c:347
+	#300168745 in logger_thread (=0) at logger.c:521
+Thread 3, Process 0, enabled
+		PC:   store %struct._stritem* %44, %struct._stritem** %46, align 8, !dbg !13441, !tbaa !13398 (op #0=0, op #1=155025460)
+	#000140006 in assoc_insert (=155025444, =1707756238) at assoc.c:167
+	#100139931 in do_item_link (=155025444, =1707756238) at items.c:539
+	#200138651 in do_store_item (=155025444, =2, =43960320, =1707756238) at memcached.c:2945
+	#300138168 in store_item (=155025444, =2, =43960320) at thread.c:639
+	#400133514 in complete_nread_ascii (=43960320) at memcached.c:1200
+	#500127724 in complete_nread (=43960320) at memcached.c:2700
+	#600125688 in drive_machine (=43960320) at memcached.c:5566
+	#700156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#800065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#900064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1000064701 in event_process_active (=147684480) at event.c:1805
+	#1100063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1200167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145113568) at runtime/POSIX/./threadsync.c:229
+	#200122329 in fill_item_stats_automove (=147472408) at items.c:723
+	#300121850 in slab_automove_init (=110344544) at slab_automove.c:48
+	#400165563 in lru_maintainer_thread (=0) at items.c:1638
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =263892368, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =96773888, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =96773888, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =96773888, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =96773888, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =1) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #10055588298816189692
+
+(22) ID #7767963871302899135 with 591 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 1176
+assembly.ll line: 130705
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 6
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=1)
+	#000176885 in __thread_preempt (=1) at runtime/POSIX/./multiprocess.h:177
+	#100176855 in _yield_sleep (=0, =54686) at runtime/POSIX/./misc.c:59
+	#200176899 in usleep (=54686) at runtime/POSIX/./misc.c:68
+	#300168729 in logger_thread (=0) at logger.c:515
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145111712) at runtime/POSIX/./threadsync.c:229
+	#200123713 in STATS_UNLOCK () at thread.c:651
+	#300139901 in do_item_link (=155024388, =2129698688) at items.c:535
+	#400138651 in do_store_item (=155024388, =2, =43971072, =2129698688) at memcached.c:2945
+	#500138168 in store_item (=155024388, =2, =43971072) at thread.c:639
+	#600133514 in complete_nread_ascii (=43971072) at memcached.c:1200
+	#700127724 in complete_nread (=43971072) at memcached.c:2700
+	#800125688 in drive_machine (=43971072) at memcached.c:5566
+	#900156278 in event_handler (=6, =2, =43971072) at memcached.c:5825
+	#1000065845 in event_persist_closure (=147684480, =43971104) at event.c:1645
+	#1100064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1200064701 in event_process_active (=147684480) at event.c:1805
+	#1300063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1400167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   store i16 %118, i16* %116, align 4, !dbg !13518, !tbaa !13520 (op #0=2, op #1=155025576)
+	#000130705 in lru_pull_tail (=2, =0, =955, =2, =0, =0) at items.c:1176
+	#100166161 in lru_maintainer_juggle (=2) at items.c:1469
+	#200165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =455529168, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =44149760, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =44149760, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =44149760, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =44149760, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =12) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #12815746056867821011
+	ID #3817639673906879476
+
+(23) ID #16779301745861054515 with 52524 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 423
+assembly.ll line: 132811
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 6
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=250529888) at runtime/POSIX/./threadsync.c:229
+	#200168843 in logger_thread_read (=250529872, =146870368) at logger.c:347
+	#300168745 in logger_thread (=0) at logger.c:521
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=142270608) at runtime/POSIX/./threadsync.c:189
+	#200127051 in try_read_network (=43971072) at memcached.c:5176
+	#300125577 in drive_machine (=43971072) at memcached.c:5509
+	#400156278 in event_handler (=6, =2, =43971072) at memcached.c:5825
+	#500065845 in event_persist_closure (=147684480, =43971104) at event.c:1645
+	#600064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#700064701 in event_process_active (=147684480) at event.c:1805
+	#800063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#900167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   store %struct._stritem* %28, %struct._stritem** %32, align 8, !dbg !13432, !tbaa !13399 (op #0=155025444, op #1=155025548)
+	#000132811 in do_item_link_q (=155025444) at items.c:423
+	#100132758 in item_link_q (=155025444) at items.c:442
+	#200131189 in lru_pull_tail (=2, =0, =955, =2, =0, =0) at items.c:1302
+	#300166161 in lru_maintainer_juggle (=2) at items.c:1469
+	#400165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =455528752, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =56928512, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =13) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #3007475314521651563
+
+(24) ID #1350639642705948956 with 2363228 occurences:
+Type of modification: write (unpersisted)
+File: slabs.c
+Line: 540
+assembly.ll line: 123328
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 3
+Thread 1, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1322)
+	#000007240 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:190
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=250529888) at runtime/POSIX/./threadsync.c:229
+	#200168843 in logger_thread_read (=250529872, =146870368) at logger.c:347
+	#300168745 in logger_thread (=0) at logger.c:521
+Thread 3, Process 0, enabled
+		PC:   store i8 4, i8* %33, align 1, !dbg !13441, !tbaa !13434 (op #0=<global const>, op #1=153977163)
+	#000123328 in do_slabs_free (=153977124, =0, =2) at slabs.c:540
+	#100131908 in split_slab_page_into_freelist (=153977124, =2) at slabs.c:262
+	#200131693 in do_slabs_newslab_from_pmem (=2) at slabs.c:344
+	#300131489 in do_slabs_newslab (=2) at slabs.c:376
+	#400131367 in do_slabs_alloc (=73, =2, =147229528, =0) at slabs.c:406
+	#500131251 in slabs_alloc (=73, =2, =147229528, =0) at slabs.c:747
+	#600130394 in do_item_alloc_pull (=73, =2) at items.c:204
+	#700137479 in do_item_alloc (=257759236, =5, =1, =0, =7) at items.c:312
+	#800137329 in item_alloc (=257759236, =5, =1, =0, =7) at thread.c:538
+	#900150019 in process_update_command (=43960320, =96489856, =6, =2, =false) at memcached.c:4081
+	#1000147885 in process_command (=43960320, =257759232) at memcached.c:4678
+	#1100127623 in try_read_command (=43960320) at memcached.c:5077
+	#1200125607 in drive_machine (=43960320) at memcached.c:5528
+	#1300156278 in event_handler (=6, =2, =43960320) at memcached.c:5825
+	#1400065845 in event_persist_closure (=147684480, =43960352) at event.c:1645
+	#1500064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1600064701 in event_process_active (=147684480) at event.c:1805
+	#1700063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1800167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=145113288) at runtime/POSIX/./threadsync.c:189
+	#200122317 in fill_item_stats_automove (=147472408) at items.c:721
+	#300121850 in slab_automove_init (=110344544) at slab_automove.c:48
+	#400165563 in lru_maintainer_thread (=0) at items.c:1638
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =258412752, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =71714176, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =71714176, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =71714176, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =71714176, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =0) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+May be masked by:
+	ID #8814757084677657023
+
+(25) ID #1524351447874958568 with 18234 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 421
+assembly.ll line: 132793
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 6
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=250529888) at runtime/POSIX/./threadsync.c:229
+	#200168843 in logger_thread_read (=250529872, =146870368) at logger.c:347
+	#300168745 in logger_thread (=0) at logger.c:521
+Thread 3, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197120 in pthread_mutex_lock (=142270608) at runtime/POSIX/./threadsync.c:189
+	#200127051 in try_read_network (=43971072) at memcached.c:5176
+	#300125577 in drive_machine (=43971072) at memcached.c:5509
+	#400156278 in event_handler (=6, =2, =43971072) at memcached.c:5825
+	#500065845 in event_persist_closure (=147684480, =43971104) at event.c:1645
+	#600064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#700064701 in event_process_active (=147684480) at event.c:1805
+	#800063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#900167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   store %struct._stritem* null, %struct._stritem** %18, align 8, !dbg !13418, !tbaa !13399 (op #0=<global const>, op #1=155025452)
+	#000132793 in do_item_link_q (=155025444) at items.c:421
+	#100132758 in item_link_q (=155025444) at items.c:442
+	#200131189 in lru_pull_tail (=2, =0, =955, =2, =0, =0) at items.c:1302
+	#300166161 in lru_maintainer_juggle (=2) at items.c:1469
+	#400165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =455528752, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =56928512, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =13) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+<not masked by anything>
+
+(26) ID #10055588298816189692 with 349 occurences:
+Type of modification: write (unpersisted)
+File: items.c
+Line: 421
+assembly.ll line: 132793
+ allocated at _block_init_pmem():  %24 = call i8* @klee_pmem_alloc_pmem(i64 %20, i8* %21, i1 zeroext %23, i8* null), !dbg !13424
+Stack: 
+Current Thread: 3
+Thread 1, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000007241 in __thread_sleep (=1322) at runtime/POSIX/./multiprocess.h:195
+	#100006932 in select (=6, =147230088, =147230176, =0, =146570752) at runtime/POSIX/./fd.c:808
+	#200033497 in select_dispatch (=109828544, =146570752) at select.c:172
+	#300063873 in event_base_loop (=109828544, =0) at event.c:2025
+	#400159457 in __klee_posix_wrapped_main (=10, =146833952) at memcached.c:7974
+	#500009873 in __klee_posix_ctor_stub_insert_point (=10, =146833952, =59371200) at runtime/POSIX/./klee_init_env.c:491
+	#600009893 in __user_main (=15, =59371072, =59371200) at runtime/POSIX/./klee_init_env.c:499
+	#700003979 in __uClibc_main (=56932488, =15, =59371072, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#800004146 in main (=15, =59371072)
+Thread 2, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197305 in pthread_mutex_unlock (=145111712) at runtime/POSIX/./threadsync.c:229
+	#200123713 in STATS_UNLOCK () at thread.c:651
+	#300169410 in logger_thread_sum_stats (=146870368) at logger.c:497
+	#400168794 in logger_thread (=0) at logger.c:538
+Thread 3, Process 0, enabled
+		PC:   store %struct._stritem* null, %struct._stritem** %18, align 8, !dbg !13418, !tbaa !13399 (op #0=<global const>, op #1=155024300)
+	#000132793 in do_item_link_q (=155024292) at items.c:421
+	#100132758 in item_link_q (=155024292) at items.c:442
+	#200139933 in do_item_link (=155024292, =2988974472) at items.c:540
+	#300138651 in do_store_item (=155024292, =2, =43971072, =2988974472) at memcached.c:2945
+	#400138168 in store_item (=155024292, =2, =43971072) at thread.c:639
+	#500133514 in complete_nread_ascii (=43971072) at memcached.c:1200
+	#600127724 in complete_nread (=43971072) at memcached.c:2700
+	#700125688 in drive_machine (=43971072) at memcached.c:5566
+	#800156278 in event_handler (=6, =2, =43971072) at memcached.c:5825
+	#900065845 in event_persist_closure (=147684480, =43971104) at event.c:1645
+	#1000064979 in event_process_active_single_queue (=147684480, =146569936, =2147483647, =0) at event.c:1704
+	#1100064701 in event_process_active (=147684480) at event.c:1805
+	#1200063967 in event_base_loop (=147684480, =0) at event.c:2047
+	#1300167435 in worker_libevent (=142270464) at thread.c:376
+Thread 4, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1307) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178637120, =178494080) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145310848, =145506736) at runtime/POSIX/./threadsync.c:315
+	#300167054 in assoc_maintenance_thread (=0) at assoc.c:262
+Thread 5, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1301) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178135520, =178100896) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145428176, =145397760) at runtime/POSIX/./threadsync.c:315
+	#300152779 in item_crawler_thread (=0) at crawler.c:364
+Thread 6, Process 0, enabled
+		PC:   call void @klee_thread_preempt(i32 %3), !dbg !13395 (op #0=<global const>, op #1=0)
+	#000197248 in __thread_preempt.1174 (=0) at runtime/POSIX/./multiprocess.h:177
+	#100197282 in pthread_mutex_trylock (=147648640) at runtime/POSIX/./threadsync.c:200
+	#200132075 in item_trylock (=1357352656) at thread.c:104
+	#300130691 in lru_pull_tail (=2, =128, =955, =2, =0, =0) at items.c:1173
+	#400166187 in lru_maintainer_juggle (=2) at items.c:1474
+	#500165667 in lru_maintainer_thread (=0) at items.c:1667
+Thread 7, Process 0, disabled
+		PC:   ret void, !dbg !13398 ()
+	#000197259 in __thread_sleep.1175 (=1311) at runtime/POSIX/./multiprocess.h:195
+	#100197626 in _atomic_cond_wait (=178585344, =178583296) at runtime/POSIX/./threadsync.c:300
+	#200197554 in pthread_cond_wait (=145304480, =145305440) at runtime/POSIX/./threadsync.c:315
+	#300164211 in slab_rebalance_thread (=0) at slabs.c:1335
+Thread 8, Process 0, disabled
+		PC:   call void @klee_thread_sleep(i64 %3), !dbg !13397 (op #0=<global const>, op #1=1320)
+	#000195554 in __thread_sleep.1121 (=1320) at runtime/POSIX/./multiprocess.h:190
+	#100195331 in _stream_readv (=252823232, =455528752, =1) at runtime/POSIX/./buffers.c:163
+	#200195869 in _stream_read (=252823232, =56928512, =127) at runtime/POSIX/./buffers.c:281
+	#300180195 in __read_stream_socket_raw (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:497
+	#400179930 in __read_stream_socket (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:563
+	#500179843 in _read_socket (=147561696, =56928512, =127) at runtime/POSIX/./sockets.c:568
+	#600198801 in do_write (=145651392, =13) at runtime/POSIX/socksim/memcached.c:135
+	#700198694 in memcached_rand_client_func (=145651392) at runtime/POSIX/socksim/memcached.c:171
+	#800190025 in connect_and_run_client (=145651392) at runtime/POSIX/socksim/client.c:66
+
+<not masking anything>
+<not masked by anything>

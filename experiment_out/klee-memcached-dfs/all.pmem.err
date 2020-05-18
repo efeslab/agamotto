@@ -1,0 +1,11 @@
+Persistent Memory Bugs:
+	Number of bugs: 0
+		Number of unpersisted write bugs (correctness): 0
+		Number of extra flush bugs (performance): 0
+		Number of flushes to untouched memory (performance): 0
+		Number of fences with nothing to commit (performance): 0
+	Overall bug occurences: 0
+		Number of unpersisted write occurences (correctness): 0
+		Number of extra flush occurences (performance): 0
+		Number of untouched memory flush occurences (performance): 0
+		Number of occurence of fences with nothing to commit (performance): 0
