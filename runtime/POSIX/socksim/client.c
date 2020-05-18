@@ -11,7 +11,7 @@
 
 void simulated_client_handler_init(void *self) {
   simulated_client_handler_t *self_hdl = (simulated_client_handler_t *)self;
-  self_hdl->client_sock = _create_socket(AF_INET, SOCK_STREAM, 0);
+  self_hdl->client_sock = NULL;
   self_hdl->server_sock = NULL;
 }
 
@@ -42,9 +42,8 @@ void simulated_client_handler_post_bind(void *self, socket_t *sock,
   posix_debug_msg("simulated_client bind handler catch the server socket\n");
 }
 
-static void *connect_and_run_client(void *self) {
-  posix_debug_msg("Starting new simulated_client thread\n");
-  simulated_client_handler_t *self_hdl = (simulated_client_handler_t *)self;
+static void _client_connect(simulated_client_handler_t *self_hdl) {
+  self_hdl->client_sock = _create_socket(AF_INET, SOCK_STREAM, 0);
 
   struct sockaddr_in server_addr;
   server_addr.sin_family = AF_INET;
@@ -61,11 +60,22 @@ static void *connect_and_run_client(void *self) {
                         sizeof(server_addr));
   assert(ret == 0 && "simulated_client listen handler fails to connect to "
                       "the server socket");
+}
 
+static void _client_close(simulated_client_handler_t *self_hdl) {
+  _close_socket(self_hdl->client_sock);
+  self_hdl->client_sock = NULL;
+}
+
+static void *connect_and_run_client(void *self) {
+  posix_debug_msg("Starting new simulated_client thread\n");
+  simulated_client_handler_t *self_hdl = (simulated_client_handler_t *)self;
+
+  _client_connect(self_hdl);
   // Call the client_func to actually do the client's work
   self_hdl->client_func(self);
+  _client_close(self_hdl);
 
-  _close_socket(self_hdl->client_sock);
   return NULL;
 }
 
@@ -85,6 +95,11 @@ void simulated_client_handler_post_listen(void *self, socket_t *sock,
   }
 
   (void)backlog;
+}
+
+void simulated_client_reconnect(simulated_client_handler_t *self_hdl) {
+  _client_close(self_hdl);
+  _client_connect(self_hdl);
 }
 
 /**

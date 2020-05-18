@@ -48,6 +48,9 @@ typedef struct {
   .client_func = _func                                     \
 }
 
+// Close the open connection and open a new one.
+void simulated_client_reconnect(simulated_client_handler_t *self_hdl);
+
 /**
  * Creates a new simulated client handler that connects to `server_port`,
  * sends the payload `text` (length `len`), then closes.
