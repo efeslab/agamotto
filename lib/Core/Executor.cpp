@@ -1356,6 +1356,7 @@ void Executor::stepInstruction(ExecutionState &state) {
 
   ++stats::instructions;
   ++state.steppedInstructions;
+  ++state.stateTime;
   state.prevPC() = state.pc();
   ++state.pc();
 

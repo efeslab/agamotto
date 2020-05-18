@@ -29,6 +29,7 @@
 #include "RootCause.h"
 
 #include <cassert>
+#include <ctime>
 #include <iomanip>
 #include <map>
 #include <set>
@@ -56,7 +57,7 @@ void ExecutionState::setupMain(KFunction *kf) {
 }
 
 void ExecutionState::setupTime() {
-  stateTime = 1284138206L * 1000000L; // Yeah, ugly, but what else? :)
+  stateTime = (long long)std::time(0) * 1000000L;
 }
 
 ExecutionState::ExecutionState(Executor *executor, KFunction *kf) :
