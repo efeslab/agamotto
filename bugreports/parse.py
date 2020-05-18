@@ -11,17 +11,76 @@ pd.set_option('display.max_rows', 500)
 CORRECTNESS = 'write (unpersisted)'
 
 FALSE_POS = {
-    'false positive 1 [libpmemobj] (flags rebuilt for unlinked items)': [
+    'benign bug 1 [libpmemobj] (flags rebuilt for unlinked items)': [
         'do_slabs_free at slabs.c:540',
+    ],
+
+    'test case': [
+        '__klee_posix_wrapped_main at nvmbugs/000_pmdk_btree_map/driver.c:74'
+    ],
+
+    'pwrite issues': [
+        'pwrite at runtime/POSIX/./fd.c:426'
     ]
 }
 
 # Bug name => list of locations
 DIAGNOSED_NVMDIRECT = {
-    'universal correctness 1 (unflushed link)': [
+
+    'universal correctness 1 (unflushed state)': [
+        'nvm_txend at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:874',
+    ],
+
+    'universal correctness 2 (incomplete flush)': [
+        'nvm_freelist_link at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:2939'
+    ],
+
+    'universal correctness 3 (unflushed link for undo)': [
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5384',
+    ],
+
+    'universal performance 2 (extra flush in TX)': [
+        'nvm_undo at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:1764',
+    ],
+
+    'universal performance 3 (extra flush/fence at txend)': [
+        'nvm_txend at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:877'
+    ],
+
+    'universal performance 4 (unnecessary flush at commit)': [
+        'nvm_commit at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2755',
+    ],
+
+    'universal performance 5 (unnecessary region flush)': [
+        'nvm_create_region at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:616'
+    ],
+
+    'universal performance 6 (unnecessary heap flush)': [
+        # Seems they thought this would clear it from the CPU, but in pmdk could be hinted to stay
+        'nvm_create_baseheap at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:367'
+    ],
+
+    'universal performance 7 (unnecessary full block flush on txend)': [
+        'nvm_free_callback at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:1967'
+    ],
+
+    'transient use 1 (unflushed link)': [
         'nvm_txend at nvm_transaction.c:872',
         'nvm_txend at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:884',
-    ]
+        'nvm_txend at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:889'
+    ],
+
+    'transient use 2 (dead list)': [
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5351',
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5333',
+    ],
+
+    'transient use 3 (Transaction transients)': [
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5325',
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5301',
+        'nvm_commit at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2836'
+    ],
+
 }
 
 DIAGNOSED_MEMCACHED = {
@@ -151,8 +210,10 @@ DIAGNOSED_PMDK = {
     'universal correctness 1 [rbtree] (dst not backed up)': [
         'tree_map_insert_bst at nvmbugs/003_pmdk_rbtree_map/rbtree_map_buggy.c:174'
     ],
+}
 
-    # Sys on PMDK: recipe
+DIAGNOSED_RECIPE = {
+     # Sys on PMDK: recipe
     'universal performance 1 [recipe] (unnecessary mfence)': [
         'mfence at src/clht_lb_res.c:139',
     ],
@@ -209,31 +270,74 @@ def remove_diagnosed(df, diagnosed):
                 to_remove += [i]
     return df.drop(index=to_remove)
 
+def get_diagnosed(series, diagnosed):
+    for bug, loc_list in diagnosed.items():
+        for x in series:
+            if x in loc_list:
+                return x
+    
+    raise Exception('Not yet diagnosed!')
+
+def uniquify(df, diagnosed):
+    unique_bugs = []
+    for k, v in diagnosed.items():
+        unique_bugs += v
+
+    sdf = df.sort_values('Timestamp').reset_index().drop('index', axis=1)
+    uniqueNum = 0
+    data = []
+    for i in range(0, len(sdf)):
+        bug = get_diagnosed(sdf.loc[i], diagnosed)
+        if bug in unique_bugs:
+            uniqueNum += 1
+            unique_bugs.remove(bug)
+        data += [uniqueNum]
+    sdf['UniqueBugsAtTime'] = data
+    embed()
+
+    return sdf
+
 def main():
     parser = ArgumentParser()
     parser.add_argument('system', type=str, help='which system',
                         choices=['memcached', 'pmdk', 'recipe', 'nvm-direct'])
     parser.add_argument('file_path', type=Path, help='CSV file to open')
+    parser.add_argument('--output-file', '-o', required=True, 
+                        type=Path, help='Where to output unique-d CSV')
 
     args = parser.parse_args()
     assert(args.file_path.exists())
+    assert(args.file_path != args.output_file)
 
     df = pd.read_csv(args.file_path)
 
     df = remove_diagnosed(df, FALSE_POS)
 
     # df = remove_known_volatile_usages(df)
-    if (args.system == 'memcached'):
-        df = remove_diagnosed(df, DIAGNOSED_MEMCACHED)
-    elif (args.system == 'pmdk' or args.system == 'recipe'):
+    # if (args.system == 'memcached'):
+    #     df = remove_diagnosed(df, DIAGNOSED_MEMCACHED)
+    # elif (args.system == 'pmdk' or args.system == 'recipe'):
+    #     df = remove_diagnosed(df, DIAGNOSED_PMDK)
+    # elif args.system == 'nvm-direct':
+    #     df = remove_diagnosed(df, DIAGNOSED_NVMDIRECT)
+    # df = df.reset_index().drop('index', axis=1)
+    # embed()
+    # return
+
+    # cdf = df[df['Type'] == CORRECTNESS]
+    # pdf = df[df['Type'] != CORRECTNESS]
+
+    if args.system == 'memcached':
+        df = uniquify(df, DIAGNOSED_MEMCACHED)
+    elif args.system == 'pmdk': 
+        df = uniquify(df, DIAGNOSED_PMDK)
+    elif args.system == 'recipe':
         df = remove_diagnosed(df, DIAGNOSED_PMDK)
+        df = uniquify(df, DIAGNOSED_RECIPE)
     elif args.system == 'nvm-direct':
-        df = remove_diagnosed(df, DIAGNOSED_NVMDIRECT)
+        df = uniquify(df, DIAGNOSED_NVMDIRECT)
 
-    cdf = df[df['Type'] == CORRECTNESS]
-    pdf = df[df['Type'] != CORRECTNESS]
-
-    embed() 
+    df.to_csv(args.output_file)
 
     print(f'Total diagnosed: {len(DIAGNOSED_MEMCACHED) + len(DIAGNOSED_PMDK) + len(DIAGNOSED_NVMDIRECT)}')
 
