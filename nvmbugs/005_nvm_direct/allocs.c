@@ -7,12 +7,12 @@
 #include <setjmp.h>
 #include <string.h>
 #include <pthread.h>
-#include "lib/nvm.h"
-#include "lib/nvm_region0.h"
-#include "lib/nvm_heap0.h"
+#include "nvm.h"
+#include "nvm_region0.h"
+#include "nvm_heap0.h"
 
 /* the number of pointers in the application managed extent of pointers */
-#define ptrs 2
+#define ptrs 16
 #include "types.h"
 
 /* The virtual address to attach the main region at */
@@ -28,7 +28,7 @@ const size_t vspace = 8 * 1024 * 1024;
 const size_t pspace = 2 * 1024 * 1024;
 
 /* the physical size of the application managed extent of pointers */
-const size_t ptrspace = 16 * 1024;
+const size_t ptrspace = 128 * 1024;
 
 /* the offset into the region for the application managed extent of pointers */
 const size_t xoff = 4 * 1024 * 1024;
@@ -48,10 +48,18 @@ int
 main(int argc, char** argv)
 {
     const char *fname = "/tmp/nvmd";
-    if (argc == 2)
-        fname = argv[1];
+    if (argc != 3) {
+      printf("usage: %s <fname> <allocs>\n", argv[0]);
+      exit(1);
+    }
+    fname = argv[1];
+    int N = atoi(argv[2]);
+    if (N < 0 || N > 10000) {
+      printf("allocs must be in range [0, 10000]\n");
+      exit(1);
+    }
 
-    printf("NVM Device: \'%s\'\n", fname);
+    printf("NVM Device: \'%s\', allocs: %d\n", fname, N);
     /* We get here if we are the child process or there are no children.
      * The first thing is to initialize the NVM library for the main thread */
     nvm_thread_init();
@@ -226,10 +234,54 @@ main(int argc, char** argv)
         exit(1);
     }
 
-    /*
-     * Start up the worker threads and wait for them to complete
-     */
     report(desc, "Begin Run");
+    srand(69); // we like determinism for our runs
+    for (int i = 0; i < N; i++) {
+      printf("alloc %d\n", i);
+      int slot = rand() % ptrs;
+      size_t size = 1 + rand() % 16;
+      nvm_txbegin(desc);
+      nvm_xlock(&rs->mtx[slot]);
+
+      branch_srp *ptr = branchArray_get(&rs->ptr);
+      branch *oldp = branch_get(&ptr[slot]);
+      nvm_verify(oldp, shapeof(branch));
+      if (oldp)
+      {
+        if (oldp->version != 3)
+          nvms_assert_fail("bad version - not upgraded");
+        nvm_free(oldp);
+        branch_txset(&ptr[slot], 0);
+      }
+      const nvm_type *shape = shapeof(branch);
+      int v = 3;
+      switch (size % 16)
+      {
+        case 1:
+          shape = shapeof(branch_v1);
+          printf("\tdouble upgrade will be needed\n");
+          v=1;
+          break;
+        case 2:
+          shape = shapeof(branch_v2);
+          printf("\tsingle upgrade will be needed\n");
+          v=2;
+          break;
+        default:
+          break;
+      }
+      branch *leaf = nvm_alloc(heap, shape, size);
+      if (leaf)
+      {
+        size_t newsz = size * sizeof(uint64_t) + sizeof(branch);
+        if (v==3)
+          NVM_NTSTORE(leaf->version, v);
+        NVM_NTSTORE(leaf->data[0], newsz);
+        branch_txset(&ptr[slot], leaf);
+      }
+      nvm_txend();
+
+    }
 
     printf("Cleaning up by deleting heap and app extent\n");
 
