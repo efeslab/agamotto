@@ -86,6 +86,10 @@
 #include <vector>
 #include <cpuid.h>
 
+#ifdef SUPPORT_CRC32
+#include <nmmintrin.h>
+#endif
+
 using namespace llvm;
 using namespace klee;
 
@@ -1416,6 +1420,34 @@ void Executor::executeCall(ExecutionState &state,
       bindLocal(ki, state, ConstantExpr::alloc(Res.bitcastToAPInt()));
       break;
     }
+#ifdef SUPPORT_CRC32
+    case Intrinsic::x86_sse42_crc32_32_16:
+    case Intrinsic::x86_sse42_crc32_32_32:
+    case Intrinsic::x86_sse42_crc32_32_8:
+    case Intrinsic::x86_sse42_crc32_64_64: {
+      ref<ConstantExpr> crc =
+          toConstant(state, eval(ki, 0, state).value, "crc32");
+      ref<ConstantExpr> v =
+          toConstant(state, eval(ki, 1, state).value, "crc32");
+      uint64_t result;
+      if (v->getWidth() == Expr::Int8) {
+        result = _mm_crc32_u8(crc->getZExtValue(32), v->getZExtValue());
+      } else if (v->getWidth() == Expr::Int16) {
+        result = _mm_crc32_u16(crc->getZExtValue(32), v->getZExtValue());
+      } else if (v->getWidth() == Expr::Int32) {
+        result = _mm_crc32_u32(crc->getZExtValue(32), v->getZExtValue());
+      } else if (v->getWidth() == Expr::Int64) {
+        result = _mm_crc32_u64(crc->getZExtValue(64), v->getZExtValue());
+      } else {
+        assert(false && "bad width for crc32");
+      }
+      Type *t = ki->inst->getType();
+      Expr::Width outWidth = getWidthForLLVMType(t);
+      bindLocal(ki, state, ConstantExpr::alloc(result, outWidth));
+      break;
+    }
+#endif
+
     // va_arg is handled by caller and intrinsic lowering, see comment for
     // ExecutionState::varargs
     case Intrinsic::vastart:  {
