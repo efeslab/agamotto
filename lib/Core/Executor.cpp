@@ -1468,10 +1468,7 @@ void Executor::executeCall(ExecutionState &state,
 
       // Non-volatile memory intrinsics
     case Intrinsic::x86_sse2_clflush: {
-      llvm::Value *v = ki->inst->getOperand(0);
-      v = v->stripPointerCasts();
-      KInstruction *kv = kmodule->getKInstruction(dyn_cast<Instruction>(v));
-      ref<Expr> address = getDestCell(state, kv).value;
+      ref<Expr> address = arguments[0];
       executePersistentMemoryFlush(state, address);
       executePersistentMemoryFence(state);
       break;
@@ -1480,10 +1477,7 @@ void Executor::executeCall(ExecutionState &state,
       klee_warning_once(
         0, "For our purposes, clflushopt ~ clwb, so implementing as fallthrough");
     case Intrinsic::x86_clwb: {
-      llvm::Value *v = ki->inst->getOperand(0);
-      v = v->stripPointerCasts();
-      KInstruction *kv = kmodule->getKInstruction(dyn_cast<Instruction>(v));
-      ref<Expr> address = getDestCell(state, kv).value;
+      ref<Expr> address = arguments[0];
       executePersistentMemoryFlush(state, address);
       break;
     }

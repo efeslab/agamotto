@@ -177,8 +177,10 @@ ssize_t _write_file(file_t *file, const void *buf, size_t count, off64_t offset)
 
     int res;
 
-    posix_debug_msg("Writing concretely at (%d) %d bytes...\n",
-                    file->concrete_fd, count);
+    if (file->concrete_fd != 1 && file->concrete_fd != 2) {
+      posix_debug_msg("Writing concretely at (%d) %d bytes...\n",
+                      file->concrete_fd, count);
+    }
 
     if (file->concrete_fd == 1 || file->concrete_fd == 2) {
       assert(offset == -1 && "Should never write stdout/stderr with offset");
