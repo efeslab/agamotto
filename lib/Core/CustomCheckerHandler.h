@@ -18,6 +18,7 @@
 #include <vector>
 #include <string>
 #include "AddressSpace.h"
+#include "RootCause.h"
 
 namespace llvm {
   class Function;
@@ -45,6 +46,8 @@ namespace klee {
     ref<Expr> getOpValue(ExecutionState &state, int opNum);
 
     ObjectPair &&resolveAddress(ExecutionState &state, ref<Expr> addr);
+
+    void reportError(ExecutionState &state, RootCauseReason r);
 
   public:
     CustomChecker(CustomCheckerHandler *_handler, Executor &_executor);

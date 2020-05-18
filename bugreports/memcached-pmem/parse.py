@@ -8,49 +8,86 @@ import pandas as pd
 
 pd.set_option('display.max_rows', 500)
 
-KNOWN_VM_USAGES = {
-    'StackFrame0_Function': [
-        'do_slabs_free', 'assoc_insert', 'do_item_link_q', 'do_slabs_alloc'],
-    'StackFrame0': ['do_item_link at items.c:541'],
-}
-
 CORRECTNESS = 'write (unpersisted)'
 
-DIAGNOSED = [
-    'do_slabs_newslab_from_pmem at slabs.c:343',
-    'do_item_alloc at items.c:374',
-    'do_item_link at items.c:516',
-    'do_item_link at items.c:520',
-    'do_item_link at items.c:522',
-    'drive_machine at memcached.c:5594',
-]
+FALSE_POS = {
+    'false positive 1 (flags rebuilt for unlinked items)': [
+        'do_slabs_free at slabs.c:540',
+    ]
+}
 
-def remove_known_volatile_usages(df):
-    for stack_fn, fn_list in KNOWN_VM_USAGES.items():
-        for fn_name in fn_list:
-            df = df[df[stack_fn] != fn_name]
-    return df
+# Bug name => list of locations
+DIAGNOSED_MEMCACHED = {
+    'transient use 1 (item free list)': [
+        'do_item_crawl_q at items.c:1880',
+        'do_item_crawl_q at items.c:1883',
+        'do_item_linktail_q at items.c:1808',
+        'do_item_link_q at items.c:421',
+        'do_item_link_q at items.c:423',
+        'do_slabs_free at slabs.c:550',
+        'do_item_crawl_q at items.c:1875',
+        'do_slabs_free at slabs.c:548',
+        'do_slabs_alloc at slabs.c:413',
+        'do_item_crawl_q at items.c:1871',
+        'do_item_crawl_q at items.c:1872',
+        'do_item_unlink_q at items.c:470',
+    ],
+    'transient use 2 (refcount)': [
+        'do_item_remove at items.c:591',
+        'item_crawler_thread at crawler.c:404',
+        'lru_pull_tail at items.c:1176',
+        'do_item_link at items.c:541',
+    ],
+    'transient use 3 (assoc hash in item)': [
+        'assoc_insert at assoc.c:167',
+    ],
+    'transient use 4 (slabs_clsid)': [
+        'lru_pull_tail at items.c:1300',
+    ],
+    'universal performance 1 (item double flush)' : [
+        'do_item_link at items.c:516',
+    ],
+    'universal correctness 1 (cas id)': [
+        'do_item_link at items.c:538',
+    ],
+}
 
-def remove_diagnosed(df): 
+DIAGNOSED_PMDK = {
+    'universal performance 1 (page sized flushes in init)': [
+        'pmemobj_create at obj.c:1423',
+    ],
+}
+
+def remove_diagnosed(df, diagnosed): 
+    dgn = []
+    for _, bug_list in diagnosed.items():
+        dgn += bug_list
+
     to_remove = []
     for i, row in df.iterrows():
         for x in row:
-            if x in DIAGNOSED:
+            if x in dgn:
                 to_remove += [i]
     return df.drop(index=to_remove)
 
 def main():
     parser = ArgumentParser()
+    parser.add_argument('system', type=str, help='which system',
+                        choices=['memcached', 'pmdk'])
     parser.add_argument('file_path', type=Path, help='CSV file to open')
 
     args = parser.parse_args()
     assert(args.file_path.exists())
 
     df = pd.read_csv(args.file_path)
-    df = remove_known_volatile_usages(df)
+    # df = remove_known_volatile_usages(df)
+    if (args.system == 'memcached'):
+        df = remove_diagnosed(df, DIAGNOSED_MEMCACHED)
+    elif (args.system == 'pmdk'):
+        df = remove_diagnosed(df, DIAGNOSED_PMDK)
 
-    cdf = df[df['Type'] == CORRECTNESS]
-    pdf = df[df['Type'] != CORRECTNESS]
+    # cdf = df[df['Type'] == CORRECTNESS]
+    # pdf = df[df['Type'] != CORRECTNESS]
 
     embed() 
 

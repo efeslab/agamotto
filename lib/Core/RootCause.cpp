@@ -133,6 +133,10 @@ const char *RootCauseLocation::reasonString(void) const {
       return "flush (never modified)";
     case PM_UnnecessaryFence:
       return "fence (unnecessary)";
+    case PM_SemanticCorrectness:
+      return "semantic correctness!";
+    case PM_SemanticPerformance:
+      return "semantic performance!";
     default:
       klee_error("unsupported!");
       break;
@@ -255,7 +259,8 @@ void RootCauseManager::markAsBug(uint64_t id) {
 
   for (auto i : allIds) {
     stats::nvmBugsTotalOccurences++;
-    if (idToRoot[i]->rootCause.getReason() == PM_Unpersisted) {
+    if (idToRoot[i]->rootCause.getReason() == PM_Unpersisted ||
+        idToRoot[i]->rootCause.getReason() == PM_SemanticCorrectness) {
       stats::nvmBugsCrtOccurences++;
       if (!idToRoot[i]->occurences) {
         stats::nvmBugsTotalUniq++;
@@ -376,10 +381,12 @@ std::string RootCauseManager::getSummary(void) const {
   for (const auto &id : buggyIds) {
     switch(idToRoot.at(id)->rootCause.getReason()) {
       case PM_Unpersisted:
+      case PM_SemanticCorrectness:
         nUnpersisted++;
         nUnpersistedOc += idToRoot.at(id)->occurences;
         break;
       case PM_UnnecessaryFlush:
+      case PM_SemanticPerformance:
         nExtra++;
         nExtraOc += idToRoot.at(id)->occurences;
         break;

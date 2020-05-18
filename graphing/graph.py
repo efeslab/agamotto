@@ -9,15 +9,20 @@ import matplotlib.pyplot as plt
 def graph(dfs, xlabel, ylabel):
   ax = plt.gca()
   for df in dfs:
-    pivoted = df.pivot(index='x', columns='label', values='y')
-    pivoted.plot.line(ax=ax)
+    try:
+      df = df.drop_duplicates(subset='x')
+      pivoted = df.pivot(index='x', columns='label', values='y')
+      pivoted.plot.line(ax=ax)
+    except:
+      embed()
+      raise
   plt.xlabel(xlabel)
   plt.ylabel(ylabel)
   plt.legend(loc='best')
 
 def output(output_file):
   fig = plt.gcf()
-  fig.set_size_inches(7, 5)
+  fig.set_size_inches(3.5, 3.0)
   fig.tight_layout()
 
   plt.savefig(output_file, dpi=300, bbox_inches='tight', pad_inches=0.02)

@@ -100,6 +100,11 @@ ObjectPair &&CustomChecker::resolveAddress(ExecutionState &state, ref<Expr> addr
   return std::move(op);
 }
 
+void CustomChecker::reportError(ExecutionState &state, RootCauseReason r) {
+  uint64_t id = executor.rootCauseMgr->getRootCauseLocationID(state, nullptr, state.prevPC(), r);
+  executor.rootCauseMgr->markAsBug(id);
+}
+
 CustomChecker::CustomChecker(CustomCheckerHandler *_handler, Executor &_executor) 
   : handler(_handler), executor(_executor) {}
 
@@ -223,8 +228,9 @@ protected:
 
     // 5. Check for overlaps. If overlap, there's a bug!
     if (overlaps(state, new_range)) {
-      executor.terminateStateOnError(state, 
-          "libpmemobj: overlapping TX add!!", Executor::TerminateReason::PMem);
+      reportError(state, PM_SemanticPerformance);
+      // executor.terminateStateOnError(state, 
+      //     "libpmemobj: overlapping TX add!!", Executor::TerminateReason::PMem);
     }
 
     // 6. Add the new range.
@@ -407,17 +413,13 @@ class TxOnlyChecker final : public PmemObjTxAddChecker {
         
         if (overlaps(state, needed, new_range)) {
           if (in_tx) {
-            if (overlaps(state, added_ranges, new_range)) {
-              errs() << "all is well in added ranges!!\n";
-            } else {
-              klee_warning("not added TX update!! bug!!");
-              state.dumpStack();
+            if (!overlaps(state, added_ranges, new_range)) {
+              // Must be in a TX AND added to the TX!
+              reportError(state, PM_SemanticCorrectness);
             }
           } else {
-            // executor.terminateStateOnError(state, 
-            //   "non-TX update!!", Executor::TerminateReason::PMem);
-            klee_warning("non-TX update!! bug!!");
-            state.dumpStack();
+            // Must be modified in a TX!
+            reportError(state, PM_SemanticCorrectness);
           } 
         }
       }
