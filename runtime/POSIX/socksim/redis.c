@@ -220,6 +220,15 @@ static void redis_file_client_func(void *self) {
   simulated_client_handler_t *client = (simulated_client_handler_t *)self;
   /* redis_handler_t *redis = (redis_handler_t *)self; */
 
+  // (iangneal): XXX cheap symbex
+  // unsigned seed = 0;
+  // klee_make_symbolic(&seed, sizeof(seed), "rand seed");
+  // klee_assume(seed <= 10);
+  // srand(seed);
+  size_t nops = 0;
+  klee_make_symbolic(&nops, sizeof(nops), "nops");
+  klee_assume(nops <= 100);
+
   const char *fname = NULL;
   int minbatch = DEFAULT_BATCH_SIZE;
   int maxbatch = DEFAULT_BATCH_SIZE;
@@ -228,7 +237,11 @@ static void redis_file_client_func(void *self) {
   int ret = 0, i = 0, batchsz = minbatch;
   FILE *file = fopen(fname, "r");
   char req[2048];
+  size_t total_ops = 0;
   while (fgets(req, sizeof(req), file)) {
+    if (total_ops >= nops) break;
+    total_ops++;
+
     if (i == 0) {
       batchsz = randint(minbatch, maxbatch);
       printf("Sending a batch of %i requests\n", batchsz);

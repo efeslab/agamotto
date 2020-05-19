@@ -425,6 +425,7 @@ def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
         total += summary_info[system]['Total']
         correctness += summary_info[system]['Correctness']
         performance += summary_info[system]['Performance']
+
     
     from pprint import pprint
     pprint(dict(summary_info), indent=4)

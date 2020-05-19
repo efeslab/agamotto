@@ -236,11 +236,12 @@ main(int argc, char** argv)
     }
 
     report(desc, "Begin Run");
-    srand((unsigned)S); 
     for (int i = 0; i < N; i++) {
       printf("alloc %d\n", i);
+      srand((unsigned)S + (unsigned)i); 
       int slot = rand() % ptrs;
       size_t size = 1 + rand() % 16;
+      srand(time(NULL));
       nvm_txbegin(desc);
       nvm_xlock(&rs->mtx[slot]);
 
