@@ -244,9 +244,16 @@ static void redis_file_client_func(void *self) {
       break;
 
     if (++i % batchsz == 0) {
-      recv_redis_responses(client->client_sock, batchsz);
+      ret = recv_redis_responses(client->client_sock, batchsz);
+      if (ret != 0)
+        break;
       simulated_client_reconnect(client);
     }
+  }
+
+  // Receive any responses that weren't yet received.
+  if (i != 0 && ret == 0) {
+    ret = recv_redis_responses(client->client_sock, i);
   }
 
   ret || (ret = send_redis_req_noreply(client->client_sock, "SHUTDOWN"));
