@@ -258,6 +258,21 @@ DIAGNOSED_RECIPE = {
     ]
 }
 
+DIAGNOSED_REDIS = {
+    'universal correctness 1 [redis] (non-fence MOVNT)': [
+        'aofguard_init at src/aofguard.c:185',
+        'flushAppendOnlyFile at aof.c:335',
+    ],
+
+    'universal correctness 2 [redis] (unflushed string)': [
+        'sdsdupnvm at sds.c:212'
+    ],
+
+    'transient usage 1 (memkind allocator)': [
+        'jemk_mallocx_check at src/memkind_arena.c:473'
+    ],
+}
+
 def remove_diagnosed(df, diagnosed): 
     dgn = []
     for _, bug_list in diagnosed.items():
@@ -276,6 +291,7 @@ def get_diagnosed(series, diagnosed):
             if x in loc_list:
                 return x
     
+    # embed()
     raise Exception('Not yet diagnosed!')
 
 def uniquify(df, diagnosed):
@@ -344,14 +360,15 @@ def old_main():
 
     print(f'Total diagnosed: {len(DIAGNOSED_MEMCACHED) + len(DIAGNOSED_PMDK) + len(DIAGNOSED_NVMDIRECT)}')
 
-SYSTEMS = ['pmdk', 'recipe', 'memcached', 'nvm-direct']
+SYSTEMS = ['pmdk', 'recipe', 'memcached', 'nvm-direct', 'redis']
 FILTER_PMDK = ['recipe']
 SEARCHES = ['bfs', 'covnew', 'default', 'dfs', 'static']
 DIAGNOSED_MAPPING = {
     'memcached': DIAGNOSED_MEMCACHED,
     'pmdk': DIAGNOSED_PMDK,
     'recipe': DIAGNOSED_RECIPE,
-    'nvm-direct': DIAGNOSED_NVMDIRECT
+    'nvm-direct': DIAGNOSED_NVMDIRECT,
+    'redis': DIAGNOSED_REDIS
 }
 
 def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
@@ -400,6 +417,9 @@ def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
     for system, search_dict in df_dict.items():
         for search, df_list in search_dict.items():
             combined_df = pd.concat(df_list)
+            # if system == 'redis':
+            #     df = remove_diagnosed(combined_df, DIAGNOSED_MAPPING[system])
+            #     embed()
             df = uniquify(combined_df, DIAGNOSED_MAPPING[system])
             out_file = out_dir / f'{system}_{search}.csv'
             df.to_csv(out_file)

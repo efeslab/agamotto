@@ -5,25 +5,41 @@ from IPython import embed
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
-def graph(dfs, xlabel, ylabel, xlim):
+plt.rcParams['font.family']     = 'serif'
+plt.rcParams['font.size']       = 8
+plt.rcParams['axes.labelsize']  = 7
+# plt.rcParams['text.usetex']     = True
+
+def graph(dfs, searches, xlabel, ylabel, xlim):
+    COLORS = {'static': 'green', 'covnew': 'blue', 'default': 'blue'}
+    STYLES = {'static': '-', 'covnew': ':', 'default': ':'}
+
     ax = plt.gca()
-    for df in dfs:
+    max_bugs = 0
+    for df, search in zip(dfs, searches):
+        # embed()
         try:
             df = df.drop_duplicates(subset='x')
+            max_bugs = max(max_bugs, df['y'].max())
             pivoted = df.pivot(index='x', columns='label', values='y')
-            pivoted.plot.line(ax=ax)
+            pivoted.plot.line(ax=ax, linestyle=STYLES[search], color=COLORS[search])
         except:
             embed()
             raise
+    step = 1
+    if (max_bugs > 10):
+        step = 2
+    plt.yticks([0, max_bugs // 2, max_bugs])
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.xlim(0, xlim)
-    plt.legend(loc='best')
+    plt.legend(loc='right')
 
 def output(output_file):
     fig = plt.gcf()
-    fig.set_size_inches(3.5, 3.0)
+    fig.set_size_inches(3.5, 1.75)
     fig.tight_layout()
 
     plt.savefig(output_file, dpi=300, bbox_inches='tight', pad_inches=0.02)
@@ -61,6 +77,8 @@ def old_main():
 
         xy['label'] = [l] * len(xy)
         xy = xy.rename(columns={args.x_axis: 'x', args.y_axis: 'y'})
+        # insert a 0 point
+        xy = xy.append({'x': 0, 'y': 0, 'label': l})
         df_list += [xy]
         # embed()
     
@@ -68,36 +86,67 @@ def old_main():
     graph(df_list, args.x_axis + " (Minutes)", ylabel, args.x_limit)
     output(args.output)
 
-SEARCHES = {'bfs': 'BFS', 'covnew': 'Coverage', 
-            'default': 'KLEE Default', 'dfs': 'DFS', 
-            'static': 'Agamotto'}
+# SEARCHES = {'bfs': 'BFS', 
+#             'covnew': 'KLEE Default', 
+#             'default': 'KLEE Default', 
+#             'dfs': 'DFS', 
+#             'static': 'Agamotto'}
 
-def get_dfs(system, root_dir=Path('./parsed')):
+
+
+def get_dfs(system, xmax, root_dir=Path('./parsed')):
     import glob
     assert(root_dir.exists())
     df_list = []
-    for csv_file in glob.glob(str(root_dir / f'{system}_*.csv')):
+    search_list = []
+
+    SEARCHES = {'covnew': 'KLEE Default', 
+            'default': 'KLEE Default', 
+            'static': 'Aɢᴀᴍᴏᴛᴛᴏ'}
+    
+    # Ensure we either get default or covnew
+    use_covnew = True
+    # Puts 'static' first
+    csv_files = sorted(glob.glob(str(root_dir / f'{system}_*.csv')), reverse=True)
+    for csv_file in csv_files:
+        if 'default' in csv_file:
+            use_covnew = False
+    
+    if not use_covnew:
+        SEARCHES.pop('covnew')
+
+    for csv_file in csv_files:
         csv_path = Path(csv_file)
         csv_path.exists()
         search = csv_path.name.split('_')[-1].split('.')[0]
-        assert search in SEARCHES
+        if search not in SEARCHES:
+            continue
         df = pd.read_csv(csv_path)
         xy = df[['Timestamp', 'UniqueBugsAtTime']]
         xy['Timestamp'] /= (1_000_000 * 60)# convert from microseconds to minutes
         xy['label'] = [SEARCHES[search]] * len(xy)
         xy = xy.rename(columns={'Timestamp': 'x', 'UniqueBugsAtTime': 'y'})
+        # insert a 0 point
+        xy = xy.append({'x': 0, 'y': 0, 'label': SEARCHES[search]}, ignore_index=True)
+        # insert a max
+        xy = xy.append({'x': xmax, 
+                        'y': xy['y'][xy['x'] <= xmax].max(), 
+                        'label': SEARCHES[search]}, ignore_index=True)
         df_list += [xy]
-    return df_list
+        search_list += [search]
+    return df_list, search_list
 
 def main():
     parser = ArgumentParser()
     parser.add_argument('system', type=str, help='What system to graph', 
-                        choices=['pmdk', 'recipe', 'memcached', 'nvm-direct'])
+                        choices=['pmdk', 'recipe', 'memcached', 'nvm-direct', 'redis'])
     parser.add_argument('--x-limit', '-x', type=int, help='Number of minutes',
                         default=60)
     args = parser.parse_args()
-    dfs = get_dfs(args.system)
-    graph(dfs, 'Time (minutes)', 'Number of Unique Bugs', args.x_limit)
+    dfs, searches = get_dfs(args.system, args.x_limit)
+    assert(len(searches) == 2)
+
+    graph(dfs, searches, 'Time (minutes)', 'Number of Unique Bugs', args.x_limit)
     output(f'{args.system}.pdf')
 
 if __name__ == '__main__':
