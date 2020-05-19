@@ -220,6 +220,11 @@ public:
   virtual ref<Expr> read(unsigned offset, Expr::Width width) const;
   virtual ref<Expr> read8(unsigned offset) const;
 
+  // read the entire contents of the object.
+  // for symbolic objects, initialValues must be specified.
+  virtual std::vector<unsigned char>
+  readAll(const Array *initialValues=nullptr) const;
+
   // return bytes written.
   virtual void write(const ExecutionState &state, unsigned offset, ref<Expr> value);
   virtual void write(const ExecutionState &state, ref<Expr> offset, ref<Expr> value);

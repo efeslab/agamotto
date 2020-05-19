@@ -92,6 +92,9 @@
 /* libcxx is supported */
 #cmakedefine SUPPORT_KLEE_LIBCXX @SUPPORT_KLEE_LIBCXX@
 
+/* interpretation of Intel _mm_crc32_* intrinsics is supported */
+#cmakedefine SUPPORT_CRC32 @SUPPORT_CRC32@
+
 /* Configuration type of KLEE's runtime libraries */
 #define RUNTIME_CONFIGURATION "@KLEE_RUNTIME_BUILD_TYPE@"
 

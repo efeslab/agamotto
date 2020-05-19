@@ -38,6 +38,7 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
+#include <unistd.h>
 #include <klee/klee.h>
 
 #include "common.h"
@@ -84,6 +85,11 @@ typedef struct {
 
 extern proc_data_t __pdata[MAX_PROCESSES];
 
+*/
+////////////////////////////////////////////////////////////////////////////////
+// Process Specific Data Structures
+////////////////////////////////////////////////////////////////////////////////
+
 typedef struct {
   // Taken from the semaphore specs
   unsigned short semval;
@@ -100,10 +106,6 @@ typedef struct {
 } sem_set_t;
 
 extern sem_set_t __sems[MAX_SEMAPHORES];
-*/
-////////////////////////////////////////////////////////////////////////////////
-// Process Specific Data Structures
-////////////////////////////////////////////////////////////////////////////////
 
 typedef struct {
   wlist_id_t wlist;
@@ -150,6 +152,7 @@ typedef struct {
   unsigned int nr_writers_queued;
   int writer;
 } rwlock_data_t;
+
 typedef struct {
   wlist_id_t wlist;
 

@@ -75,6 +75,15 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b, Module &M) {
       case Intrinsic::x86_sse_sfence:
         break;
 
+#ifdef SUPPORT_CRC32
+        // Implemented by the interpreter
+      case Intrinsic::x86_sse42_crc32_32_16:
+      case Intrinsic::x86_sse42_crc32_32_32:
+      case Intrinsic::x86_sse42_crc32_32_8:
+      case Intrinsic::x86_sse42_crc32_64_64:
+        break;
+#endif
+
         // Probably safely ignorable.
       case Intrinsic::x86_sse2_pause:
         klee_warning_once(0, "Ignoring intrinsic function %s",

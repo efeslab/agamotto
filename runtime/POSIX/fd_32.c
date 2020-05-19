@@ -93,6 +93,10 @@ int openat(int fd, const char *pathname, int flags, ...) {
   return __fd_openat(fd, pathname, flags, mode);
 }
 
+int faccessat(int fd, const char *pathname, int mode, int flags) {
+  return __fd_faccessat(fd, pathname, mode, flags);
+}
+
 off_t lseek(int fd, off_t off, int whence) {
   return (off_t) __fd_lseek64(fd, off, whence);
 }

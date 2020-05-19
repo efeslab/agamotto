@@ -11,6 +11,7 @@ typedef struct {
 } redis_handler_t;
 
 extern redis_handler_t __redis_simple_concrete_handler;
+extern redis_handler_t __redis_file_handler;
 extern redis_handler_t __redis_symbolic_handler;
 extern redis_handler_t __redis_semi_symbolic_handler;
 

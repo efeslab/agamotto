@@ -44,7 +44,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 /* I do not support processes for now
 proc_data_t __pdata[MAX_PROCESSES];
-sem_set_t __sems[MAX_SEMAPHORES];
 
 static void klee_init_semaphores(void) {
   STATIC_LIST_INIT(__sems);
@@ -79,6 +78,12 @@ void klee_init_processes(void) {
 ////////////////////////////////////////////////////////////////////////////////
 
 tsync_data_t __tsync;
+sem_set_t __sems[MAX_SEMAPHORES];
+
+static void klee_init_semaphores(void) {
+  STATIC_LIST_INIT(__sems);
+  klee_make_shared(__sems, sizeof(__sems));
+}
 
 void klee_init_threads(void) {
   STATIC_LIST_INIT(__tsync.threads);
@@ -90,4 +95,6 @@ void klee_init_threads(void) {
   def_data->ret_value = 0;
   def_data->joinable = 1; // Why not?
   def_data->wlist = klee_get_wlist();
+
+  klee_init_semaphores();
 }

@@ -201,7 +201,7 @@ ssize_t _stream_readv(stream_buffer_t *buff, const struct iovec *iov, int iovcnt
       offset = overflow;
     } else {
       memcpy(iov[i].iov_base, &buff->contents[offset], cur_count);
-      offset += cur_count;
+      offset = (offset + cur_count) % buff->max_size;
     }
     remaining -= cur_count;
   }
@@ -307,8 +307,11 @@ void _block_init(block_buffer_t *buff, size_t max_size) {
 }
 
 void _block_init_pmem(block_buffer_t *buff, size_t max_size, const char *bname, bool init_zero) {
-  if (max_size % getpagesize()) {
-    klee_error("Adjusting size in _block_init_pmem to be page size aligned!");
+  size_t pgsz = getpagesize();
+  size_t offset;
+  if ((offset = max_size % pgsz) != 0) {
+    klee_warning("Adjusting size in _block_init_pmem to be page size aligned!");
+    max_size += (pgsz - offset);
   }
   memset(buff, 0, sizeof(block_buffer_t));
   buff->contents = (char*)klee_pmem_alloc_pmem(max_size, bname, init_zero, NULL);

@@ -38,6 +38,8 @@ typedef struct {
 #define SIMULATED_CLIENT_HANDLER(_name, _port, _func) {    \
   .__base = {                                              \
     .name = _name,                                         \
+    .argc = 0,                                             \
+    .argv = NULL,                                          \
     .init = simulated_client_handler_init,                 \
     .post_bind = simulated_client_handler_post_bind,       \
     .post_listen = simulated_client_handler_post_listen,   \
@@ -45,6 +47,9 @@ typedef struct {
   .server_port = _port,                                    \
   .client_func = _func                                     \
 }
+
+// Close the open connection and open a new one.
+void simulated_client_reconnect(simulated_client_handler_t *self_hdl);
 
 /**
  * Creates a new simulated client handler that connects to `server_port`,
