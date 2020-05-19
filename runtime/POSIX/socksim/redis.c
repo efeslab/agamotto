@@ -43,14 +43,14 @@ static int _send_redis_req(socket_t *client_sock, const char *msg) {
   int len = strlen(msg);
   int sent = 0;
   while (sent < len) {
-    ret = _write_socket(client_sock, msg, len);
+    ret = _write_socket(client_sock, msg + sent, len - sent);
     if (ret < 0) return -1;
     sent += ret;
   }
 
   sent = 0;
   while (sent < 2) {
-    ret = _write_socket(client_sock, linebreak, 2);
+    ret = _write_socket(client_sock, linebreak + sent, 2 - sent);
     if (ret < 0) return -1;
     sent += ret;
   }
@@ -59,7 +59,7 @@ static int _send_redis_req(socket_t *client_sock, const char *msg) {
 }
 
 // Receives nresp responses from the redis server.
-// Returns 0 on success, -1 on recv failure, and -2 on redis error
+// Returns 0 on success, -2 on recv failure, and -3 on redis error
 static int recv_redis_responses(socket_t *client_sock, int nresp) {
   int ret = 0;
   char buf[64];
@@ -71,7 +71,7 @@ static int recv_redis_responses(socket_t *client_sock, int nresp) {
   while (responses < nresp) {
     ret = _read_socket(client_sock, buf, sizeof(buf) - 1);
     if (ret == 0) break;
-    if (ret < 0) return -1;
+    if (ret < 0) return -2;
 
     // Ensure null-terminated
     buf[ret] = 0;
@@ -99,29 +99,30 @@ static int recv_redis_responses(socket_t *client_sock, int nresp) {
         // Got a response
         ++responses;
         *newline = 0;
-        if (!klee_is_symbolic(*srch))
-          posix_debug_msg("Received response ending in: '%s'\n", srch);
+        if (!klee_is_symbolic(*srch)) {
+          if (first == '-') {
+            printf("Received error ending in: '%s'\n", srch);
+          } else {
+            posix_debug_msg("Received response ending in: '%s'\n", srch);
+          }
+        }
       }
 
       srch = newline + 2;
     }
   }
 
-  return redis_err ? -2 : ret;
+  return redis_err ? -3 : 0;
 }
 
 // Send req followed by '\r\n' and wait for response.
 // Return 0 on success, -1 on send failure, -2 on recv failure, -3 on redis error.
 static int send_redis_req(socket_t *client_sock, const char *msg) {
   int ret = _send_redis_req(client_sock, msg);
-  if (ret == -1)
-    return -1;
+  if (ret < 0)
+    return ret;
   ret = recv_redis_responses(client_sock, 1);
-  if (ret == -1)
-    return -2;
-  if (ret == -2)
-    return -3;
-  return 0;
+  return ret;
 }
 
 // Send req followed by '\r\n'.
@@ -228,8 +229,7 @@ static void redis_file_client_func(void *self) {
   FILE *file = fopen(fname, "r");
   char req[2048];
   while (fgets(req, sizeof(req), file)) {
-    if (i % batchsz == 0) {
-      i = 0;
+    if (i == 0) {
       batchsz = randint(minbatch, maxbatch);
       printf("Sending a batch of %i requests\n", batchsz);
     }
@@ -244,6 +244,7 @@ static void redis_file_client_func(void *self) {
       break;
 
     if (++i % batchsz == 0) {
+      i = 0;
       ret = recv_redis_responses(client->client_sock, batchsz);
       if (ret != 0)
         break;
@@ -256,7 +257,7 @@ static void redis_file_client_func(void *self) {
     ret = recv_redis_responses(client->client_sock, i);
   }
 
-  ret || (ret = send_redis_req_noreply(client->client_sock, "SHUTDOWN"));
+  ret || send_redis_req_noreply(client->client_sock, "SHUTDOWN");
 
   if (ret == -1)
     perror("Failed to send redis request");
