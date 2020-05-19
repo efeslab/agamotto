@@ -293,11 +293,11 @@ def uniquify(df, diagnosed):
             unique_bugs.remove(bug)
         data += [uniqueNum]
     sdf['UniqueBugsAtTime'] = data
-    embed()
+    # embed()
 
     return sdf
 
-def main():
+def old_main():
     parser = ArgumentParser()
     parser.add_argument('system', type=str, help='which system',
                         choices=['memcached', 'pmdk', 'recipe', 'nvm-direct'])
@@ -340,6 +340,69 @@ def main():
     df.to_csv(args.output_file)
 
     print(f'Total diagnosed: {len(DIAGNOSED_MEMCACHED) + len(DIAGNOSED_PMDK) + len(DIAGNOSED_NVMDIRECT)}')
+
+SYSTEMS = ['pmdk', 'recipe', 'memcached', 'nvm-direct']
+FILTER_PMDK = ['recipe']
+SEARCHES = ['bfs', 'covnew', 'default', 'dfs', 'static']
+DIAGNOSED_MAPPING = {
+    'memcached': DIAGNOSED_MEMCACHED,
+    'pmdk': DIAGNOSED_PMDK,
+    'recipe': DIAGNOSED_RECIPE,
+    'nvm-direct': DIAGNOSED_NVMDIRECT
+}
+
+def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
+    from collections import defaultdict
+    import glob
+    source_name = 'all_pmem_errs.csv'
+
+    klee_out_paths = str(root_dir / 'klee-*')
+
+    if not out_dir.exists():
+        out_dir.mkdir()
+
+    # system => search => [data points]
+    df_dict = defaultdict(lambda: defaultdict(list))
+
+    for exp_dir_str in glob.glob(klee_out_paths):
+        exp_dir = Path(exp_dir_str)
+        assert(exp_dir.is_dir())
+        csv_file = exp_dir / source_name
+        if not csv_file.exists():
+            continue
+
+        parts = exp_dir.name.split('-')
+        print(parts)
+
+        system = parts[1]
+        if system == 'nvm':
+            system = f'{system}-{parts[2]}'
+        search = parts[-1]
+
+        if system not in SYSTEMS:
+            raise Exception(f'{system} not in SYSTEMS!')
+        if search not in SEARCHES:
+            raise Exception(f'{search} not in SEARCHES!')
+
+        df = pd.read_csv(csv_file)
+        df = remove_diagnosed(df, FALSE_POS)
+
+        if system in FILTER_PMDK:
+            df = remove_diagnosed(df, DIAGNOSED_PMDK)
+        
+        df_dict[system][search] += [df]
+    
+    for system, search_dict in df_dict.items():
+        for search, df_list in search_dict.items():
+            combined_df = pd.concat(df_list)
+            df = uniquify(combined_df, DIAGNOSED_MAPPING[system])
+            out_file = out_dir / f'{system}_{search}.csv'
+            df.to_csv(out_file)
+            assert(out_file.exists())
+            embed()
+
+def main():
+    convert_all()
 
 if __name__ == '__main__':
     main()

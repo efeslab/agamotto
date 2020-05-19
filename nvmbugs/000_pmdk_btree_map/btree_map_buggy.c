@@ -344,6 +344,7 @@ btree_map_rotate_left(TOID(struct tree_map_node) lsb,
 	TOID(struct tree_map_node) node,
 	TOID(struct tree_map_node) parent, int p)
 {
+	printf("rotate_left!\n");
 	/* move the separator from parent to the deficient node */
 	struct tree_map_node_item sep = D_RO(parent)->items[p - 1];
 	btree_map_insert_item(node, 0, sep);

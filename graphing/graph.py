@@ -60,6 +60,7 @@ def main():
     xy['label'] = [l] * len(xy)
     xy = xy.rename(columns={args.x_axis: 'x', args.y_axis: 'y'})
     df_list += [xy]
+    embed()
   
   ylabel = args.y_axis + " (MB)" if args.y_axis == 'MallocUsage' else args.y_axis
   graph(df_list, args.x_axis + " (Minutes)", ylabel)

@@ -3881,6 +3881,7 @@ void Executor::resolveExact(ExecutionState &state,
   }
 
   if (unbound) {
+    errs() << *p << "\n";
     terminateStateOnError(*unbound, "memory error: invalid pointer: " + name,
                           Ptr, NULL, getAddressInfo(*unbound, p));
   }
