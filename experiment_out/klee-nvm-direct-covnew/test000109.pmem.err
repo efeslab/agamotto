@@ -1,40 +1,40 @@
 Error: persistent memory violation!
 File: nvmbugs/005_nvm_direct/no_fc_lib/pmem.c
 Line: 394
-assembly.ll line: 10581
+assembly.ll line: 10582
 Stack: 
 Current Thread: 1
 Thread 1, Process 0, enabled
-		PC:   call void @llvm.x86.clwb(i8* %20, i8* %20), !dbg !5667 (op #0=<global const>, op #1=99344512, op #2=99344512)
-	#000010581 in flush_clwb (=99344512, =1) at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:394
-	#100011834 in pmem_flush (=99344512, =1) at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:437
-	#200013521 in nvms_flush (=99344512) at nvmbugs/005_nvm_direct/no_fc_lib/nvms_misc.c:113
-	#300014015 in nvm_flush (=99344384, =1024) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_misc.c:349
-	#400022518 in nvm_create_baseheap (=86961520, =94101504, =99344384, =99344384, =131072, =31) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:367
-	#500023793 in nvm_create_heap (=1, =99344384, =131072, =86961520) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:738
-	#600037686 in __klee_posix_wrapped_main (=4, =88758800) at nvmbugs/005_nvm_direct/allocs.c:126
-	#700007903 in __klee_posix_ctor_stub_insert_point (=4, =88758800, =27169352) at runtime/POSIX/./klee_init_env.c:555
-	#800007923 in __user_main (=8, =27169280, =27169352) at runtime/POSIX/./klee_init_env.c:563
-	#900001759 in __uClibc_main (=27169160, =8, =27169280, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
-	#1000001926 in main (=8, =27169280)
+		PC:   call void @llvm.x86.clwb(i8* %20, i8* %20), !dbg !5667 (op #0=<global const>, op #1=129556608, op #2=129556608)
+	#000010582 in flush_clwb (=129556608, =1) at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:394
+	#100011835 in pmem_flush (=129556608, =1) at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:437
+	#200013522 in nvms_flush (=129556608) at nvmbugs/005_nvm_direct/no_fc_lib/nvms_misc.c:113
+	#300014016 in nvm_flush (=129556480, =1024) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_misc.c:349
+	#400022519 in nvm_create_baseheap (=117034400, =124313600, =129556480, =129556480, =131072, =31) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:367
+	#500023794 in nvm_create_heap (=1, =129556480, =131072, =117034400) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:738
+	#600037688 in __klee_posix_wrapped_main (=4, =118876512) at nvmbugs/005_nvm_direct/allocs.c:126
+	#700007904 in __klee_posix_ctor_stub_insert_point (=4, =118876512, =61364680) at runtime/POSIX/./klee_init_env.c:555
+	#800007924 in __user_main (=8, =61364608, =61364680) at runtime/POSIX/./klee_init_env.c:563
+	#900001760 in __uClibc_main (=57389576, =8, =61364608, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1000001927 in main (=8, =61364608)
 Errors: 
 49) File: nvmbugs/005_nvm_direct/no_fc_lib/pmem.c
 Line: 394
-assembly.ll line: 10581
+assembly.ll line: 10582
  allocated at _block_init_pmem():  %32 = call i8* @klee_pmem_alloc_pmem(i64 %28, i8* %29, i1 zeroext %31, i8* null), !dbg !5691
 Stack: 
 Current Thread: 1
 Thread 1, Process 0, enabled
-		PC:   call void @llvm.x86.clwb(i8* %20, i8* %20), !dbg !5667 (op #0=<global const>, op #1=99344384, op #2=99344384)
-	#000010581 in flush_clwb (=99344384, =1) at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:394
-	#100011834 in pmem_flush (=99344384, =1) at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:437
-	#200013521 in nvms_flush (=99344384) at nvmbugs/005_nvm_direct/no_fc_lib/nvms_misc.c:113
-	#300014015 in nvm_flush (=99344384, =1024) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_misc.c:349
-	#400022518 in nvm_create_baseheap (=86961520, =94101504, =99344384, =99344384, =131072, =31) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:367
-	#500023793 in nvm_create_heap (=1, =99344384, =131072, =86961520) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:738
-	#600037686 in __klee_posix_wrapped_main (=4, =88758800) at nvmbugs/005_nvm_direct/allocs.c:126
-	#700007903 in __klee_posix_ctor_stub_insert_point (=4, =88758800, =27169352) at runtime/POSIX/./klee_init_env.c:555
-	#800007923 in __user_main (=8, =27169280, =27169352) at runtime/POSIX/./klee_init_env.c:563
-	#900001759 in __uClibc_main (=27169160, =8, =27169280, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
-	#1000001926 in main (=8, =27169280)
+		PC:   call void @llvm.x86.clwb(i8* %20, i8* %20), !dbg !5667 (op #0=<global const>, op #1=129556480, op #2=129556480)
+	#000010582 in flush_clwb (=129556480, =1) at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:394
+	#100011835 in pmem_flush (=129556480, =1) at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:437
+	#200013522 in nvms_flush (=129556480) at nvmbugs/005_nvm_direct/no_fc_lib/nvms_misc.c:113
+	#300014016 in nvm_flush (=129556480, =1024) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_misc.c:349
+	#400022519 in nvm_create_baseheap (=117034400, =124313600, =129556480, =129556480, =131072, =31) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:367
+	#500023794 in nvm_create_heap (=1, =129556480, =131072, =117034400) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:738
+	#600037688 in __klee_posix_wrapped_main (=4, =118876512) at nvmbugs/005_nvm_direct/allocs.c:126
+	#700007904 in __klee_posix_ctor_stub_insert_point (=4, =118876512, =61364680) at runtime/POSIX/./klee_init_env.c:555
+	#800007924 in __user_main (=8, =61364608, =61364680) at runtime/POSIX/./klee_init_env.c:563
+	#900001760 in __uClibc_main (=57389576, =8, =61364608, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1000001927 in main (=8, =61364608)
 

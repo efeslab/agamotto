@@ -238,6 +238,9 @@ main(int argc, char** argv)
     report(desc, "Begin Run");
     for (int i = 0; i < N; i++) {
       printf("alloc %d\n", i);
+      for (int q = 0; q < N; q++) {
+          printf("q=%d\n", q);
+    }
       srand((unsigned)S + (unsigned)i); 
       int slot = rand() % ptrs;
       size_t size = 1 + rand() % 16;
