@@ -1,0 +1,46 @@
+Error: persistent memory violation!
+File: nvmbugs/005_nvm_direct/no_fc_lib/pmem.c
+Line: 295
+assembly.ll line: 10546
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !5647 (op #0=<global const>)
+	#000010546 in predrain_fence_sfence () at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:295
+	#100010673 in drain_no_pcommit () at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:315
+	#200014274 in pmem_drain () at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:352
+	#300014266 in nvms_persist () at nvmbugs/005_nvm_direct/no_fc_lib/nvms_misc.c:126
+	#400014224 in nvm_persist () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_misc.c:550
+	#500016450 in nvm_commit () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2755
+	#600016032 in nvm_txend () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:794
+	#700015000 in nvm_upgrade (=144148544, =89623296) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_usid.c:752
+	#800022145 in nvm_verify.620 (=144148544, =89623296) at nvmbugs/005_nvm_direct/lib/nvm_usid.h:685
+	#900038005 in __klee_posix_wrapped_main (=4, =138633792) at nvmbugs/005_nvm_direct/allocs.c:250
+	#1000007903 in __klee_posix_ctor_stub_insert_point (=4, =138633792, =55402440) at runtime/POSIX/./klee_init_env.c:555
+	#1100007923 in __user_main (=8, =55402368, =55402440) at runtime/POSIX/./klee_init_env.c:563
+	#1200001759 in __uClibc_main (=56095112, =8, =55402368, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300001926 in main (=8, =55402368)
+Errors: 
+133) File: nvmbugs/005_nvm_direct/no_fc_lib/pmem.c
+Line: 295
+assembly.ll line: 10546
+ (no allocation info)
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.sse.sfence(), !dbg !5647 (op #0=<global const>)
+	#000010546 in predrain_fence_sfence () at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:295
+	#100010673 in drain_no_pcommit () at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:315
+	#200014274 in pmem_drain () at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:352
+	#300014266 in nvms_persist () at nvmbugs/005_nvm_direct/no_fc_lib/nvms_misc.c:126
+	#400014224 in nvm_persist () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_misc.c:550
+	#500016450 in nvm_commit () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2755
+	#600016032 in nvm_txend () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:794
+	#700015000 in nvm_upgrade (=144148544, =89623296) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_usid.c:752
+	#800022145 in nvm_verify.620 (=144148544, =89623296) at nvmbugs/005_nvm_direct/lib/nvm_usid.h:685
+	#900038005 in __klee_posix_wrapped_main (=4, =138633792) at nvmbugs/005_nvm_direct/allocs.c:250
+	#1000007903 in __klee_posix_ctor_stub_insert_point (=4, =138633792, =55402440) at runtime/POSIX/./klee_init_env.c:555
+	#1100007923 in __user_main (=8, =55402368, =55402440) at runtime/POSIX/./klee_init_env.c:563
+	#1200001759 in __uClibc_main (=56095112, =8, =55402368, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1300001926 in main (=8, =55402368)
+
