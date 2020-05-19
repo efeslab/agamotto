@@ -375,7 +375,6 @@ def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
             continue
 
         parts = exp_dir.name.split('-')
-        print(parts)
 
         system = parts[1]
         if system == 'nvm':
@@ -410,12 +409,26 @@ def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
     
     # Do the summarizing
     summary_info = defaultdict(dict)
+    total = 0
+    correctness = 0
+    performance = 0
     for system, df_list in summary_dict.items():
         df = pd.concat(df_list)
         df = uniquify(df, DIAGNOSED_MAPPING[system])
-        print(f'System: {system}')
-        print(f'\tTotal bugs: {df["UniqueBugsAtTime"].max()}')
-        # embed()
+
+        summary_info[system]['Total'] = df['UniqueBugsAtTime'].max()
+        gdf = df.drop_duplicates(subset='BugDiagnosis', keep='first')
+        summary_info[system]['Correctness'] = len(gdf[gdf['Type'] == CORRECTNESS])
+        summary_info[system]['Performance'] = len(gdf[gdf['Type'] != CORRECTNESS])
+        assert(summary_info[system]['Total'] == \
+               summary_info[system]['Correctness'] + summary_info[system]['Performance'])
+        total += summary_info[system]['Total']
+        correctness += summary_info[system]['Correctness']
+        performance += summary_info[system]['Performance']
+    
+    from pprint import pprint
+    pprint(dict(summary_info), indent=4)
+    print(f'\nOverall:\n\tTotal: {total}\n\tCorrectness: {correctness}\n\tPerformance: {performance}')
 
 def main():
     convert_all()
