@@ -286,13 +286,16 @@ def uniquify(df, diagnosed):
     sdf = df.sort_values('Timestamp').reset_index().drop('index', axis=1)
     uniqueNum = 0
     data = []
+    bugs = []
     for i in range(0, len(sdf)):
         bug = get_diagnosed(sdf.loc[i], diagnosed)
         if bug in unique_bugs:
             uniqueNum += 1
             unique_bugs.remove(bug)
         data += [uniqueNum]
+        bugs += [bug]
     sdf['UniqueBugsAtTime'] = data
+    sdf['BugDiagnosis'] = bugs
     # embed()
 
     return sdf
@@ -392,6 +395,9 @@ def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
         
         df_dict[system][search] += [df]
     
+    # For the summary stuff (system => [dfs])
+    summary_dict = defaultdict(list)
+
     for system, search_dict in df_dict.items():
         for search, df_list in search_dict.items():
             combined_df = pd.concat(df_list)
@@ -399,7 +405,17 @@ def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
             out_file = out_dir / f'{system}_{search}.csv'
             df.to_csv(out_file)
             assert(out_file.exists())
-            embed()
+
+            summary_dict[system] += [df]
+    
+    # Do the summarizing
+    summary_info = defaultdict(dict)
+    for system, df_list in summary_dict.items():
+        df = pd.concat(df_list)
+        df = uniquify(df, DIAGNOSED_MAPPING[system])
+        print(f'System: {system}')
+        print(f'\tTotal bugs: {df["UniqueBugsAtTime"].max()}')
+        # embed()
 
 def main():
     convert_all()

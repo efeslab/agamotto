@@ -48,18 +48,19 @@ int
 main(int argc, char** argv)
 {
     const char *fname = "/tmp/nvmd";
-    if (argc != 3) {
-      printf("usage: %s <fname> <allocs>\n", argv[0]);
+    if (argc != 4) {
+      printf("usage: %s <fname> <allocs> <seed>\n", argv[0]);
       exit(1);
     }
     fname = argv[1];
     int N = atoi(argv[2]);
+    int S = atoi(argv[3]);
     if (N < 0 || N > 10000) {
       printf("allocs must be in range [0, 10000]\n");
       exit(1);
     }
 
-    printf("NVM Device: \'%s\', allocs: %d\n", fname, N);
+    // printf("NVM Device: \'%s\', allocs: %d\n", fname, N);
     /* We get here if we are the child process or there are no children.
      * The first thing is to initialize the NVM library for the main thread */
     nvm_thread_init();
@@ -235,7 +236,7 @@ main(int argc, char** argv)
     }
 
     report(desc, "Begin Run");
-    srand(69); // we like determinism for our runs
+    srand((unsigned)S); 
     for (int i = 0; i < N; i++) {
       printf("alloc %d\n", i);
       int slot = rand() % ptrs;
