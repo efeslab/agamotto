@@ -1,0 +1,34 @@
+Error: persistent memory violation!
+File: runtime/POSIX/./mman.c
+Line: 248
+assembly.ll line: 58692
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @klee_pmem_check_persisted(i8* %130, i64 %131), !dbg !5767 (op #0=<global const>, op #1=100859904, op #2=4096)
+	#000058692 in munmap_sym (=99811328, =8388608, =93864864, =0) at runtime/POSIX/./mman.c:248
+	#100058838 in munmap (=99811328, =8388608) at runtime/POSIX/./mman.c:272
+	#200030443 in nvms_close_region (=136945600) at nvmbugs/005_nvm_direct/no_fc_lib/nvms_region.c:310
+	#300033502 in nvm_unmap_region (=1) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:3581
+	#400033368 in nvm_detach_region (=1) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:1477
+	#500038139 in __klee_posix_wrapped_main (=3, =94296736) at nvmbugs/005_nvm_direct/allocs.c:297
+	#600007902 in __klee_posix_ctor_stub_insert_point (=3, =94296736, =26444960) at runtime/POSIX/./klee_init_env.c:555
+	#700007922 in __user_main (=7, =26444896, =26444960) at runtime/POSIX/./klee_init_env.c:563
+	#800001758 in __uClibc_main (=32943880, =7, =26444896, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900001925 in main (=7, =26444896)
+Errors: 
+104) File: nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c
+Line: 2836
+assembly.ll line: 16630
+ allocated at _block_init_pmem():  %32 = call i8* @klee_pmem_alloc_pmem(i64 %28, i8* %29, i1 zeroext %31, i8* null), !dbg !5691
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   store %struct.nvm_on_commit* %129, %struct.nvm_on_commit** %131, align 8, !dbg !5785 (op #0=0, op #1=100861864)
+	#000016630 in nvm_commit () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2836
+	#100038135 in __klee_posix_wrapped_main (=3, =94296736) at nvmbugs/005_nvm_direct/allocs.c:293
+	#200007902 in __klee_posix_ctor_stub_insert_point (=3, =94296736, =26444960) at runtime/POSIX/./klee_init_env.c:555
+	#300007922 in __user_main (=7, =26444896, =26444960) at runtime/POSIX/./klee_init_env.c:563
+	#400001758 in __uClibc_main (=32943880, =7, =26444896, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#500001925 in main (=7, =26444896)
+
