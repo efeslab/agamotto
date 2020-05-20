@@ -1,50 +1,42 @@
 Error: persistent memory violation!
-File: nvmbugs/005_nvm_direct/no_fc_lib/pmem.c
-Line: 295
-assembly.ll line: 10545
+File: nvmbugs/005_nvm_direct/original_lib/pmem.c
+Line: 374
+assembly.ll line: 10566
 Stack: 
 Current Thread: 1
 Thread 1, Process 0, enabled
-		PC:   call void @llvm.x86.sse.sfence(), !dbg !5647 (op #0=<global const>)
-	#000010545 in predrain_fence_sfence () at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:295
-	#100010672 in drain_no_pcommit () at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:315
-	#200014273 in pmem_drain () at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:352
-	#300014265 in nvms_persist () at nvmbugs/005_nvm_direct/no_fc_lib/nvms_misc.c:126
-	#400014223 in nvm_persist () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_misc.c:550
-	#500016449 in nvm_commit () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2755
-	#600016031 in nvm_txend () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:794
-	#700016999 in nvm_unlock_callback (=138594296) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2533
-	#800016564 in nvm_commit () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2801
-	#900016137 in nvm_txend () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:837
-	#1000034748 in nvm_set_txconfig (=1, =132907872) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:4597
-	#1100037737 in __klee_posix_wrapped_main (=3, =137373344) at nvmbugs/005_nvm_direct/allocs.c:151
-	#1200007902 in __klee_posix_ctor_stub_insert_point (=3, =137373344, =20645472) at runtime/POSIX/./klee_init_env.c:555
-	#1300007922 in __user_main (=7, =20645408, =20645472) at runtime/POSIX/./klee_init_env.c:563
-	#1400001758 in __uClibc_main (=27078408, =7, =20645408, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
-	#1500001925 in main (=7, =20645408)
+		PC:   call void @llvm.x86.clwb(i8* %20, i8* %20), !dbg !5667 (op #0=<global const>, op #1=136628096, op #2=136628096)
+	#000010566 in flush_clwb (=136628096, =1) at nvmbugs/005_nvm_direct/original_lib/pmem.c:374
+	#100011819 in pmem_flush (=136628096, =1) at nvmbugs/005_nvm_direct/original_lib/pmem.c:417
+	#200013580 in nvms_flush (=136628096) at nvmbugs/005_nvm_direct/original_lib/nvms_misc.c:112
+	#300014296 in nvm_persist () at nvmbugs/005_nvm_direct/original_lib/nvm_misc.c:525
+	#400014192 in nvm_add_oper (=135583680, =1, =12) at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:1430
+	#500013407 in nvm_undo (=135577756, =4) at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:1763
+	#600024315 in nvm_add_extent (=139771904, =131072) at nvmbugs/005_nvm_direct/original_lib/nvm_region.c:2210
+	#700037532 in __klee_posix_wrapped_main (=3, =85497312) at nvmbugs/005_nvm_direct/allocs.c:100
+	#800007888 in __klee_posix_ctor_stub_insert_point (=3, =85497312, =28033520) at runtime/POSIX/./klee_init_env.c:555
+	#900007908 in __user_main (=7, =28033456, =28033520) at runtime/POSIX/./klee_init_env.c:563
+	#1000001744 in __uClibc_main (=26438536, =7, =28033456, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1100001911 in main (=7, =28033456)
 Errors: 
-56) File: nvmbugs/005_nvm_direct/no_fc_lib/pmem.c
-Line: 295
-assembly.ll line: 10545
- (no allocation info)
+54) File: nvmbugs/005_nvm_direct/original_lib/pmem.c
+Line: 374
+assembly.ll line: 10566
+ allocated at _block_init_pmem():  %32 = call i8* @klee_pmem_alloc_pmem(i64 %28, i8* %29, i1 zeroext %31, i8* null), !dbg !5691
 Stack: 
 Current Thread: 1
 Thread 1, Process 0, enabled
-		PC:   call void @llvm.x86.sse.sfence(), !dbg !5647 (op #0=<global const>)
-	#000010545 in predrain_fence_sfence () at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:295
-	#100010672 in drain_no_pcommit () at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:315
-	#200014273 in pmem_drain () at nvmbugs/005_nvm_direct/no_fc_lib/pmem.c:352
-	#300014265 in nvms_persist () at nvmbugs/005_nvm_direct/no_fc_lib/nvms_misc.c:126
-	#400014223 in nvm_persist () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_misc.c:550
-	#500016449 in nvm_commit () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2755
-	#600016031 in nvm_txend () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:794
-	#700016999 in nvm_unlock_callback (=138594296) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2533
-	#800016564 in nvm_commit () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2801
-	#900016137 in nvm_txend () at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:837
-	#1000034748 in nvm_set_txconfig (=1, =132907872) at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:4597
-	#1100037737 in __klee_posix_wrapped_main (=3, =137373344) at nvmbugs/005_nvm_direct/allocs.c:151
-	#1200007902 in __klee_posix_ctor_stub_insert_point (=3, =137373344, =20645472) at runtime/POSIX/./klee_init_env.c:555
-	#1300007922 in __user_main (=7, =20645408, =20645472) at runtime/POSIX/./klee_init_env.c:563
-	#1400001758 in __uClibc_main (=27078408, =7, =20645408, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
-	#1500001925 in main (=7, =20645408)
+		PC:   call void @llvm.x86.clwb(i8* %20, i8* %20), !dbg !5667 (op #0=<global const>, op #1=136624256, op #2=136624256)
+	#000010566 in flush_clwb (=136624256, =1) at nvmbugs/005_nvm_direct/original_lib/pmem.c:374
+	#100011819 in pmem_flush (=136624256, =1) at nvmbugs/005_nvm_direct/original_lib/pmem.c:417
+	#200013580 in nvms_flush (=136624256) at nvmbugs/005_nvm_direct/original_lib/nvms_misc.c:112
+	#300014296 in nvm_persist () at nvmbugs/005_nvm_direct/original_lib/nvm_misc.c:525
+	#400014192 in nvm_add_oper (=135583680, =1, =12) at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:1430
+	#500013407 in nvm_undo (=135577756, =4) at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:1763
+	#600024315 in nvm_add_extent (=139771904, =131072) at nvmbugs/005_nvm_direct/original_lib/nvm_region.c:2210
+	#700037532 in __klee_posix_wrapped_main (=3, =85497312) at nvmbugs/005_nvm_direct/allocs.c:100
+	#800007888 in __klee_posix_ctor_stub_insert_point (=3, =85497312, =28033520) at runtime/POSIX/./klee_init_env.c:555
+	#900007908 in __user_main (=7, =28033456, =28033520) at runtime/POSIX/./klee_init_env.c:563
+	#1000001744 in __uClibc_main (=26438536, =7, =28033456, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1100001911 in main (=7, =28033456)
 

@@ -48,13 +48,12 @@ int
 main(int argc, char** argv)
 {
     const char *fname = "/tmp/nvmd";
-    if (argc != 4) {
-      printf("usage: %s <fname> <allocs> <seed>\n", argv[0]);
+    if (argc != 3) {
+      printf("usage: %s <fname> <allocs>\n", argv[0]);
       exit(1);
     }
     fname = argv[1];
     int N = atoi(argv[2]);
-    int S = atoi(argv[3]);
     if (N < 0 || N > 10000) {
       printf("allocs must be in range [0, 10000]\n");
       exit(1);
@@ -236,15 +235,10 @@ main(int argc, char** argv)
     }
 
     report(desc, "Begin Run");
+  srand(69); 
     for (int i = 0; i < N; i++) {
-      printf("alloc %d\n", i);
-      for (int q = 0; q < N; q++) {
-          printf("q=%d\n", q);
-    }
-      srand((unsigned)S + (unsigned)i); 
       int slot = rand() % ptrs;
       size_t size = 1 + rand() % 16;
-      srand(time(NULL));
       nvm_txbegin(desc);
       nvm_xlock(&rs->mtx[slot]);
 

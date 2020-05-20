@@ -23,6 +23,7 @@ def graph(dfs, searches, xlabel, ylabel, xlim):
         try:
             df = df.drop_duplicates(subset='x')
             max_bugs = max(max_bugs, df['y'].max())
+            print(df['y'].max())
             pivoted = df.pivot(index='x', columns='label', values='y')
             pivoted.plot.line(ax=ax, linestyle=STYLES[search], color=COLORS[search])
         except:

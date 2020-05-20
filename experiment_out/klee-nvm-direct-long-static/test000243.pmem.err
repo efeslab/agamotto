@@ -1,0 +1,50 @@
+Error: persistent memory violation!
+File: nvmbugs/005_nvm_direct/original_lib/pmem.c
+Line: 374
+assembly.ll line: 10566
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %20, i8* %20), !dbg !5667 (op #0=<global const>, op #1=164128448, op #2=164128448)
+	#000010566 in flush_clwb (=164128448, =1) at nvmbugs/005_nvm_direct/original_lib/pmem.c:374
+	#100011819 in pmem_flush (=164128448, =1) at nvmbugs/005_nvm_direct/original_lib/pmem.c:417
+	#200013580 in nvms_flush (=164128448) at nvmbugs/005_nvm_direct/original_lib/nvms_misc.c:112
+	#300014296 in nvm_persist () at nvmbugs/005_nvm_direct/original_lib/nvm_misc.c:525
+	#400014192 in nvm_add_oper (=163084224, =1, =16) at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:1430
+	#500013407 in nvm_undo (=168321384, =8) at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:1763
+	#600021664 in nvm_freelist_link (=168321024, =168323520) at nvmbugs/005_nvm_direct/original_lib/nvm_heap.c:2925
+	#700021370 in nvm_free_blk (=168321024, =168323520) at nvmbugs/005_nvm_direct/original_lib/nvm_heap.c:3454
+	#800021079 in nvm_free_callback (=164128800) at nvmbugs/005_nvm_direct/original_lib/nvm_heap.c:1964
+	#900016789 in nvm_commit () at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:2861
+	#1000016234 in nvm_txend () at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:836
+	#1100038035 in __klee_posix_wrapped_main (=3, =112965088) at nvmbugs/005_nvm_direct/allocs.c:281
+	#1200007888 in __klee_posix_ctor_stub_insert_point (=3, =112965088, =55525872) at runtime/POSIX/./klee_init_env.c:555
+	#1300007908 in __user_main (=7, =55525808, =55525872) at runtime/POSIX/./klee_init_env.c:563
+	#1400001744 in __uClibc_main (=53930888, =7, =55525808, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500001911 in main (=7, =55525808)
+Errors: 
+198) File: nvmbugs/005_nvm_direct/original_lib/pmem.c
+Line: 374
+assembly.ll line: 10566
+ allocated at _block_init_pmem():  %32 = call i8* @klee_pmem_alloc_pmem(i64 %28, i8* %29, i1 zeroext %31, i8* null), !dbg !5691
+Stack: 
+Current Thread: 1
+Thread 1, Process 0, enabled
+		PC:   call void @llvm.x86.clwb(i8* %20, i8* %20), !dbg !5667 (op #0=<global const>, op #1=168322560, op #2=168322560)
+	#000010566 in flush_clwb (=168322560, =1) at nvmbugs/005_nvm_direct/original_lib/pmem.c:374
+	#100011819 in pmem_flush (=168322560, =1) at nvmbugs/005_nvm_direct/original_lib/pmem.c:417
+	#200013580 in nvms_flush (=168322560) at nvmbugs/005_nvm_direct/original_lib/nvms_misc.c:112
+	#300014296 in nvm_persist () at nvmbugs/005_nvm_direct/original_lib/nvm_misc.c:525
+	#400014192 in nvm_add_oper (=163084224, =1, =16) at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:1430
+	#500013407 in nvm_undo (=168321384, =8) at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:1763
+	#600021664 in nvm_freelist_link (=168321024, =168323520) at nvmbugs/005_nvm_direct/original_lib/nvm_heap.c:2925
+	#700021370 in nvm_free_blk (=168321024, =168323520) at nvmbugs/005_nvm_direct/original_lib/nvm_heap.c:3454
+	#800021079 in nvm_free_callback (=164128800) at nvmbugs/005_nvm_direct/original_lib/nvm_heap.c:1964
+	#900016789 in nvm_commit () at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:2861
+	#1000016234 in nvm_txend () at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:836
+	#1100038035 in __klee_posix_wrapped_main (=3, =112965088) at nvmbugs/005_nvm_direct/allocs.c:281
+	#1200007888 in __klee_posix_ctor_stub_insert_point (=3, =112965088, =55525872) at runtime/POSIX/./klee_init_env.c:555
+	#1300007908 in __user_main (=7, =55525808, =55525872) at runtime/POSIX/./klee_init_env.c:563
+	#1400001744 in __uClibc_main (=53930888, =7, =55525808, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#1500001911 in main (=7, =55525808)
+
