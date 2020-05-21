@@ -86,6 +86,10 @@
 #include <vector>
 #include <cpuid.h>
 
+#ifdef SUPPORT_CRC32
+#include <nmmintrin.h>
+#endif
+
 using namespace llvm;
 using namespace klee;
 
@@ -1356,6 +1360,7 @@ void Executor::stepInstruction(ExecutionState &state) {
 
   ++stats::instructions;
   ++state.steppedInstructions;
+  ++state.stateTime;
   state.prevPC() = state.pc();
   ++state.pc();
 
@@ -1415,6 +1420,34 @@ void Executor::executeCall(ExecutionState &state,
       bindLocal(ki, state, ConstantExpr::alloc(Res.bitcastToAPInt()));
       break;
     }
+#ifdef SUPPORT_CRC32
+    case Intrinsic::x86_sse42_crc32_32_16:
+    case Intrinsic::x86_sse42_crc32_32_32:
+    case Intrinsic::x86_sse42_crc32_32_8:
+    case Intrinsic::x86_sse42_crc32_64_64: {
+      ref<ConstantExpr> crc =
+          toConstant(state, eval(ki, 0, state).value, "crc32");
+      ref<ConstantExpr> v =
+          toConstant(state, eval(ki, 1, state).value, "crc32");
+      uint64_t result;
+      if (v->getWidth() == Expr::Int8) {
+        result = _mm_crc32_u8(crc->getZExtValue(32), v->getZExtValue());
+      } else if (v->getWidth() == Expr::Int16) {
+        result = _mm_crc32_u16(crc->getZExtValue(32), v->getZExtValue());
+      } else if (v->getWidth() == Expr::Int32) {
+        result = _mm_crc32_u32(crc->getZExtValue(32), v->getZExtValue());
+      } else if (v->getWidth() == Expr::Int64) {
+        result = _mm_crc32_u64(crc->getZExtValue(64), v->getZExtValue());
+      } else {
+        assert(false && "bad width for crc32");
+      }
+      Type *t = ki->inst->getType();
+      Expr::Width outWidth = getWidthForLLVMType(t);
+      bindLocal(ki, state, ConstantExpr::alloc(result, outWidth));
+      break;
+    }
+#endif
+
     // va_arg is handled by caller and intrinsic lowering, see comment for
     // ExecutionState::varargs
     case Intrinsic::vastart:  {
@@ -1467,10 +1500,7 @@ void Executor::executeCall(ExecutionState &state,
 
       // Non-volatile memory intrinsics
     case Intrinsic::x86_sse2_clflush: {
-      llvm::Value *v = ki->inst->getOperand(0);
-      v = v->stripPointerCasts();
-      KInstruction *kv = kmodule->getKInstruction(dyn_cast<Instruction>(v));
-      ref<Expr> address = getDestCell(state, kv).value;
+      ref<Expr> address = arguments[0];
       executePersistentMemoryFlush(state, address);
       executePersistentMemoryFence(state);
       break;
@@ -1479,10 +1509,7 @@ void Executor::executeCall(ExecutionState &state,
       klee_warning_once(
         0, "For our purposes, clflushopt ~ clwb, so implementing as fallthrough");
     case Intrinsic::x86_clwb: {
-      llvm::Value *v = ki->inst->getOperand(0);
-      v = v->stripPointerCasts();
-      KInstruction *kv = kmodule->getKInstruction(dyn_cast<Instruction>(v));
-      ref<Expr> address = getDestCell(state, kv).value;
+      ref<Expr> address = arguments[0];
       executePersistentMemoryFlush(state, address);
       break;
     }
@@ -4619,6 +4646,7 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
     if (pi!=pie) break;
   }
 
+  // Get viable *initial* values for all memory objects.
   std::vector< std::vector<unsigned char> > values;
   std::vector<const Array*> objects;
   for (unsigned i = 0; i != state.symbolics.size(); ++i) {
@@ -4632,6 +4660,30 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
     ExprPPrinter::printQuery(llvm::errs(), state.constraints,
                              ConstantExpr::alloc(0, Expr::Bool));
     return false;
+  }
+
+  // The program may have written to parts of the symbolic memory object,
+  // so our output should reflect those changes.
+  for (unsigned i = 0; i != state.symbolics.size(); ++i) {
+    const MemoryObject *mo = state.symbolics[i].first;
+    const ObjectState *os = state.addressSpace.findObject(mo);
+    if (!os)
+      continue;
+
+    size_t size = mo->size;
+
+    // Create a tmp Array with the initial values returned by the solver
+    // XXX TODO a way to clean these up so they're not leaked until program end.
+    std::vector< ref<ConstantExpr> > Init(size);
+    for (unsigned j = 0; j < size; ++j) {
+      Init[j] = ConstantExpr::create(values[i][j], Expr::Int8);
+    }
+    const Array *initialValues = arrayCache.CreateArray("tmp", size,
+                                                        &Init[0],
+                                                        &Init[0] + size);
+
+    // Read the contents of the memory object assuming those initial values
+    values[i] = os->readAll(initialValues);
   }
 
   for (unsigned i = 0; i != state.symbolics.size(); ++i)

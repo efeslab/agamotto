@@ -221,10 +221,10 @@ int pthread_atfork(void (*prepare)(void), void (*parent)(void),
   return 0;
 }
 
-// Since we don't support multi-process, all pids are 0.
+// Since we don't support multi-process, all pids are 1.
 
 pid_t getpid(void) {
-  return 0;
+  return 1;
 }
 
 int kill(pid_t pid, int sig) {

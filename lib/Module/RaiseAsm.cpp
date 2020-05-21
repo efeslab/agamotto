@@ -146,20 +146,13 @@ static bool X86RaiseToAtomicRMWInst(Module &M, CallInst *I, InlineAsm *IA,
     // the inputs, then the clobbers.
     InlineAsm::ConstraintInfoVector constraints = IA->ParseConstraints();
 
-    // The first one should always be the return value.
-    size_t i = 1;
-
-    // There may be more outputs (they should all be indirect outputs)
+    // There may be some indirect outputs (those consume input arguments)
+    size_t i = 0;
     while (constraints[i].Type == InlineAsm::isOutput) {
-      // If it's not indirect, then what the heck is it? We only expect one output.
-      if (!constraints[i].isIndirect) {
-        errs() << "More than one output constraint in inline xchg assembly\n";
-        return false;
+      if (constraints[i].isIndirect) {
+        // Consume an input argument
+        inputs.erase(inputs.begin());
       }
-
-      // Consume an input argument
-      inputs.erase(inputs.begin());
-
       ++i;
     }
 

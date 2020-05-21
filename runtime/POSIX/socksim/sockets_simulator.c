@@ -1,14 +1,28 @@
 #include <assert.h>
+#include <stdlib.h>
 
 #include "memcached.h"
+#include "redis.h"
 #include "sockets_simulator.h"
 
 char useSymbolicHandler;
 socket_simulator_t __sock_simulator;
 
-static socket_event_handler_t *predefined_handlers[] = {
-    (socket_event_handler_t *)(&__memcached_1_5_13_handler),
-    (socket_event_handler_t *)(&__memcached_update_handler),
+typedef struct {
+  const socket_event_handler_t *handler;
+  size_t size;
+} predefined_handler_t;
+
+#define PREDEFINED(_name) \
+  { (const socket_event_handler_t *)(&(_name)), sizeof(_name) }
+
+static predefined_handler_t predefined_handlers[] = {
+    PREDEFINED(__memcached_1_5_13_handler),
+    PREDEFINED(__memcached_update_handler),
+    PREDEFINED(__redis_simple_concrete_handler),
+    PREDEFINED(__redis_file_handler),
+    PREDEFINED(__redis_symbolic_handler),
+    PREDEFINED(__redis_semi_symbolic_handler),
 };
 
 void klee_init_sockets_simulator(const socksim_init_descriptor_t *ssid) {
@@ -29,14 +43,17 @@ void register_socket_handler(socket_event_handler_t *hdl) {
   hdl->init(hdl);
 }
 
-socket_event_handler_t *get_predefined_socket_handler(const char *name) {
+socket_event_handler_t *
+get_predefined_socket_handler(const char *name) {
   int i;
   for (i = 0; i < sizeof(predefined_handlers) / sizeof(predefined_handlers[0]); ++i) {
-    socket_event_handler_t *hdl = predefined_handlers[i];
+    const socket_event_handler_t *hdl = predefined_handlers[i].handler;
+    size_t size = predefined_handlers[i].size;
     if (strcmp(name, hdl->name) == 0) {
-      return hdl;
+      socket_event_handler_t *new_hdl = malloc(size);
+      memcpy(new_hdl, hdl, size);
+      return new_hdl;
     }
   }
   return NULL;
 }
-

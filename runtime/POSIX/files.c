@@ -177,8 +177,10 @@ ssize_t _write_file(file_t *file, const void *buf, size_t count, off64_t offset)
 
     int res;
 
-    posix_debug_msg("Writing concretely at (%d) %d bytes...\n",
-                    file->concrete_fd, count);
+    if (file->concrete_fd != 1 && file->concrete_fd != 2) {
+      posix_debug_msg("Writing concretely at (%d) %d bytes...\n",
+                      file->concrete_fd, count);
+    }
 
     if (file->concrete_fd == 1 || file->concrete_fd == 2) {
       assert(offset == -1 && "Should never write stdout/stderr with offset");
@@ -204,31 +206,22 @@ ssize_t _write_file(file_t *file, const void *buf, size_t count, off64_t offset)
   posix_debug_msg("Writing symbolically %d bytes...\n", count);
 
   if (file->storage->ops.write) {
-    size_t actual_count = 0;
-    size_t symf_size = file->storage->size;
-    if (file->offset + count <= symf_size) {
-      actual_count = count;
-    } else {
+    ssize_t res = file->storage->ops.write(
+        file->storage, buf, count, offset >= 0 ? offset : file->offset);
+
+    if (count != res) {
       if (__exe_env.save_all_writes)
         assert(0);
-      else {
-        if (file->offset < (off64_t)symf_size)
-          actual_count = symf_size - file->offset;
-      }
+      posix_debug_msg("write() ignores bytes: %lu->%lu\n", count, res);
     }
-    if (count != actual_count) {
-      posix_debug_msg("write() ignores bytes: %lu->%lu\n", count, actual_count);
-    }
-    if (file->storage == __sym_fs.sym_stdout)
-      __sym_fs.stdout_writes += actual_count;
-
-    ssize_t res = file->storage->ops.write(
-        file->storage, buf, actual_count, offset >= 0 ? offset : file->offset);
 
     if (res < 0) {
       errno = EINVAL;
       return -1;
     }
+
+    if (file->storage == __sym_fs.sym_stdout)
+      __sym_fs.stdout_writes += res;
 
     if (offset < 0) {
       // not positional write
@@ -730,6 +723,39 @@ int __fd_openat(int basefd, const char *pathname, int flags, mode_t mode) {
   }
 
   return fd;
+}
+
+int __fd_faccessat(int basefd, const char *pathname, int mode, int flags) {
+  if (basefd != AT_FDCWD) {
+    fd_entry_t *bf = __get_fd(basefd);
+
+    if (!bf || !(bf->attr & eIsFile)) {
+      errno = EBADF;
+      return -1;
+    }
+    file_t *bfile = (file_t*)(bf->io_object);
+    if (!_file_is_concrete(bfile)) {
+      klee_warning("symbolic file descriptor, ignoring (ENOENT)");
+      errno = ENOENT;
+      return -1;
+    }
+    basefd = bfile->concrete_fd;
+  }
+
+  if (__get_sym_file(pathname)) {
+    if (flags != 0) {
+      // XXX TODO
+      klee_warning("flags not yet supported for faccessat");
+      errno = EINVAL;
+      return -1;
+    }
+    /* for a symbolic file, it doesn't matter if/where it exists on disk */
+    return access(pathname, mode);
+  }
+
+  int ret = CALL_UNDERLYING(faccessat, basefd, __concretize_string(pathname), mode, flags);
+  if (ret == -1) errno = klee_get_errno();
+  return ret;
 }
 
 DEFINE_MODEL(int, creat, const char *pathname, mode_t mode) {

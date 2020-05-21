@@ -104,6 +104,8 @@ class Executor : public Interpreter {
 
   friend class ExecutionState;
 
+  friend class RootCauseManager;
+
   friend class CustomCheckerHandler;
   friend class CustomChecker;
   friend class PmemObjTxAddChecker;

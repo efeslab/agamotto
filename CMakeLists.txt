@@ -44,6 +44,7 @@ project(KLEE CXX C)
 
 include(CheckFunctionExists)
 include(CheckLibraryExists)
+include(CheckCSourceCompiles)
 
 ###############################################################################
 # Project version
@@ -694,6 +695,34 @@ if (ENABLE_KLEE_LIBCXX)
 else()
   message(STATUS "libc++ support disabled")
   set(SUPPORT_KLEE_LIBCXX 0) # For config.h
+endif()
+
+################################################################################
+# KLEE platform-specific feature support
+################################################################################
+
+option(ENABLE_CRC32_SUPPORT "Enable support for interpreting Intel _mm_crc32_* intrinsics." OFF)
+if (ENABLE_CRC32_SUPPORT)
+  message(STATUS "Intel _mm_crc32_* support enabled")
+  set(SUPPORT_CRC32 1) # For config.h
+  check_c_source_compiles("
+      #include <nmmintrin.h>
+      int main() {
+        int a = _mm_crc32_u8(0, 0);
+        int b = _mm_crc32_u16(0, 0);
+        int c = _mm_crc32_u32(0, 0);
+        long long d = _mm_crc32_u64(0, 0);
+        return 0;
+      }
+    "
+    HAVE_CRC32_INTRINSIC
+  )
+  if (NOT ${HAVE_CRC32_INTRINSIC})
+    message(FATAL_ERROR "Intel _mm_crc32_* intrinsics not available. Cannot support them.")
+  endif()
+else()
+  message(STATUS "Intel _mm_crc32_* intrinsic support disabled.")
+  set(SUPPORT_CRC32 0) # For config.h
 endif()
 
 ################################################################################

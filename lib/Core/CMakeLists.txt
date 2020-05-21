@@ -41,6 +41,10 @@ klee_add_component(kleeCore
   Threading.cpp
 )
 
+if (${ENABLE_CRC32_SUPPORT})
+  set_source_files_properties(Executor.cpp PROPERTIES COMPILE_FLAGS -msse4.2)
+endif()
+
 # TODO: Work out what the correct LLVM components are for
 # kleeCore.
 set(LLVM_COMPONENTS
