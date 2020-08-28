@@ -83,6 +83,52 @@ DIAGNOSED_NVMDIRECT = {
 
 }
 
+REMOVE_NVMDIRECT = {
+
+    'universal performance 2 (extra flush in TX)': [
+        'nvm_undo at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:1764',
+    ],
+
+    'universal performance 3 (extra flush/fence at txend)': [
+        'nvm_txend at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:877'
+    ],
+
+    'universal performance 4 (unnecessary flush at commit)': [
+        'nvm_commit at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2755',
+    ],
+
+    'universal performance 5 (unnecessary region flush)': [
+        'nvm_create_region at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:616'
+    ],
+
+    'universal performance 6 (unnecessary heap flush)': [
+        # Seems they thought this would clear it from the CPU, but in pmdk could be hinted to stay
+        'nvm_create_baseheap at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:367'
+    ],
+
+    'universal performance 7 (unnecessary full block flush on txend)': [
+        'nvm_free_callback at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:1967'
+    ],
+
+    'transient use 1 (unflushed link)': [
+        'nvm_txend at nvm_transaction.c:872',
+        'nvm_txend at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:884',
+        'nvm_txend at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:889'
+    ],
+
+    'transient use 2 (dead list)': [
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5351',
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5333',
+    ],
+
+    'transient use 3 (Transaction transients)': [
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5325',
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5301',
+        'nvm_commit at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2836'
+    ],
+
+}
+
 DIAGNOSED_MEMCACHED = {
     'transient use 1 (item free list)': [
         'do_item_crawl_q at items.c:1880',
@@ -203,7 +249,8 @@ DIAGNOSED_PMDK = {
     # to persist nbuckets after 
     # consequence of universal perf #2
     'semantic correctness 1 [hashmap_atomic] (nbuckets flushed with buckets)': [
-        'create_buckets at nvmbugs/hashmap_atomic/hashmap_atomic.c:118',
+        'create_buckets at nvmbugs/hashmap_atomic/hashmap_atomic.c:120',
+        # 'create_buckets at nvmbugs/hashmap_atomic/hashmap_atomic.c:118',
     ],
 
     # Examples: rbtree
@@ -211,6 +258,10 @@ DIAGNOSED_PMDK = {
         'tree_map_insert_bst at nvmbugs/003_pmdk_rbtree_map/rbtree_map_buggy.c:174'
     ],
 }
+
+COUNT_DOUBLE = [
+    'create_buckets at nvmbugs/hashmap_atomic/hashmap_atomic.c:120'
+]
 
 DIAGNOSED_RECIPE = {
      # Sys on PMDK: recipe
@@ -279,11 +330,14 @@ def remove_diagnosed(df, diagnosed):
         dgn += bug_list
 
     to_remove = []
+    to_keep = []
     for i, row in df.iterrows():
         for x in row:
             if x in dgn:
                 to_remove += [i]
-    return df.drop(index=to_remove)
+            else:
+                to_keep += [i]
+    return df.drop(index=to_remove), df.drop(index=to_keep)
 
 def get_diagnosed(series, diagnosed):
     for bug, loc_list in diagnosed.items():
@@ -295,23 +349,35 @@ def get_diagnosed(series, diagnosed):
     raise Exception('Not yet diagnosed!')
 
 def uniquify(df, diagnosed):
-    unique_bugs = []
+    unique_bugs = {}
     for k, v in diagnosed.items():
-        unique_bugs += v
+        diagnosis = 'performance'
+        if 'correctness' in k:
+            diagnosis = 'correctness'
+        if 'transient' in k:
+            diagnosis = 'transient'
+
+        for x in v:
+            unique_bugs[x] = diagnosis
 
     sdf = df.sort_values('Timestamp').reset_index().drop('index', axis=1)
     uniqueNum = 0
     data = []
     bugs = []
+    bug_types = []
+    last_diagnosis = None
     for i in range(0, len(sdf)):
         bug = get_diagnosed(sdf.loc[i], diagnosed)
         if bug in unique_bugs:
             uniqueNum += 1
-            unique_bugs.remove(bug)
+            last_diagnosis = unique_bugs[bug]
+            unique_bugs.pop(bug)
         data += [uniqueNum]
         bugs += [bug]
+        bug_types += [last_diagnosis]
     sdf['UniqueBugsAtTime'] = data
     sdf['BugDiagnosis'] = bugs
+    sdf['BugType'] = bug_types
     # embed()
 
     return sdf
@@ -404,10 +470,18 @@ def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
             raise Exception(f'{search} not in SEARCHES!')
 
         df = pd.read_csv(csv_file)
-        df = remove_diagnosed(df, FALSE_POS)
+        df, _ = remove_diagnosed(df, FALSE_POS)
+
+        if 'crt' in exp_dir_str:
+            df, _ = remove_diagnosed(df, REMOVE_NVMDIRECT)
+            # embed()
+            continue
 
         if system in FILTER_PMDK:
-            df = remove_diagnosed(df, DIAGNOSED_PMDK)
+            df, xdf = remove_diagnosed(df, DIAGNOSED_PMDK)
+            df_dict['pmdk'][search] += [xdf]
+            # xdf = df - fdf
+            # embed()
         
         df_dict[system][search] += [df]
     
@@ -432,24 +506,35 @@ def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
     total = 0
     correctness = 0
     performance = 0
+    transient = 0
+    summary_dfs = []
     for system, df_list in summary_dict.items():
         df = pd.concat(df_list)
         df = uniquify(df, DIAGNOSED_MAPPING[system])
 
         summary_info[system]['Total'] = df['UniqueBugsAtTime'].max()
         gdf = df.drop_duplicates(subset='BugDiagnosis', keep='first')
-        summary_info[system]['Correctness'] = len(gdf[gdf['Type'] == CORRECTNESS])
-        summary_info[system]['Performance'] = len(gdf[gdf['Type'] != CORRECTNESS])
+        gdf['System'] = [system] * len(gdf)
+        summary_info[system]['Correctness'] = len(gdf[gdf['BugType'] == 'correctness'])
+        summary_info[system]['Performance'] = len(gdf[gdf['BugType'] != 'correctness'])
+        # embed()
         assert(summary_info[system]['Total'] == \
                summary_info[system]['Correctness'] + summary_info[system]['Performance'])
         total += summary_info[system]['Total']
         correctness += summary_info[system]['Correctness']
-        performance += summary_info[system]['Performance']
+        performance += len(gdf[gdf['BugType'] == 'performance'])
+        transient += len(gdf[gdf['BugType'] == 'transient'])
+        # embed()
+        summary_dfs += [gdf[['System', 'BugType', 'BugDiagnosis']]]
+    
+    sdf = pd.concat(summary_dfs).sort_values(by=['System', 'BugType'])
+    sdf.to_csv('summary.csv', index=False)
 
     
     from pprint import pprint
     pprint(dict(summary_info), indent=4)
     print(f'\nOverall:\n\tTotal: {total}\n\tCorrectness: {correctness}\n\tPerformance: {performance}')
+    print(f'\tTransient: {transient}')
 
 def main():
     convert_all()

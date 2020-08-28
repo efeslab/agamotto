@@ -23,7 +23,11 @@ def graph(dfs, searches, xlabel, ylabel, xlim):
         try:
             df = df.drop_duplicates(subset='x')
             max_bugs = max(max_bugs, df['y'].max())
+<<<<<<< Updated upstream
             print(df['y'].max())
+=======
+            print(df[df['x'] <= xlim]['y'].max())
+>>>>>>> Stashed changes
             pivoted = df.pivot(index='x', columns='label', values='y')
             pivoted.plot.line(ax=ax, linestyle=STYLES[search], color=COLORS[search])
         except:
@@ -36,7 +40,7 @@ def graph(dfs, searches, xlabel, ylabel, xlim):
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.xlim(0, xlim)
-    plt.legend(loc='right')
+    plt.legend(loc='lower right')
 
 def output(output_file):
     fig = plt.gcf()

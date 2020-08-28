@@ -99,22 +99,46 @@ touch appendonly.aof
 	# --only-output-states-covering-new \
 	# --all-external-warnings \
 	# --posix-debug \
+
+
+# set -x
+# $KLEE \
+# 	--output-dir=$OUTPUT \
+# 	--disable-verify=true \
+# 	--max-memory=128000 \
+# 	--libc=uclibc \
+#   --calloc-max-unit-size=4096 \
+# 	--link-known-lib=libpmem \
+# 	--link-llvm-lib=build/libjemalloc.bca \
+# 	--link-llvm-lib=build/libjemallocat.bca \
+# 	--link-llvm-lib=build/libmemkind.bca \
+# 	# --link-llvm-lib=build/libhiredis.bca \
+# 	# --link-llvm-lib=build/liblua.bca \
+# 	--link-llvm-lib=build/libaofguard.bca \
+# 	# --link-llvm-lib=build/libnuma.bca \
+# 	--posix-runtime \
+# 	--env-file=pmdk.env \
+# 	$SEARCH \
+# 	--check-div-zero=false \
+# 	--check-overshift=false \
+# 	$TARGET \
+# 	$SYM_FILE_OPTS \
+# 	$PMEM_INIT_OPTS \
+# 	$TCP_OPTS \
+# 	$REDIS_CONF
+
+
+	# --link-llvm-lib=build/libjemalloc.bca \
+	# --link-llvm-lib=build/libjemallocat.bca \
+	# --link-llvm-lib=build/libmemkind.bca \
+	# --link-llvm-lib=build/libaofguard.bca \
+
 set -x
 $KLEE \
 	--output-dir=$OUTPUT \
 	--disable-verify=true \
 	--max-memory=128000 \
-	--libc=uclibc \
   --calloc-max-unit-size=4096 \
-	--link-known-lib=libpmem \
-	--link-llvm-lib=build/libjemalloc.bca \
-	--link-llvm-lib=build/libjemallocat.bca \
-	--link-llvm-lib=build/libmemkind.bca \
-	--link-llvm-lib=build/libhiredis.bca \
-	--link-llvm-lib=build/liblua.bca \
-	--link-llvm-lib=build/libaofguard.bca \
-	--link-llvm-lib=build/libnuma.bca \
-	--posix-runtime \
 	--env-file=pmdk.env \
 	$SEARCH \
 	--check-div-zero=false \

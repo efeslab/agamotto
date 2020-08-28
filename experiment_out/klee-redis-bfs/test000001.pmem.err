@@ -1,73 +1,73 @@
 Error: persistent memory violation!
 File: runtime/POSIX/./multiprocess.h
 Line: 180
-assembly.ll line: 473463
+assembly.ll line: 473465
 Stack: 
 Current Thread: 1
 Thread 1, Process 0, enabled
 		PC:   call void @klee_thread_preempt(i32 %3), !dbg !12058 (op #0=<global const>, op #1=0)
-	#000473463 in __thread_preempt.1037 (=0) at runtime/POSIX/./multiprocess.h:180
-	#100473335 in pthread_mutex_lock (=239800448) at runtime/POSIX/./threadsync.c:189
-	#200377855 in moduleHandleBlockedClients () at module.c:3391
-	#300377664 in beforeSleep (=4387570824) at server.c:1241
-	#400348991 in aeMain (=4387570824) at ae.c:463
-	#500385968 in __klee_posix_wrapped_main (=2, =241194176) at server.c:4042
-	#600013141 in __klee_posix_ctor_stub_insert_point (=2, =241194176, =92287320) at runtime/POSIX/./klee_init_env.c:555
-	#700013161 in __user_main (=18, =92287168, =92287320) at runtime/POSIX/./klee_init_env.c:563
-	#800007015 in __uClibc_main (=28461832, =18, =92287168, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
-	#900007182 in main (=18, =92287168)
+	#000473465 in __thread_preempt.1037 (=0) at runtime/POSIX/./multiprocess.h:180
+	#100473337 in pthread_mutex_lock (=366441968) at runtime/POSIX/./threadsync.c:189
+	#200377857 in moduleHandleBlockedClients () at module.c:3391
+	#300377666 in beforeSleep (=4386130088) at server.c:1241
+	#400348993 in aeMain (=4386130088) at ae.c:463
+	#500385970 in __klee_posix_wrapped_main (=2, =367803712) at server.c:4042
+	#600013143 in __klee_posix_ctor_stub_insert_point (=2, =367803712, =92664152) at runtime/POSIX/./klee_init_env.c:555
+	#700013163 in __user_main (=18, =92664000, =92664152) at runtime/POSIX/./klee_init_env.c:563
+	#800007017 in __uClibc_main (=28838664, =18, =92664000, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900007184 in main (=18, =92664000)
 Thread 2, Process 0, disabled
 		PC:   call void (...) @klee_thread_terminate() #41, !dbg !12093 (op #0=<global const>)
-	#000472652 in pthread_exit (=0) at runtime/POSIX/./threads.c:114
-	#100468574 in connect_and_run_client (=241254528) at runtime/POSIX/socksim/client.c:79
+	#000472654 in pthread_exit (=0) at runtime/POSIX/./threads.c:114
+	#100468576 in connect_and_run_client (=367837952) at runtime/POSIX/socksim/client.c:79
 Thread 3, Process 0, disabled
 		PC:   call void @klee_thread_sleep(i64 %3), !dbg !12060 (op #0=<global const>, op #1=57)
-	#000473473 in __thread_sleep.1038 (=57) at runtime/POSIX/./multiprocess.h:193
-	#100474894 in _atomic_sem_lock (=250938880, =0) at runtime/POSIX/./threadsync.c:692
-	#200474819 in sem_wait (=102693528) at runtime/POSIX/./threadsync.c:702
-	#300376719 in afsync_thread (=102693448) at src/aofguard.c:93
+	#000473475 in __thread_sleep.1038 (=57) at runtime/POSIX/./multiprocess.h:193
+	#100474896 in _atomic_sem_lock (=1455977152, =0) at runtime/POSIX/./threadsync.c:692
+	#200474821 in sem_wait (=103202872) at runtime/POSIX/./threadsync.c:702
+	#300376721 in afsync_thread (=103202792) at src/aofguard.c:93
 Thread 4, Process 0, disabled
 		PC:   call void @klee_thread_sleep(i64 %3), !dbg !12060 (op #0=<global const>, op #1=61)
-	#000473473 in __thread_sleep.1038 (=61) at runtime/POSIX/./multiprocess.h:193
-	#100473841 in _atomic_cond_wait (=255668672, =255609888) at runtime/POSIX/./threadsync.c:300
-	#200473769 in pthread_cond_wait (=82091776, =115311072) at runtime/POSIX/./threadsync.c:315
-	#300381022 in bioProcessBackgroundJobs (=0) at bio.c:176
+	#000473475 in __thread_sleep.1038 (=61) at runtime/POSIX/./multiprocess.h:193
+	#100473843 in _atomic_cond_wait (=1456813184, =1455979552) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=88407808, =103242112) at runtime/POSIX/./threadsync.c:315
+	#300381024 in bioProcessBackgroundJobs (=0) at bio.c:176
 Thread 5, Process 0, disabled
 		PC:   call void @klee_thread_sleep(i64 %3), !dbg !12060 (op #0=<global const>, op #1=64)
-	#000473473 in __thread_sleep.1038 (=64) at runtime/POSIX/./multiprocess.h:193
-	#100473841 in _atomic_cond_wait (=255669216, =254141792) at runtime/POSIX/./threadsync.c:300
-	#200473769 in pthread_cond_wait (=82091824, =115311112) at runtime/POSIX/./threadsync.c:315
-	#300381022 in bioProcessBackgroundJobs (=1) at bio.c:176
+	#000473475 in __thread_sleep.1038 (=64) at runtime/POSIX/./multiprocess.h:193
+	#100473843 in _atomic_cond_wait (=1456026848, =1454491232) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=88407856, =103242152) at runtime/POSIX/./threadsync.c:315
+	#300381024 in bioProcessBackgroundJobs (=1) at bio.c:176
 Thread 6, Process 0, disabled
 		PC:   call void @klee_thread_sleep(i64 %3), !dbg !12060 (op #0=<global const>, op #1=67)
-	#000473473 in __thread_sleep.1038 (=67) at runtime/POSIX/./multiprocess.h:193
-	#100473841 in _atomic_cond_wait (=255608992, =255670464) at runtime/POSIX/./threadsync.c:300
-	#200473769 in pthread_cond_wait (=82091872, =115311152) at runtime/POSIX/./threadsync.c:315
-	#300381022 in bioProcessBackgroundJobs (=2) at bio.c:176
+	#000473475 in __thread_sleep.1038 (=67) at runtime/POSIX/./multiprocess.h:193
+	#100473843 in _atomic_cond_wait (=1455978272, =1456028096) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=88407904, =103242192) at runtime/POSIX/./threadsync.c:315
+	#300381024 in bioProcessBackgroundJobs (=2) at bio.c:176
 Thread 7, Process 0, disabled
 		PC:   call void @klee_thread_sleep(i64 %3), !dbg !12060 (op #0=<global const>, op #1=70)
-	#000473473 in __thread_sleep.1038 (=70) at runtime/POSIX/./multiprocess.h:193
-	#100473841 in _atomic_cond_wait (=255608640, =254140800) at runtime/POSIX/./threadsync.c:300
-	#200473769 in pthread_cond_wait (=82091920, =115311192) at runtime/POSIX/./threadsync.c:315
-	#300381022 in bioProcessBackgroundJobs (=3) at bio.c:176
+	#000473475 in __thread_sleep.1038 (=70) at runtime/POSIX/./multiprocess.h:193
+	#100473843 in _atomic_cond_wait (=1456023552, =1454490240) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=88407952, =103242232) at runtime/POSIX/./threadsync.c:315
+	#300381024 in bioProcessBackgroundJobs (=3) at bio.c:176
 Errors: 
 1) File: src/aofguard.c
 Line: 38
-assembly.ll line: 264270
+assembly.ll line: 264272
  allocated at _block_init_pmem():  %32 = call i8* @klee_pmem_alloc_pmem(i64 %28, i8* %29, i1 zeroext %31, i8* null), !dbg !12098
 Stack: 
 Current Thread: 1
 Thread 1, Process 0, enabled
-		PC:   store i64 %14, i64* %13, align 1, !dbg !12067, !nontemporal !12068 (op #0=0, op #1=3049578504)
-	#000264270 in nvm_set_64 (=3049578504, =0) at src/aofguard.c:38
-	#100376633 in aofguard_init (=102693448, =7, =5, =251529960, =536870912, =0) at src/aofguard.c:185
-	#200380203 in initServer () at server.c:2055
-	#300385874 in __klee_posix_wrapped_main (=2, =241194176) at server.c:4005
-	#400013141 in __klee_posix_ctor_stub_insert_point (=2, =241194176, =92287320) at runtime/POSIX/./klee_init_env.c:555
-	#500013161 in __user_main (=18, =92287168, =92287320) at runtime/POSIX/./klee_init_env.c:563
-	#600007015 in __uClibc_main (=28461832, =18, =92287168, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
-	#700007182 in main (=18, =92287168)
+		PC:   store i64 %14, i64* %13, align 1, !dbg !12067, !nontemporal !12068 (op #0=0, op #1=3050004488)
+	#000264272 in nvm_set_64 (=3050004488, =0) at src/aofguard.c:38
+	#100376635 in aofguard_init (=103202792, =7, =5, =1452379368, =536870912, =0) at src/aofguard.c:185
+	#200380205 in initServer () at server.c:2055
+	#300385876 in __klee_posix_wrapped_main (=2, =367803712) at server.c:4005
+	#400013143 in __klee_posix_ctor_stub_insert_point (=2, =367803712, =92664152) at runtime/POSIX/./klee_init_env.c:555
+	#500013163 in __user_main (=18, =92664000, =92664152) at runtime/POSIX/./klee_init_env.c:563
+	#600007017 in __uClibc_main (=28838664, =18, =92664000, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#700007184 in main (=18, =92664000)
 Thread 2, Process 0, enabled
 		PC:   %2 = alloca i8*, align 8 (op #0=<global const>)
-	#000468556 in connect_and_run_client (=241254528) at /home/iangneal/workspace/nvm-reliability-study/klee-nvm/runtime/POSIX/socksim/client.c:70
+	#000468558 in connect_and_run_client (=367837952) at /home/iangneal/workspace/nvm-reliability-study/klee-nvm/runtime/POSIX/socksim/client.c:70
 

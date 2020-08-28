@@ -228,6 +228,8 @@ static void redis_file_client_func(void *self) {
   size_t nops = 0;
   klee_make_symbolic(&nops, sizeof(nops), "nops");
   klee_assume(nops <= 100);
+  size_t nprints = 0;
+  klee_make_symbolic(&nprints, sizeof(nprints), "nprints");
 
   const char *fname = NULL;
   int minbatch = DEFAULT_BATCH_SIZE;
@@ -241,6 +243,9 @@ static void redis_file_client_func(void *self) {
   while (fgets(req, sizeof(req), file)) {
     if (total_ops >= nops) break;
     total_ops++;
+    for (int i = 0; i < nprints; ++i) {
+      printf("i=%d\n", i);
+    }
 
     if (i == 0) {
       batchsz = randint(minbatch, maxbatch);
