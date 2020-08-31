@@ -33,6 +33,7 @@ sudo guestunmount mnt
 
 cd ~/
 git clone https://github.com/efeslab/klee-nvm.git agamotto 
+git submodule init
 ```
 
 #### Using the prebuilt VM
@@ -46,6 +47,64 @@ ssh reviewer@localhost -p 5000
 ```
 
 #### Compile <span style="font-variant:small-caps;">Agamotto</span>
+
+Heavily adapted from: http://klee.github.io/build-llvm9/
+
+```
+mkdir -p agamotto/build
+cd agamotto
+
+sudo apt install -y python3-pip build-essential curl libcap-dev git cmake libncurses5-dev python-minimal python-pip unzip libtcmalloc-minimal4 libgoogle-perftools-dev libsqlite3-dev doxygen python3-pip libselinux1-dev clang-8 llvm-8 llvm-8-dev llvm-8-tools pandoc
+
+sudo -H pip3 install wllvm tabulate lit
+
+# Install STP https://github.com/stp/stp
+sudo apt-get install -y cmake bison flex libboost-all-dev python perl minisat
+git clone https://github.com/stp/stp
+cd stp
+git submodule init && git submodule update
+mkdir build
+cd build
+cmake ..
+cmake --build .
+sudo cmake --install .
+
+source build.env
+
+# uCLibc
+
+cd klee-uclibc
+./configure --make-llvm-lib --with-llvm-config=$(which llvm-config-8)
+make -j$(nproc)
+cd ..
+
+# LibCXX
+
+LLVM_VERSION=8 SANITIZER_BUILD= BASE=$(realpath ./build/) REQUIRES_RTTI=1 DISABLE_ASSERTIONS=1 ENABLE_DEBUG=0 ENABLE_OPTIMIZED=1 ./scripts/build/build.sh libcxx
+
+# Finally build Agamotto
+
+cd agamotto/build
+
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DENABLE_SOLVER_STP=ON \
+  -DENABLE_POSIX_RUNTIME=ON \
+  -DENABLE_KLEE_UCLIBC=ON \
+  -DKLEE_UCLIBC_PATH=$(realpath ../klee-uclibc) \
+  -DENABLE_UNIT_TESTS=OFF \
+  -DLLVM_CONFIG_BINARY=$(which llvm-config-8) \
+  -DLLVMCC=$(which clang-8) \
+  -DLLVMCXX=$(which clang++-8) \
+  -DCMAKE_C_COMPILER=$(which clang-8) \
+  -DCMAKE_CXX_COMPILER=$(which clang++-8) \
+  -DENABLE_KLEE_LIBCXX=ON \
+  -DKLEE_LIBCXX_DIR=$(realpath .)/libc++-install-8/ \
+  -DKLEE_LIBCXX_INCLUDE_DIR=$(realpath .)/libc++-install-8/include/c++/v1/ \
+  ..
+
+make -j$(nproc)
+
+```
 
 ## Results Reproduced
 

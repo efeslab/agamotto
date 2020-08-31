@@ -1,7 +1,8 @@
 #! /bin/bash
 set +x
 
-OUTDIR=../../experiment_out
+
+OUTDIR=./
 
 # 1. Agamotto
 ./klee --output-dir=$OUTDIR/klee-memcached-static --search=nvm --nvm-heuristic-type=static \
