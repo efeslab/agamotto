@@ -1,5 +1,5 @@
 * text=auto
-
 *.h text
 *.c text
 *.cpp text
+old_klee_out/** filter=lfs diff=lfs merge=lfs -text

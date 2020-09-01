@@ -1,4 +1,22 @@
-# Artifact Evaluation Instructions
+# <span style="font-variant:small-caps;">Agamotto</span> OSDI '20 Artifact
+
+This document describes the artifact for our OSDI '20 paper on <span style="font-variant:small-caps;">Agamotto</span>, a symbolic-execution based approach for systematically finding bugs in persistent memory applications and libraries. The remainder of this document describes how to run <span style="font-variant:small-caps;">Agamotto</span> and reproduce the key results from our paper.
+
+### Downloads
+---
+
+
+
+## Artifact Overview
+---
+
+`targets/`: This directory contains the scripts required to run all the tests needed to reproduce the main results from the paper.
+After running experiments, the results will be placed into the `results/` directory
+
+`results/`: This directory contains the scripts required to parse the results generated from the main experiments.
+
+`vm_scripts/`: This directory contains scripts for building and running the evaluation VM.
+
 
 ## Artifacts Available Criteria
 

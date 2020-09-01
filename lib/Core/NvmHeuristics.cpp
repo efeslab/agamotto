@@ -651,10 +651,6 @@ NvmStaticHeuristic::NvmStaticHeuristic(Executor *executor, KFunction *mainFn)
     module_(executor->kmodule->module.get()),
     nvmSites_(utils::getNvmAllocationSites(module_, analysis_)),
     valueState_(NvmValueDesc::staticState(analysis_, module_)) {
-  klee_message("NvmStaticHeuristic initialization complete!\n");
-  errs() << stats::nvmOfflineTime << "\n";
-  errs() << "micro\n";
-  exit(1);
 }
 
 uint64_t NvmStaticHeuristic::computeInstWeight(Instruction *i) const {
@@ -704,8 +700,11 @@ void NvmStaticHeuristic::computePriority(void) {
   do {
     c = false;
     for (CallBase *cb : call_insts) {
+      assert(cb && "callbase is nullptr!");
       std::unordered_set<Function*> possibleFns;
-      cb = dyn_cast<CallBase>(cb->stripPointerCasts());
+      // errs() << *cb << "\n";
+      auto *tmp = dyn_cast<CallBase>(cb->stripPointerCasts());
+      if (tmp) cb = tmp;
       assert(cb && "could not strip!");
       if (Function *f = utils::getCallInstFunction(cb)) {
         possibleFns.insert(f);

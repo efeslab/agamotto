@@ -6,6 +6,11 @@
 # License. See LICENSE.TXT for details.
 #
 #===------------------------------------------------------------------------===#
+
+set(ANDERSEN_SRC ${PROJECT_SOURCE_DIR}/deps/andersen-pa)
+include_directories(${ANDERSEN_SRC}/include)
+list(APPEND KLEE_COMPONENT_EXTRA_INCLUDE_DIRS ${ANDERSEN_SRC}/include)
+
 set(KLEE_MODULE_COMPONENT_SRCS
   Checks.cpp
   FunctionAlias.cpp

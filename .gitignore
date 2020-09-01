@@ -49,3 +49,6 @@ googletest-release-*
 # VSCode
 *.code-workspace
 settings.json
+
+# Other
+experiment_out

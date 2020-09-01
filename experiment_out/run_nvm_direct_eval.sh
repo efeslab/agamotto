@@ -7,6 +7,22 @@ cd ../build/bin
 ulimit -s unlimited
 
 # 1. Agamotto
+./klee --output-dir=$OUTDIR/klee-nvm-direct-concrete-static --search=nvm --nvm-heuristic-type=static \
+  --custom-checkers=false --max-time=3600 --write-errors-only=true --max-memory=10000  \
+  --disable-verify=true --libc=uclibc --link-known-lib=libpmem \
+  --posix-runtime --env-file=pmdk.env \
+  005_AllocsOriginal.bc --sym-pmem-delay PMEM 8388608 PMEM 10 &
+
+# 2. Default (random-path + covnew)
+./klee --output-dir=$OUTDIR/klee-nvm-direct-concrete-default \
+  --custom-checkers=false --max-time=3600 --write-errors-only=true --max-memory=10000  \
+  --disable-verify=true --libc=uclibc --link-known-lib=libpmem \
+  --posix-runtime --env-file=pmdk.env \
+  005_AllocsOriginal.bc --sym-pmem-delay PMEM 8388608 PMEM 10 &
+
+exit
+
+# 1. Agamotto
 ./klee --output-dir=$OUTDIR/klee-nvm-direct-no-fc-static --search=nvm --nvm-heuristic-type=static \
   --custom-checkers=false --max-time=3600 --write-errors-only=true --max-memory=10000  \
   --disable-verify=true --libc=uclibc --link-known-lib=libpmem \

@@ -47,12 +47,15 @@
 #endif
 
 #include <algorithm>
+#include <ctime>
 #include <fstream>
 #include <map>
 #include <set>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include "../Core/NvmAnalysisUtils.h"
 
 using namespace llvm;
 using namespace klee;
@@ -238,6 +241,16 @@ static bool linkTwoModules(llvm::Module *Dest,
                            std::string &errorMsg) {
   // Get the potential error message (Src is moved and won't be available later)
   errorMsg = "Linking module " + Src->getModuleIdentifier() + " failed";
+
+  // std::time_t st = std::time(0);
+  // // XXX: test static analysis time.
+  // {
+  //   auto junk = utils::createAndersen(*Src);
+  // }
+  // std::time_t et = std::time(0);
+  // klee_message("Module %s took %ld seconds to analyze!\n", 
+  //               Src->getName().data(), et - st);
+
   auto linkResult = Linker::linkModules(*Dest, removeMultipleSymbols(Dest, std::move(Src)));
 
   return !linkResult;
@@ -255,6 +268,7 @@ klee::linkModules(std::vector<std::unique_ptr<llvm::Module>> &modules,
 
     // Just link all modules together
     for (auto &module : modules) {
+
       if (linkTwoModules(composite.get(), std::move(module), errorMsg))
         continue;
 

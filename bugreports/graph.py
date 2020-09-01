@@ -23,11 +23,7 @@ def graph(dfs, searches, xlabel, ylabel, xlim):
         try:
             df = df.drop_duplicates(subset='x')
             max_bugs = max(max_bugs, df['y'].max())
-<<<<<<< Updated upstream
-            print(df['y'].max())
-=======
             print(df[df['x'] <= xlim]['y'].max())
->>>>>>> Stashed changes
             pivoted = df.pivot(index='x', columns='label', values='y')
             pivoted.plot.line(ax=ax, linestyle=STYLES[search], color=COLORS[search])
         except:
@@ -107,18 +103,26 @@ def get_dfs(system, xmax, root_dir=Path('./parsed')):
 
     SEARCHES = {'covnew': 'KLEE Default', 
             'default': 'KLEE Default', 
-            'static': 'Aɢᴀᴍᴏᴛᴛᴏ'}
+            'static': 'Aɢᴀᴍᴏᴛᴛᴏ',
+            'dfs': 'Aɢᴀᴍᴏᴛᴛᴏ'}
     
     # Ensure we either get default or covnew
     use_covnew = True
+    use_depth = True
     # Puts 'static' first
     csv_files = sorted(glob.glob(str(root_dir / f'{system}_*.csv')), reverse=True)
+    print(csv_files)
     for csv_file in csv_files:
         if 'default' in csv_file:
             use_covnew = False
+        if 'static' in csv_file:
+            use_depth = False
+        print(csv_file)
     
     if not use_covnew:
         SEARCHES.pop('covnew')
+    if not use_depth:
+        SEARCHES.pop('dfs')
 
     for csv_file in csv_files:
         csv_path = Path(csv_file)

@@ -25,7 +25,7 @@ FALSE_POS = {
 }
 
 # Bug name => list of locations
-DIAGNOSED_NVMDIRECT = {
+OLD_DIAGNOSED_NVMDIRECT = {
 
     'universal correctness 1 (unflushed state)': [
         'nvm_txend at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:874',
@@ -83,51 +83,7 @@ DIAGNOSED_NVMDIRECT = {
 
 }
 
-REMOVE_NVMDIRECT = {
 
-    'universal performance 2 (extra flush in TX)': [
-        'nvm_undo at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:1764',
-    ],
-
-    'universal performance 3 (extra flush/fence at txend)': [
-        'nvm_txend at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:877'
-    ],
-
-    'universal performance 4 (unnecessary flush at commit)': [
-        'nvm_commit at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2755',
-    ],
-
-    'universal performance 5 (unnecessary region flush)': [
-        'nvm_create_region at nvmbugs/005_nvm_direct/no_fc_lib/nvm_region.c:616'
-    ],
-
-    'universal performance 6 (unnecessary heap flush)': [
-        # Seems they thought this would clear it from the CPU, but in pmdk could be hinted to stay
-        'nvm_create_baseheap at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:367'
-    ],
-
-    'universal performance 7 (unnecessary full block flush on txend)': [
-        'nvm_free_callback at nvmbugs/005_nvm_direct/no_fc_lib/nvm_heap.c:1967'
-    ],
-
-    'transient use 1 (unflushed link)': [
-        'nvm_txend at nvm_transaction.c:872',
-        'nvm_txend at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:884',
-        'nvm_txend at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:889'
-    ],
-
-    'transient use 2 (dead list)': [
-        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5351',
-        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5333',
-    ],
-
-    'transient use 3 (Transaction transients)': [
-        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5325',
-        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5301',
-        'nvm_commit at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2836'
-    ],
-
-}
 
 DIAGNOSED_MEMCACHED = {
     'transient use 1 (item free list)': [
@@ -324,6 +280,65 @@ DIAGNOSED_REDIS = {
     ],
 }
 
+DIAGNOSED_NVMDIRECT = {
+
+    'universal correctness 1 (unpersisted heap data)': [
+        'nvm_create_baseheap at nvmbugs/005_nvm_direct/original_lib/nvm_heap.c:360',
+        'nvm_create_baseheap at nvmbugs/005_nvm_direct/original_lib/nvm_heap.c:350',
+        'nvm_create_baseheap at nvmbugs/005_nvm_direct/original_lib/nvm_heap.c:359',
+        'nvm_freelist_link at nvmbugs/005_nvm_direct/original_lib/nvm_heap.c:2936',
+    ],
+
+    'universal correctness 2 (unpersisted transaction data)': [
+        'nvm_recover at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:5374',
+        'nvm_txend at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:872',
+    ],
+
+    'universal correctness 3 (branch set)': [
+        'branch_set at nvmbugs/005_nvm_direct/types.h:34',
+    ] ,
+
+    'universal performance 1 (unnecessary fence)': [
+        'nvm_txend at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:873',
+    ],
+
+    'universal performance 2 (unnecessary flush)': [
+        'nvm_add_oper at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:1430',
+        'nvm_commit at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:2751',
+        'nvm_txbegin at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:545',
+        'nvm_add_oper at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:1429',
+        'nvm_txbegin at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:545',
+        'nvm_create_baseheap at nvmbugs/005_nvm_direct/original_lib/nvm_heap.c:367',
+    ],
+
+    'perf?': [
+        'nvm_create_trans_table at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:4649',
+        'nvm_create_heap at nvmbugs/005_nvm_direct/original_lib/nvm_heap.c:741',
+        'nvm_oncommit at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:2243'
+    ],
+
+    'transient use 1 (unflushed link)': [
+        'nvm_txend at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:884',
+        'nvm_txend at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:885',
+        'nvm_txend at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:880',
+    ],
+
+    'transient?': [
+        'nvm_recover at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:5323',
+        'nvm_recover at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:5341',
+        'nvm_recover at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:5294',
+        'nvm_recover at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:5315',        
+        'nvm_commit at nvmbugs/005_nvm_direct/original_lib/nvm_transaction.c:2832',
+
+        'nvm_commit at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:2836',
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5325',
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5351',
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5301',
+        'nvm_recover at nvmbugs/005_nvm_direct/no_fc_lib/nvm_transaction.c:5333',
+
+    ]
+}
+
 def remove_diagnosed(df, diagnosed): 
     dgn = []
     for _, bug_list in diagnosed.items():
@@ -337,6 +352,7 @@ def remove_diagnosed(df, diagnosed):
                 to_remove += [i]
             else:
                 to_keep += [i]
+
     return df.drop(index=to_remove), df.drop(index=to_keep)
 
 def get_diagnosed(series, diagnosed):
@@ -345,7 +361,6 @@ def get_diagnosed(series, diagnosed):
             if x in loc_list:
                 return x
     
-    # embed()
     raise Exception('Not yet diagnosed!')
 
 def uniquify(df, diagnosed):
@@ -437,7 +452,7 @@ DIAGNOSED_MAPPING = {
     'redis': DIAGNOSED_REDIS
 }
 
-def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
+def convert_all(root_dir, out_dir):
     from collections import defaultdict
     import glob
     source_name = 'all_pmem_errs.csv'
@@ -462,6 +477,7 @@ def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
         system = parts[1]
         if system == 'nvm':
             system = f'{system}-{parts[2]}'
+            print(exp_dir_str, system)
         search = parts[-1]
 
         if system not in SYSTEMS:
@@ -471,11 +487,6 @@ def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
 
         df = pd.read_csv(csv_file)
         df, _ = remove_diagnosed(df, FALSE_POS)
-
-        if 'crt' in exp_dir_str:
-            df, _ = remove_diagnosed(df, REMOVE_NVMDIRECT)
-            # embed()
-            continue
 
         if system in FILTER_PMDK:
             df, xdf = remove_diagnosed(df, DIAGNOSED_PMDK)
@@ -490,10 +501,10 @@ def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
 
     for system, search_dict in df_dict.items():
         for search, df_list in search_dict.items():
-            combined_df = pd.concat(df_list)
-            # if system == 'redis':
-            #     df = remove_diagnosed(combined_df, DIAGNOSED_MAPPING[system])
-            #     embed()
+            combined_df = pd.concat(df_list).reset_index(drop=True)
+            if system == 'nvm-direct':
+                df, _ = remove_diagnosed(combined_df, DIAGNOSED_MAPPING[system])
+                embed()
             df = uniquify(combined_df, DIAGNOSED_MAPPING[system])
             out_file = out_dir / f'{system}_{search}.csv'
             df.to_csv(out_file)
@@ -537,7 +548,14 @@ def convert_all(root_dir=Path('../experiment_out'), out_dir=Path('parsed')):
     print(f'\tTransient: {transient}')
 
 def main():
-    convert_all()
+    parser = ArgumentParser('Parse all of the bug reports in a given directory.')
+    parser.add_argument('experiment_output_dir', type=Path, 
+                        help='The location of the experiment outputs.',
+                        default=Path('../experiment_out'))
+    parser.add_argument('outdir', type=Path, help='Where to output parsed results',
+                        default=Path('parsed'))
+    args = parser.parse_args()
+    convert_all(args.experiment_output_dir, args.outdir)
 
 if __name__ == '__main__':
     main()

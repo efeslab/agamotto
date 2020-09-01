@@ -7,47 +7,47 @@ Current Thread: 5
 Thread 1, Process 0, enabled
 		PC:   call void @klee_thread_preempt(i32 %3), !dbg !12058 (op #0=<global const>, op #1=0)
 	#000473465 in __thread_preempt.1037 (=0) at runtime/POSIX/./multiprocess.h:180
-	#100473337 in pthread_mutex_lock (=366441968) at runtime/POSIX/./threadsync.c:189
+	#100473337 in pthread_mutex_lock (=244471280) at runtime/POSIX/./threadsync.c:189
 	#200377857 in moduleHandleBlockedClients () at module.c:3391
-	#300377666 in beforeSleep (=4386130088) at server.c:1241
-	#400348993 in aeMain (=4386130088) at ae.c:463
-	#500385970 in __klee_posix_wrapped_main (=2, =367803712) at server.c:4042
-	#600013143 in __klee_posix_ctor_stub_insert_point (=2, =367803712, =92664152) at runtime/POSIX/./klee_init_env.c:555
-	#700013163 in __user_main (=18, =92664000, =92664152) at runtime/POSIX/./klee_init_env.c:563
-	#800007017 in __uClibc_main (=28838664, =18, =92664000, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
-	#900007184 in main (=18, =92664000)
+	#300377666 in beforeSleep (=4400630952) at server.c:1241
+	#400348993 in aeMain (=4400630952) at ae.c:463
+	#500385970 in __klee_posix_wrapped_main (=2, =245833024) at server.c:4042
+	#600013143 in __klee_posix_ctor_stub_insert_point (=2, =245833024, =102789464) at runtime/POSIX/./klee_init_env.c:555
+	#700013163 in __user_main (=18, =102789312, =102789464) at runtime/POSIX/./klee_init_env.c:563
+	#800007017 in __uClibc_main (=38963976, =18, =102789312, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900007184 in main (=18, =102789312)
 Thread 2, Process 0, disabled
 		PC:   call void (...) @klee_thread_terminate() #41, !dbg !12093 (op #0=<global const>)
 	#000472654 in pthread_exit (=0) at runtime/POSIX/./threads.c:114
-	#100468576 in connect_and_run_client (=367837952) at runtime/POSIX/socksim/client.c:79
+	#100468576 in connect_and_run_client (=245867264) at runtime/POSIX/socksim/client.c:79
 Thread 3, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=57) at runtime/POSIX/./multiprocess.h:198
-	#100474896 in _atomic_sem_lock (=1455977152, =0) at runtime/POSIX/./threadsync.c:692
-	#200474821 in sem_wait (=103202872) at runtime/POSIX/./threadsync.c:702
-	#300376721 in afsync_thread (=103202792) at src/aofguard.c:93
+	#100474896 in _atomic_sem_lock (=260266912, =0) at runtime/POSIX/./threadsync.c:692
+	#200474821 in sem_wait (=125891320) at runtime/POSIX/./threadsync.c:702
+	#300376721 in afsync_thread (=125891240) at src/aofguard.c:93
 Thread 4, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=61) at runtime/POSIX/./multiprocess.h:198
-	#100473843 in _atomic_cond_wait (=1456813184, =1455979552) at runtime/POSIX/./threadsync.c:300
-	#200473771 in pthread_cond_wait (=88407808, =103242112) at runtime/POSIX/./threadsync.c:315
+	#100473843 in _atomic_cond_wait (=256519808, =260310272) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=98533120, =96531136) at runtime/POSIX/./threadsync.c:315
 	#300381024 in bioProcessBackgroundJobs (=0) at bio.c:176
 Thread 5, Process 0, enabled
 		PC:   call void @klee_thread_preempt(i32 %3), !dbg !12058 (op #0=<global const>, op #1=0)
 	#000473465 in __thread_preempt.1037 (=0) at runtime/POSIX/./multiprocess.h:180
-	#100473522 in pthread_mutex_unlock (=103242152) at runtime/POSIX/./threadsync.c:229
+	#100473522 in pthread_mutex_unlock (=96531176) at runtime/POSIX/./threadsync.c:229
 	#200381041 in bioProcessBackgroundJobs (=1) at bio.c:184
 Thread 6, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=67) at runtime/POSIX/./multiprocess.h:198
-	#100473843 in _atomic_cond_wait (=1455978272, =1456028096) at runtime/POSIX/./threadsync.c:300
-	#200473771 in pthread_cond_wait (=88407904, =103242192) at runtime/POSIX/./threadsync.c:315
+	#100473843 in _atomic_cond_wait (=260308992, =258777792) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=98533216, =96531216) at runtime/POSIX/./threadsync.c:315
 	#300381024 in bioProcessBackgroundJobs (=2) at bio.c:176
 Thread 7, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=70) at runtime/POSIX/./multiprocess.h:198
-	#100473843 in _atomic_cond_wait (=1456023552, =1454490240) at runtime/POSIX/./threadsync.c:300
-	#200473771 in pthread_cond_wait (=88407952, =103242232) at runtime/POSIX/./threadsync.c:315
+	#100473843 in _atomic_cond_wait (=260313312, =258780000) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=98533264, =96531256) at runtime/POSIX/./threadsync.c:315
 	#300381024 in bioProcessBackgroundJobs (=3) at bio.c:176
 Errors: 
 9) File: src/aofguard.c
@@ -57,57 +57,57 @@ assembly.ll line: 264272
 Stack: 
 Current Thread: 1
 Thread 1, Process 0, enabled
-		PC:   store i64 %14, i64* %13, align 1, !dbg !12067, !nontemporal !12068 (op #0=60, op #1=3050004488)
-	#000264272 in nvm_set_64 (=3050004488, =60) at src/aofguard.c:38
-	#100263632 in aofguard_write (=103202792, =71166235, =60) at src/aofguard.c:297
+		PC:   store i64 %14, i64* %13, align 1, !dbg !12067, !nontemporal !12068 (op #0=60, op #1=3060080648)
+	#000264272 in nvm_set_64 (=3060080648, =60) at src/aofguard.c:38
+	#100263632 in aofguard_write (=125891240, =81275163, =60) at src/aofguard.c:297
 	#200262814 in flushAppendOnlyFile (=0) at aof.c:335
-	#300377678 in beforeSleep (=4386130088) at server.c:1248
-	#400348993 in aeMain (=4386130088) at ae.c:463
-	#500385970 in __klee_posix_wrapped_main (=2, =367803712) at server.c:4042
-	#600013143 in __klee_posix_ctor_stub_insert_point (=2, =367803712, =92664152) at runtime/POSIX/./klee_init_env.c:555
-	#700013163 in __user_main (=18, =92664000, =92664152) at runtime/POSIX/./klee_init_env.c:563
-	#800007017 in __uClibc_main (=28838664, =18, =92664000, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
-	#900007184 in main (=18, =92664000)
+	#300377678 in beforeSleep (=4400630952) at server.c:1248
+	#400348993 in aeMain (=4400630952) at ae.c:463
+	#500385970 in __klee_posix_wrapped_main (=2, =245833024) at server.c:4042
+	#600013143 in __klee_posix_ctor_stub_insert_point (=2, =245833024, =102789464) at runtime/POSIX/./klee_init_env.c:555
+	#700013163 in __user_main (=18, =102789312, =102789464) at runtime/POSIX/./klee_init_env.c:563
+	#800007017 in __uClibc_main (=38963976, =18, =102789312, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900007184 in main (=18, =102789312)
 Thread 2, Process 0, disabled
 		PC:   call void @klee_thread_sleep(i64 %3), !dbg !12060 (op #0=<global const>, op #1=243)
 	#000470284 in __thread_sleep.917 (=243) at runtime/POSIX/./multiprocess.h:193
-	#100470058 in _stream_readv (=4398325568, =4387133936, =1) at runtime/POSIX/./buffers.c:163
-	#200470597 in _stream_read (=4398325568, =4594876544, =63) at runtime/POSIX/./buffers.c:281
-	#300459257 in __read_stream_socket_raw (=4398150304, =4594876544, =63) at runtime/POSIX/./sockets.c:497
-	#400458992 in __read_stream_socket (=4398150304, =4594876544, =63) at runtime/POSIX/./sockets.c:563
-	#500458905 in _read_socket (=4398150304, =4594876544, =63) at runtime/POSIX/./sockets.c:568
-	#600475708 in recv_redis_responses (=4398150304, =1) at runtime/POSIX/socksim/redis.c:72
-	#700475998 in redis_file_client_func (=367837952) at runtime/POSIX/socksim/redis.c:266
-	#800468573 in connect_and_run_client (=367837952) at runtime/POSIX/socksim/client.c:76
+	#100470058 in _stream_readv (=4408377152, =4397227504, =1) at runtime/POSIX/./buffers.c:163
+	#200470597 in _stream_read (=4408377152, =4604951488, =63) at runtime/POSIX/./buffers.c:281
+	#300459257 in __read_stream_socket_raw (=4408232736, =4604951488, =63) at runtime/POSIX/./sockets.c:497
+	#400458992 in __read_stream_socket (=4408232736, =4604951488, =63) at runtime/POSIX/./sockets.c:563
+	#500458905 in _read_socket (=4408232736, =4604951488, =63) at runtime/POSIX/./sockets.c:568
+	#600475708 in recv_redis_responses (=4408232736, =1) at runtime/POSIX/socksim/redis.c:72
+	#700475998 in redis_file_client_func (=245867264) at runtime/POSIX/socksim/redis.c:266
+	#800468573 in connect_and_run_client (=245867264) at runtime/POSIX/socksim/client.c:76
 Thread 3, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=57) at runtime/POSIX/./multiprocess.h:198
-	#100474896 in _atomic_sem_lock (=1455977152, =0) at runtime/POSIX/./threadsync.c:692
-	#200474821 in sem_wait (=103202872) at runtime/POSIX/./threadsync.c:702
-	#300376721 in afsync_thread (=103202792) at src/aofguard.c:93
+	#100474896 in _atomic_sem_lock (=260266912, =0) at runtime/POSIX/./threadsync.c:692
+	#200474821 in sem_wait (=125891320) at runtime/POSIX/./threadsync.c:702
+	#300376721 in afsync_thread (=125891240) at src/aofguard.c:93
 Thread 4, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=61) at runtime/POSIX/./multiprocess.h:198
-	#100473843 in _atomic_cond_wait (=1456813184, =1455979552) at runtime/POSIX/./threadsync.c:300
-	#200473771 in pthread_cond_wait (=88407808, =103242112) at runtime/POSIX/./threadsync.c:315
+	#100473843 in _atomic_cond_wait (=256519808, =260310272) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=98533120, =96531136) at runtime/POSIX/./threadsync.c:315
 	#300381024 in bioProcessBackgroundJobs (=0) at bio.c:176
 Thread 5, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=64) at runtime/POSIX/./multiprocess.h:198
-	#100473843 in _atomic_cond_wait (=1456026848, =1454491232) at runtime/POSIX/./threadsync.c:300
-	#200473771 in pthread_cond_wait (=88407856, =103242152) at runtime/POSIX/./threadsync.c:315
+	#100473843 in _atomic_cond_wait (=260316608, =258780992) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=98533168, =96531176) at runtime/POSIX/./threadsync.c:315
 	#300381024 in bioProcessBackgroundJobs (=1) at bio.c:176
 Thread 6, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=67) at runtime/POSIX/./multiprocess.h:198
-	#100473843 in _atomic_cond_wait (=1455978272, =1456028096) at runtime/POSIX/./threadsync.c:300
-	#200473771 in pthread_cond_wait (=88407904, =103242192) at runtime/POSIX/./threadsync.c:315
+	#100473843 in _atomic_cond_wait (=260308992, =258777792) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=98533216, =96531216) at runtime/POSIX/./threadsync.c:315
 	#300381024 in bioProcessBackgroundJobs (=2) at bio.c:176
 Thread 7, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=70) at runtime/POSIX/./multiprocess.h:198
-	#100473843 in _atomic_cond_wait (=1456023552, =1454490240) at runtime/POSIX/./threadsync.c:300
-	#200473771 in pthread_cond_wait (=88407952, =103242232) at runtime/POSIX/./threadsync.c:315
+	#100473843 in _atomic_cond_wait (=260313312, =258780000) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=98533264, =96531256) at runtime/POSIX/./threadsync.c:315
 	#300381024 in bioProcessBackgroundJobs (=3) at bio.c:176
 
 10) File: src/aofguard.c
@@ -117,56 +117,56 @@ assembly.ll line: 264240
 Stack: 
 Current Thread: 1
 Thread 1, Process 0, enabled
-		PC:   store i64 %158, i64* %157, align 1, !dbg !12217, !nontemporal !12131 (op #0=168637232, op #1=3050004552)
-	#000264240 in nvm_memcpy (=3050004496, =71166235, =60) at src/aofguard.c:84
-	#100263509 in aofguard_write (=103202792, =71166235, =60) at src/aofguard.c:286
+		PC:   store i64 %158, i64* %157, align 1, !dbg !12217, !nontemporal !12131 (op #0=168637232, op #1=3060080712)
+	#000264240 in nvm_memcpy (=3060080656, =81275163, =60) at src/aofguard.c:84
+	#100263509 in aofguard_write (=125891240, =81275163, =60) at src/aofguard.c:286
 	#200262814 in flushAppendOnlyFile (=0) at aof.c:335
-	#300377678 in beforeSleep (=4386130088) at server.c:1248
-	#400348993 in aeMain (=4386130088) at ae.c:463
-	#500385970 in __klee_posix_wrapped_main (=2, =367803712) at server.c:4042
-	#600013143 in __klee_posix_ctor_stub_insert_point (=2, =367803712, =92664152) at runtime/POSIX/./klee_init_env.c:555
-	#700013163 in __user_main (=18, =92664000, =92664152) at runtime/POSIX/./klee_init_env.c:563
-	#800007017 in __uClibc_main (=28838664, =18, =92664000, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
-	#900007184 in main (=18, =92664000)
+	#300377678 in beforeSleep (=4400630952) at server.c:1248
+	#400348993 in aeMain (=4400630952) at ae.c:463
+	#500385970 in __klee_posix_wrapped_main (=2, =245833024) at server.c:4042
+	#600013143 in __klee_posix_ctor_stub_insert_point (=2, =245833024, =102789464) at runtime/POSIX/./klee_init_env.c:555
+	#700013163 in __user_main (=18, =102789312, =102789464) at runtime/POSIX/./klee_init_env.c:563
+	#800007017 in __uClibc_main (=38963976, =18, =102789312, =0, =0, =0, =0) at libc/misc/internals/__uClibc_main.c:401
+	#900007184 in main (=18, =102789312)
 Thread 2, Process 0, disabled
 		PC:   call void @klee_thread_sleep(i64 %3), !dbg !12060 (op #0=<global const>, op #1=243)
 	#000470284 in __thread_sleep.917 (=243) at runtime/POSIX/./multiprocess.h:193
-	#100470058 in _stream_readv (=4398325568, =4387133936, =1) at runtime/POSIX/./buffers.c:163
-	#200470597 in _stream_read (=4398325568, =4594876544, =63) at runtime/POSIX/./buffers.c:281
-	#300459257 in __read_stream_socket_raw (=4398150304, =4594876544, =63) at runtime/POSIX/./sockets.c:497
-	#400458992 in __read_stream_socket (=4398150304, =4594876544, =63) at runtime/POSIX/./sockets.c:563
-	#500458905 in _read_socket (=4398150304, =4594876544, =63) at runtime/POSIX/./sockets.c:568
-	#600475708 in recv_redis_responses (=4398150304, =1) at runtime/POSIX/socksim/redis.c:72
-	#700475998 in redis_file_client_func (=367837952) at runtime/POSIX/socksim/redis.c:266
-	#800468573 in connect_and_run_client (=367837952) at runtime/POSIX/socksim/client.c:76
+	#100470058 in _stream_readv (=4408377152, =4397227504, =1) at runtime/POSIX/./buffers.c:163
+	#200470597 in _stream_read (=4408377152, =4604951488, =63) at runtime/POSIX/./buffers.c:281
+	#300459257 in __read_stream_socket_raw (=4408232736, =4604951488, =63) at runtime/POSIX/./sockets.c:497
+	#400458992 in __read_stream_socket (=4408232736, =4604951488, =63) at runtime/POSIX/./sockets.c:563
+	#500458905 in _read_socket (=4408232736, =4604951488, =63) at runtime/POSIX/./sockets.c:568
+	#600475708 in recv_redis_responses (=4408232736, =1) at runtime/POSIX/socksim/redis.c:72
+	#700475998 in redis_file_client_func (=245867264) at runtime/POSIX/socksim/redis.c:266
+	#800468573 in connect_and_run_client (=245867264) at runtime/POSIX/socksim/client.c:76
 Thread 3, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=57) at runtime/POSIX/./multiprocess.h:198
-	#100474896 in _atomic_sem_lock (=1455977152, =0) at runtime/POSIX/./threadsync.c:692
-	#200474821 in sem_wait (=103202872) at runtime/POSIX/./threadsync.c:702
-	#300376721 in afsync_thread (=103202792) at src/aofguard.c:93
+	#100474896 in _atomic_sem_lock (=260266912, =0) at runtime/POSIX/./threadsync.c:692
+	#200474821 in sem_wait (=125891320) at runtime/POSIX/./threadsync.c:702
+	#300376721 in afsync_thread (=125891240) at src/aofguard.c:93
 Thread 4, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=61) at runtime/POSIX/./multiprocess.h:198
-	#100473843 in _atomic_cond_wait (=1456813184, =1455979552) at runtime/POSIX/./threadsync.c:300
-	#200473771 in pthread_cond_wait (=88407808, =103242112) at runtime/POSIX/./threadsync.c:315
+	#100473843 in _atomic_cond_wait (=256519808, =260310272) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=98533120, =96531136) at runtime/POSIX/./threadsync.c:315
 	#300381024 in bioProcessBackgroundJobs (=0) at bio.c:176
 Thread 5, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=64) at runtime/POSIX/./multiprocess.h:198
-	#100473843 in _atomic_cond_wait (=1456026848, =1454491232) at runtime/POSIX/./threadsync.c:300
-	#200473771 in pthread_cond_wait (=88407856, =103242152) at runtime/POSIX/./threadsync.c:315
+	#100473843 in _atomic_cond_wait (=260316608, =258780992) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=98533168, =96531176) at runtime/POSIX/./threadsync.c:315
 	#300381024 in bioProcessBackgroundJobs (=1) at bio.c:176
 Thread 6, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=67) at runtime/POSIX/./multiprocess.h:198
-	#100473843 in _atomic_cond_wait (=1455978272, =1456028096) at runtime/POSIX/./threadsync.c:300
-	#200473771 in pthread_cond_wait (=88407904, =103242192) at runtime/POSIX/./threadsync.c:315
+	#100473843 in _atomic_cond_wait (=260308992, =258777792) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=98533216, =96531216) at runtime/POSIX/./threadsync.c:315
 	#300381024 in bioProcessBackgroundJobs (=2) at bio.c:176
 Thread 7, Process 0, disabled
 		PC:   ret void, !dbg !12061 ()
 	#000473476 in __thread_sleep.1038 (=70) at runtime/POSIX/./multiprocess.h:198
-	#100473843 in _atomic_cond_wait (=1456023552, =1454490240) at runtime/POSIX/./threadsync.c:300
-	#200473771 in pthread_cond_wait (=88407952, =103242232) at runtime/POSIX/./threadsync.c:315
+	#100473843 in _atomic_cond_wait (=260313312, =258780000) at runtime/POSIX/./threadsync.c:300
+	#200473771 in pthread_cond_wait (=98533264, =96531256) at runtime/POSIX/./threadsync.c:315
 	#300381024 in bioProcessBackgroundJobs (=3) at bio.c:176
 

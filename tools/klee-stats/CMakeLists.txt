@@ -8,6 +8,7 @@
 #===------------------------------------------------------------------------===#
 install(PROGRAMS klee-stats DESTINATION bin)
 
+message("klee_stats: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/klee-stats")
 # Copy into the build directory's binary directory
 # so system tests can find it
 configure_file(klee-stats "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/klee-stats" COPYONLY)

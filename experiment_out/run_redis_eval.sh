@@ -8,8 +8,10 @@ rm -rf klee-redis-static
 cd ../build/bin/redis2
 ulimit -s unlimited
 
+./run.sh build/redis-server.bc "--search=nvm --nvm-heuristic-type=static" "$OUTDIR/klee-redis-axetime" 
+
 # 1. Agamotto
-./run.sh build/redis-server.bc "--search=nvm --nvm-heuristic-type=static" "$OUTDIR/klee-redis-static"
+# ./run.sh build/redis-server.bc "--search=nvm --nvm-heuristic-type=static" "$OUTDIR/klee-redis-static" & 
 
 # 2. Default (random-path + covnew)
 # ./run.sh build/redis-server.bc "" "$OUTDIR/klee-redis-default" &
