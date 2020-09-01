@@ -1,0 +1,5 @@
+SET test hello
+GET test
+APPEND test world
+DEL test
+SHUTDOWN
