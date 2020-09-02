@@ -1,9 +1,10 @@
 #!/bin/bash
 
-KLEE_NVM_BUILD=/home/bgreeves/klee-nvm/build
-KLEE=$KLEE_NVM_BUILD/bin/klee
+source ../common.sh
 
 TARGET=$1
+SEARCH=$2
+OUTPUT=$3
 
 PMEM=1
 
@@ -17,7 +18,7 @@ if [[ $PMEM -eq 1 ]]; then
 	REDIS_CONF=redis-pmem.conf
 	# SEARCH="--search=nvm --nvm-heuristic-type=static"
 	# SEARCH="--search=nurs:covnew"
-	SEARCH="--search=nurs:depth"
+	#SEARCH="--search=nurs:depth"
 	# SEARCH="--search=dfs"
 
 	SEARCH="$SEARCH --use-batching-search"
@@ -55,22 +56,23 @@ EOF
 	# --write-paths \
 	# --very-verbose \
 set -x
-$KLEE \
+$KLEE --output-dir=$OUTPUT \
 	--disable-verify=true \
-	--max-memory=128000 \
+	$CONSTRAINTS \
 	--libc=uclibc \
-	--link-known-lib=libpmem \
-	--link-known-lib=libpmemobj \
-	--link-llvm-lib=deps/hiredis/libhiredis.bca \
-	--link-llvm-lib=deps/lua/src/liblua.bca \
+	$SEARCH \
+	--link-llvm-lib=libpmem.so.bc \
+	--link-llvm-lib=libpmemobj.so.bc \
+	--link-llvm-lib=libhiredis.bca \
+	--link-llvm-lib=liblua.bca \
 	--posix-runtime \
 	--env-file=pmdk.env \
-	$SEARCH \
-	--check-div-zero=false \
-	--check-overshift=false \
-	--use-query-log=all:kquery \
-	--only-output-states-covering-new \
 	$TARGET \
 	$PMEM_INIT_OPTS \
 	$TCP_OPTS \
 	$REDIS_CONF
+
+	# --check-div-zero=false \
+	# --check-overshift=false \
+	# --only-output-states-covering-new \
+	#--use-query-log=all:kquery \
