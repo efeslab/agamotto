@@ -5,7 +5,7 @@ This document describes the artifact for our OSDI '20 paper on <span style="font
 ### Downloads
 ---
 
-
+[VM Image][https://drive.google.com/file/d/1UYg1D5vsL58lJ7HwDoprs5bfPeqUaypW/view?usp=sharing]
 
 ## Artifact Overview
 ---
@@ -23,8 +23,6 @@ After running experiments, the results will be placed into the `results/` direct
 Agamotto is open-source and is available at https://github.com/efeslab/klee-nvm.git.
 
 ## Artifacts Functional Criteria
-
-
 
 ### Building <span style="font-variant:small-caps;">Agamotto</span>
 
@@ -132,6 +130,16 @@ There are three main results from <span style="font-variant:small-caps;">Agamott
 2. The performance of <span style="font-variant:small-caps;">Agamotto</span>'s 
 search strategy compared to <span style="font-variant:small-caps;">Klee</span>'s default search strategy.
 3. The overhead of <span style="font-variant:small-caps;">Agamotto</span>'s static analysis.
+
+### 1. Reproduce the newly found bugs.
+
+First, we rerun all of the symbolic tests that we ran for our evaluation.
+
+```
+cd artifact/targets
+./run_btree_eval.sh
+./run_rbtree_eva
+```
 
 [//]: # (Links below)
 
