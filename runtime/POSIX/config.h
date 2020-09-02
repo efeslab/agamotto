@@ -49,7 +49,7 @@
 #define MAX_PURE_SYM_FILES  26
 #define MAX_FILES           32
 
-#define MAX_PATH_LEN        75
+#define MAX_PATH_LEN        1024
 #define MAX_SOCK_ADDRSTRLEN 64
 
 #define MAX_PORTS           32
