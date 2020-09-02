@@ -471,7 +471,7 @@ class TxOnlyChecker final : public PmemObjTxAddChecker {
             if (0 == CE->getZExtValue()) return;
           }
 
-          errs() << "TXONLY " << *i << "\n";
+          // errs() << "TXONLY " << *i << "\n";
 
           ObjectPair op = resolveAddress(state, addr);
           if (op.second && isa<PersistentState>(op.second)) {
@@ -479,7 +479,7 @@ class TxOnlyChecker final : public PmemObjTxAddChecker {
             auto offset = op.first->getOffsetExpr(addr);
             llvm::DataLayout* dl = new llvm::DataLayout(getModule());
             uint64_t structSz = dl->getTypeStoreSize(st);
-            errs() << "Adding " << offset << " with size to ignore!\n";
+            // errs() << "Adding " << offset << " with size to ignore!\n";
 
             auto range_start = addr;
             auto structSzExpr = ConstantExpr::create(structSz, addr->getWidth());

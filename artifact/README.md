@@ -137,8 +137,11 @@ First, we rerun all of the symbolic tests that we ran for our evaluation.
 
 ```
 cd artifact/targets
-./run_btree_eval.sh
-./run_rbtree_eva
+./run_pmdk_eval.sh
+./run_nvm_direct_eval.sh
+./run_memcached_eval.sh
+./run_recipe_eval.sh
+./run_redis_eval.sh
 ```
 
 [//]: # (Links below)
