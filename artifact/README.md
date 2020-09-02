@@ -124,7 +124,7 @@ make -j$(nproc)
 
 ## Results Reproduced
 
-There are three main results from <span style="font-variant:small-caps;">Agamotto</span>:
+There are four main results from <span style="font-variant:small-caps;">Agamotto</span>:
 
 1. The number of new bugs found.
 2. The performance of <span style="font-variant:small-caps;">Agamotto</span>'s 
@@ -142,6 +142,31 @@ cd artifact/targets
 ./run_memcached_eval.sh
 ./run_recipe_eval.sh
 ./run_redis_eval.sh
+```
+
+Then, run the script.
+
+```
+```
+
+### 2. Measure the performance of <span style="font-variant:small-caps;">Agamotto</span>'s search strategy
+
+Run the experiments as performed earlier. If already run, there is no need to re-run them.
+
+### 3. Calculate the offline overhead of <span style="font-variant:small-caps;">Agamotto</span>
+
+Run the experiments as performed earlier. If already run, there is no need to re-run them.
+
+Then, run the script.
+
+```
+```
+
+### 4. Reproduce the bugs from prior work.
+
+Run the script:
+```
+./run_prior_art_eval.sh
 ```
 
 [//]: # (Links below)

@@ -3,7 +3,7 @@
 source common.sh
 
 # PMTest: two bugs from btree
-
+rm -rf $OUTDIR/klee-pmdk-btree-pmtest-repro 
 $KLEE --output-dir=$OUTDIR/klee-pmdk-btree-pmtest-repro --search=nvm --nvm-heuristic-type=static \
   $CONSTRAINTS \
   --custom-checkers=true --write-errors-only=true \
@@ -14,7 +14,7 @@ $KLEE --output-dir=$OUTDIR/klee-pmdk-btree-pmtest-repro --search=nvm --nvm-heuri
   $BUILD/bin/000_Buggy.bc --sym-pmem-delay PMEM 8388608 PMEM --sym-arg 2 &
 
 # XFDetector: two bugs from hashmap atomic
-
+rm -rf $OUTDIR/klee-pmdk-hashmap-atomic-pmtest-repro 
 $KLEE --output-dir=$OUTDIR/klee-pmdk-hashmap-atomic-pmtest-repro --search=nvm --nvm-heuristic-type=static \
   $CONSTRAINTS \
   --custom-checkers=true --write-errors-only=true \
