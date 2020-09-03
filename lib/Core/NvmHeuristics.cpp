@@ -710,9 +710,13 @@ void NvmStaticHeuristic::computePriority(void) {
         possibleFns.insert(f);
       } else if (Function *f = cb->getCalledFunction()) {
         possibleFns.insert(f);
-      } else if (auto *f = dyn_cast<Function>(cb->getCalledValue()->stripPointerCastsNoFollowAliases())) {
+      } else if (auto *f = dyn_cast<Function>(cb->getCalledValue()->stripPointerCasts())) {
         possibleFns.insert(f);
       } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(cb->getCalledValue())) {
+        Function *f = dyn_cast<Function>(ga->getAliasee());
+        assert(f && "bad assumption about aliases!");
+        possibleFns.insert(f);
+      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(cb->getCalledValue()->stripPointerCasts())) {
         Function *f = dyn_cast<Function>(ga->getAliasee());
         assert(f && "bad assumption about aliases!");
         possibleFns.insert(f);
@@ -722,6 +726,7 @@ void NvmStaticHeuristic::computePriority(void) {
           errs() << cb->getCalledValue() << "\n";
           if (cb->getCalledValue()) errs() << *cb->getCalledValue() << "\n";
           if (cb->getCalledValue()) errs() << *cb->getCalledValue()->stripPointerCastsNoFollowAliases() << "\n";
+          if (cb->getCalledValue()) errs() << dyn_cast<GlobalAlias>(cb->getCalledValue()->stripPointerCastsNoFollowAliases()) << "\n";
         }
         assert(cb->isIndirectCall());
 

@@ -23,7 +23,7 @@ After running experiments, the results will be placed into the `results/` direct
 
 ## Artifacts Available Criteria
 
-Agamotto is open-source and is available at https://github.com/efeslab/klee-nvm.git.
+Agamotto is open-source and is available at https://github.com/efeslab/agamotto.git.
 
 ## Artifacts Functional Criteria
 
@@ -156,7 +156,8 @@ search strategy compared to <span style="font-variant:small-caps;">Klee</span>'s
 
 ### 1. Reproduce the newly found bugs.
 
-First, we rerun all of the symbolic tests that we ran for our evaluation. 
+First, we run all of the test cases that we used to symbolically explore our test applications, as we did for the evaluation in our paper.
+
 The `run_*_eval.sh` scripts are wrappers which execute <span style="font-variant:small-caps;">Agamotto</span>
 with the appropriate command line parameters required.
 
@@ -218,26 +219,9 @@ This should provide output similar to the following:
 IAN: TODO
 
 Note that this experiment is dependent on the underlying CPU for timing and 
-may vary.
+may vary. In addition, we have modified our alias analysis algorithm from our original submission,
+so the precise numbers may vary. 
 
-### 4. Reproducing bugs from prior work.
-
-To reproduce these results, we first run a different set of experiments with the custom oracles enabled.
-
-```
-cd artifact/targets
-./run_prior_art_repro.sh
-```
-
-We then parse the results from these experiments:
-```
-cd ../results
-./count_reproduced_bugs.py
-```
-
-This should provide the following output:
-
-IAN: TODO
 
 [//]: # (Links below)
 
