@@ -13,7 +13,8 @@ CURDIR = Path(__file__).absolute().parent
 
 DIAGNOSED = {
     'klee-pmdk-btree-pmtest-repro': {
-        'btree_map_insert_item at nvmbugs/000_pmdk_btree_map/btree_map_buggy.c:266': 0
+        'btree_map_insert_item at nvmbugs/000_pmdk_btree_map/btree_map_buggy.c:267': 0,
+        'btree_map_insert_empty at nvmbugs/000_pmdk_btree_map/btree_map_buggy.c:150': 1
     },
     'klee-pmdk-hashmap-atomic-pmtest-repro': {
         'create_hashmap at nvmbugs/hashmap_atomic/hashmap_atomic.c:132': 0,
@@ -33,38 +34,31 @@ def count(csv_file, bugs):
     # bug_types = ['semantic correctness!', 'semantic performance!']
     # bdf = df[df['Type'].isin(bug_types)]
     diag_rows = []
-    undiag_rows = 0
     for _, row in df.iterrows():
         diagnosed = -1
         for idx, val in row.iteritems():
             if 'StackFrame' not in idx or '_' in idx:
                 continue
             if val in bugs:
+                print(f'\t{val}')
                 diagnosed = bugs[val]
                 break
 
         if diagnosed >= 0:
             diag_rows += [diagnosed]
-        else:
-            undiag_rows += 1
 
-    if undiag_rows:
-        print('undiagnosed!')
-        embed()
-
-    return len(set(diag_rows)), undiag_rows
+    return len(set(diag_rows))
 
 def count_reproduced(exp_root):
-    n = 0
+    ndiag = 0
     for exp, bugs in DIAGNOSED.items():
         exp_dir = exp_root / exp
         assert exp_dir, f'Could not find {str(exp_dir)}!'
         csv_file = exp_dir / 'all_pmem_errs.csv'
         assert csv_file.exists(), 'Could not find bug report file!'
-        ndiag, nundiag = count(csv_file, bugs)
-        n += ndiag
+        ndiag += count(csv_file, bugs)
     
-    print(f'Number of reproduced bugs: {n}')
+    print(f'Number of unique reproduced bugs: {ndiag}')
 
 def main():
     parser = ArgumentParser('Compute the number of reproduced bugs.')

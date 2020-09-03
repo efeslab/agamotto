@@ -413,6 +413,7 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
       if (!file_size) {
         __emit_error("--sym-pmem-delay file size cannot be 0\n");
       }
+      printf("%s: adding delay-create pmem file!\n", __func__);
       __add_symfs_file(&fid, SYMBOLIC, PMEM_DELAY_CREATE, file_name, file_size);
     } else if (__streq(argv[k], "--tcp-client-text") ||
                __streq(argv[k], "-tcp-client-text")) {

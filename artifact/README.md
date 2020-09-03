@@ -115,8 +115,8 @@ cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DLLVM_CONFIG_BINARY=$(which llvm-config-8) \
   -DLLVMCC=$(which clang-8) \
   -DLLVMCXX=$(which clang++-8) \
-  -DCMAKE_C_COMPILER=$(which clang-8) \
-  -DCMAKE_CXX_COMPILER=$(which clang++-8) \
+  -DCMAKE_C_COMPILER=$(which wllvm) \
+  -DCMAKE_CXX_COMPILER=$(which wllvm++) \
   -DENABLE_KLEE_LIBCXX=ON \
   -DKLEE_LIBCXX_DIR=$(realpath .)/libc++-install-8/ \
   -DKLEE_LIBCXX_INCLUDE_DIR=$(realpath .)/libc++-install-8/include/c++/v1/ \
@@ -259,10 +259,20 @@ cd artifacts/results
 ./count_reproduced_bugs.py
 ```
 
-This should provide the following output:
+This should provide output similar to the following:
 
 ```
-IAN: TODO
+        btree_map_insert_empty at nvmbugs/000_pmdk_btree_map/btree_map_buggy.c:150
+        btree_map_insert_empty at nvmbugs/000_pmdk_btree_map/btree_map_buggy.c:150
+        btree_map_insert_item at nvmbugs/000_pmdk_btree_map/btree_map_buggy.c:267
+        create_hashmap at nvmbugs/hashmap_atomic/hashmap_atomic.c:135
+        create_hashmap at nvmbugs/hashmap_atomic/hashmap_atomic.c:132
+        hm_atomic_insert at nvmbugs/hashmap_atomic/hashmap_atomic.c:263
+        create_hashmap at nvmbugs/hashmap_atomic/hashmap_atomic.c:137
+        create_hashmap at nvmbugs/hashmap_atomic/hashmap_atomic.c:138
+        initPersistentMemory at server.c:4029
+        initPersistentMemory at server.c:4029
+Number of unique reproduced bugs: 5
 ```
 
 

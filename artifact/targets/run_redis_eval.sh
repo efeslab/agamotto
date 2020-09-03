@@ -10,7 +10,7 @@ rm -rf $OUTDIR/klee-redis-static
 
 ./run.sh build/redis-server.bc "--search=nvm --nvm-heuristic-type=static" "$OUTDIR/klee-redis-static" &
 
-# 2. Default (random-path + covnew)
+# 2. Klee
 
 rm -rf $OUTDIR/klee-redis-default
 

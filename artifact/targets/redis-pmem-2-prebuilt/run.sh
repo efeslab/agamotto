@@ -119,6 +119,7 @@ time $KLEE \
 	$CONSTRAINTS \
 	--libc=uclibc \
 	--link-llvm-lib=build/libnuma.bca \
+	--link-llvm-lib=build/libpmem.so.bc \
  	--calloc-max-unit-size=4096 \
 	--posix-runtime \
 	--env-file=pmdk.env \

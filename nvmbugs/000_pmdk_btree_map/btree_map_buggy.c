@@ -186,6 +186,7 @@ btree_map_create_split_node(TOID(struct tree_map_node) node,
 	*m = D_RO(node)->items[c - 1]; /* select median item */
     // (iangneal): THIS IS THE BUG
 	//TX_ADD(node);
+	printf("split node!\n");
 	set_empty_item(&D_RW(node)->items[c - 1]);
 
 	/* move everything right side of median to the new node */
