@@ -149,7 +149,6 @@ are symbolic on initialization and can represent any value.
 There are four main results from <span style="font-variant:small-caps;">Agamotto</span>:
 
 1. The number of new bugs found.
-2. The number of bugs reproduced from prior work.
 3. The performance of <span style="font-variant:small-caps;">Agamotto</span>'s 
 search strategy compared to <span style="font-variant:small-caps;">Klee</span>'s default search strategy.
 4. The overhead of <span style="font-variant:small-caps;">Agamotto</span>'s static analysis.
@@ -178,12 +177,24 @@ For identifying new bugs, we run this script:
 
 ```
 cd artifact/results
-./count_new_bugs.py
+./parse_bugs_and_perf.py
 ```
 
 This should provide the following output:
 
-IAN: TODO
+```
+{   'memcached': {'Correctness': 1, 'Performance': 20, 'Total': 21},
+    'nvm-direct': {'Correctness': 7, 'Performance': 16, 'Total': 23},
+    'pmdk': {'Correctness': 2, 'Performance': 11, 'Total': 13},
+    'recipe': {'Correctness': 1, 'Performance': 13, 'Total': 14},
+    'redis': {'Correctness': 3, 'Performance': 1, 'Total': 4}}
+
+Overall:
+        Total: 75
+        Correctness: 14
+        Performance: 21
+        Transient: 40
+```
 
 
 ### 2. Measure the performance of <span style="font-variant:small-caps;">Agamotto</span>'s search strategy

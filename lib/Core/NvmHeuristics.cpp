@@ -890,6 +890,10 @@ void NvmStaticHeuristic::computePriority(void) {
         Function *f = dyn_cast<Function>(ga->getAliasee());
         assert(f && "bad assumption about aliases!");
         possibleFns.insert(f);
+      } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(cb->getCalledValue()->stripPointerCasts())) {
+        Function *f = dyn_cast<Function>(ga->getAliasee());
+        assert(f && "bad assumption about aliases!");
+        possibleFns.insert(f);
       } else {
         if (!cb->isIndirectCall()) errs() << *cb << "\n";
         assert(cb->isIndirectCall());
