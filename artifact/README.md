@@ -5,7 +5,7 @@ This document describes the artifact for our OSDI '20 paper on <span style="font
 ### Downloads
 
 
-[VM Image](https://drive.google.com/file/d/1UYg1D5vsL58lJ7HwDoprs5bfPeqUaypW/view?usp=sharing): Already has all the dependencies installed.
+[VM Image](https://drive.google.com/file/d/1UYg1D5vsL58lJ7HwDoprs5bfPeqUaypW/view?usp=sharing): Already has all the dependencies installed. Runs on KVM QEMU.
 
 - Username: `reviewer`
 - Password: See submission site
@@ -62,7 +62,15 @@ wget <VM URL> artifact/vm_scripts
 cd artifact/vm_scripts
 ./run-vm.sh
 ssh reviewer@localhost -p 5000
+```
 
+All the dependencies should be installed. You can then update the version of <span style="font-variant:small-caps;">Agamotto</span> and rebuild it by simply running:
+
+```
+cd agamotto
+git checkout <COMMIT_HASH>
+cd build
+make -j40
 ```
 
 #### Compiling <span style="font-variant:small-caps;">Agamotto</span>
