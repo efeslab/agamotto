@@ -3,15 +3,15 @@
 This document describes the artifact for our OSDI '20 paper on <span style="font-variant:small-caps;">Agamotto</span>, a symbolic-execution based approach for systematically finding bugs in persistent memory applications and libraries. The remainder of this document describes how to run <span style="font-variant:small-caps;">Agamotto</span> and reproduce the key results from our paper.
 
 ### Downloads
----
+
 
 [VM Image](https://drive.google.com/file/d/1UYg1D5vsL58lJ7HwDoprs5bfPeqUaypW/view?usp=sharing): Already has all the dependencies installed.
 
-Username: `reviewer`
-Password: See submission site
+- Username: `reviewer`
+- Password: See submission site
 
 ## Artifact Overview
----
+
 
 `targets/`: This directory contains the scripts required to run all the tests needed to reproduce the main results from the paper.
 After running experiments, the results will be placed into the `results/` directory
@@ -27,12 +27,12 @@ Agamotto is open-source and is available at https://github.com/efeslab/klee-nvm.
 
 ## Artifacts Functional Criteria
 
+We now provide an overview of how to build and run <span style="font-variant:small-caps;">Agamotto</span>. For a guide on how to compile applications to run on <span style="font-variant:small-caps;">Agamotto</span>, see [<span style="font-variant:small-caps;">Klees</span>'s tutorial on building coreutils](https://klee.github.io/tutorials/testing-coreutils/).
+
 ### Building <span style="font-variant:small-caps;">Agamotto</span>
 
 The procedure for building <span style="font-variant:small-caps;">Agamotto</span> is substantially similar to building KLEE
-(the instructions for building KLEE can be found [here][klee-build].) We outline
-the main differences at a high-level below:
-1. <span style="font-variant:small-caps;">Agamotto</span> requires LLVM 8.
+(the instructions for building KLEE can be found [here][klee-build].) The notable difference is that <span style="font-variant:small-caps;">Agamotto</span> requires LLVM 8 rather than LLVM 9.
 
 
 #### Creating the VM (optional)
@@ -184,20 +184,8 @@ This should provide the following output:
 
 IAN: TODO
 
-### 2. Reproducing bugs from prior work.
 
-```
-cd artifact/targets
-./run_prior_art_repro.sh
-cd ../results
-./count_reproduced_bugs.py
-```
-
-This should provide the following output:
-
-IAN: TODO
-
-### 3. Measure the performance of <span style="font-variant:small-caps;">Agamotto</span>'s search strategy
+### 2. Measure the performance of <span style="font-variant:small-caps;">Agamotto</span>'s search strategy
 
 Run the experiments as performed for finding new bugs. If already run, there is no need to re-run them.
 
@@ -215,7 +203,7 @@ Note that this experiment is dependent on the underlying CPU for timing and
 may vary.
 
 
-### 4. Calculate the offline overhead of <span style="font-variant:small-caps;">Agamotto</span>
+### 3. Calculate the offline overhead of <span style="font-variant:small-caps;">Agamotto</span>
 
 Run the experiments as performed for finding new bugs. If already run, there is no need to re-run them.
 
@@ -232,13 +220,24 @@ IAN: TODO
 Note that this experiment is dependent on the underlying CPU for timing and 
 may vary.
 
+### 4. Reproducing bugs from prior work.
 
-### 4. Reproduce the bugs from prior work.
+To reproduce these results, we first run a different set of experiments with the custom oracles enabled.
 
-Run the script:
 ```
-./run_prior_art_eval.sh
+cd artifact/targets
+./run_prior_art_repro.sh
 ```
+
+We then parse the results from these experiments:
+```
+cd ../results
+./count_reproduced_bugs.py
+```
+
+This should provide the following output:
+
+IAN: TODO
 
 [//]: # (Links below)
 
