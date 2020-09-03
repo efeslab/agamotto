@@ -27,7 +27,7 @@ Agamotto is open-source and is available at https://github.com/efeslab/klee-nvm.
 
 ## Artifacts Functional Criteria
 
-We now provide an overview of how to build and run <span style="font-variant:small-caps;">Agamotto</span>. For a guide on how to compile applications to run on <span style="font-variant:small-caps;">Agamotto</span>, see [<span style="font-variant:small-caps;">Klees</span>'s tutorial on building coreutils](https://klee.github.io/tutorials/testing-coreutils/).
+We now provide an overview of how to build and run <span style="font-variant:small-caps;">Agamotto</span>. For a guide on how to compile applications to run on <span style="font-variant:small-caps;">Agamotto</span>, see [<span style="font-variant:small-caps;">Klee</span>'s tutorial on building coreutils](https://klee.github.io/tutorials/testing-coreutils/).
 
 ### Building <span style="font-variant:small-caps;">Agamotto</span>
 
