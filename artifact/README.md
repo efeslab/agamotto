@@ -230,11 +230,11 @@ cd artifact/results
 This should provide output similar to the following:
 
 ```
-memcached-pm    4.217978
-redis-pmem      0.000000
-nvm-direct      0.025899
-recipe          1.847798
-pmdk            0.357568
+memcached-pm      4.745251
+redis-pmem      101.692201
+nvm-direct        0.025899
+recipe            1.847798
+pmdk              0.357568
 Name: Offline Overhead (minutes), dtype: float64
 ```
 
