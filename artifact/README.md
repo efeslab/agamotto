@@ -65,7 +65,7 @@ ssh reviewer@localhost -p 5000
 
 ```
 
-#### Compile <span style="font-variant:small-caps;">Agamotto</span>
+#### Compiling <span style="font-variant:small-caps;">Agamotto</span>
 
 Heavily adapted from: http://klee.github.io/build-llvm9/
 
@@ -152,7 +152,7 @@ There are four main results from <span style="font-variant:small-caps;">Agamotto
 2. The performance of <span style="font-variant:small-caps;">Agamotto</span>'s 
 search strategy compared to <span style="font-variant:small-caps;">Klee</span>'s default search strategy.
 3. The overhead of <span style="font-variant:small-caps;">Agamotto</span>'s static analysis.
-<!-- 4. The number of bugs reproduced from prior work. -->
+4. The number of bugs reproduced from prior work.
 
 ### 1. Reproduce the newly found bugs.
 
@@ -241,6 +241,29 @@ Name: Offline Overhead (minutes), dtype: float64
 Note that this experiment is dependent on the underlying CPU for timing and 
 may vary. In addition, we have modified our alias analysis algorithm from our original submission,
 so the precise numbers may vary. 
+
+### 4. Reproducing bugs from prior work
+
+We run a different set of test cases to reproduce the bugs found by prior work (specifically
+PMTest and XFDetector).
+
+```
+cd artifact/targets
+./run_prior_art_repro.sh
+```
+
+Then, run the script to count the bugs that were reproduced.
+
+```
+cd artifacts/results
+./count_reproduced_bugs.py
+```
+
+This should provide the following output:
+
+```
+IAN: TODO
+```
 
 
 [//]: # (Links below)
