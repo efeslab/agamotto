@@ -503,15 +503,21 @@ class TxOnlyChecker final : public PmemObjTxAddChecker {
 /* #endregion */
 
 /* #region CustomCheckerHandler */
+cl::opt<bool>
+    EnableTxAdd("tx-add-checker", cl::init(true),
+                 cl::desc("Enable PMDK logging checker (default=true)"));
+cl::opt<bool>
+    EnableTxOnly("atomic-checker", cl::init(true),
+                 cl::desc("Enable tx-only (atomic) checker (default=true)"));
 
 CustomCheckerHandler::CustomCheckerHandler(Executor &_executor) 
   : executor(_executor), addr(nullptr) {
   // Bind new custom checkers here!
 #define addCC(T) checkers.emplace_back(new T(this, executor))
   addCC(CounterChecker);
-  // addCC(PmemObjTxAddChecker);
+  if (EnableTxAdd) addCC(PmemObjTxAddChecker);
   // addCC(VolatileFilter);
-  addCC(TxOnlyChecker);
+  if (EnableTxOnly) addCC(TxOnlyChecker);
 #undef addCC
 }
 

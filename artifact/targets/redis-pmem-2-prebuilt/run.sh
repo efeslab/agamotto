@@ -99,23 +99,27 @@ touch appendonly.aof
 	# --all-external-warnings \
 	# --posix-debug \
 
+
+	# --link-llvm-lib=build/libpmem.so.bc \
+	# --link-llvm-lib=build/libjemalloc.bca \
+	# --link-llvm-lib=build/libjemallocat.bca \
+	# --link-llvm-lib=build/libmemkind.bca \
+	# --link-llvm-lib=build/libhiredis.bca \
+	# --link-llvm-lib=build/liblua.bca \
+	# --link-llvm-lib=build/libaofguard.bca \
+	# --link-llvm-lib=build/libnuma.bca \
+
 mkdir -p pmem
 
 set -x
-$KLEE \
+# gdb --args $KLEE \
+time $KLEE \
 	--output-dir=$OUTPUT \
 	--disable-verify=true \
 	$CONSTRAINTS \
 	--libc=uclibc \
- 	--calloc-max-unit-size=4096 \
-	--link-known-lib=libpmem \
-	--link-llvm-lib=build/libjemalloc.bca \
-	--link-llvm-lib=build/libjemallocat.bca \
-	--link-llvm-lib=build/libmemkind.bca \
-	--link-llvm-lib=build/libhiredis.bca \
-	--link-llvm-lib=build/liblua.bca \
-	--link-llvm-lib=build/libaofguard.bca \
 	--link-llvm-lib=build/libnuma.bca \
+ 	--calloc-max-unit-size=4096 \
 	--posix-runtime \
 	--env-file=pmdk.env \
 	$SEARCH \

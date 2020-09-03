@@ -32,8 +32,13 @@ def get_stat_df(klee_stats_bin, experiment_dir, category):
 
 def process(klee_stats_bin, experiment_root):
     # Map experiment -> category
-    experiments = { 'klee-memcached-static': 'memcached',
-                    'klee-redis-static': 'redis' }
+    experiments = { 'klee-memcached-static': 'memcached-pm',
+                    'klee-redis-static': 'redis-pmem',
+                    'klee-nvm-direct-static': 'nvm-direct',
+                    'klee-recipe-nothread-static': 'recipe',
+                    'klee-pmdk-btree-static': 'pmdk',
+                    'klee-pmdk-rbtree-static': 'pmdk',
+                    'klee-pmdk-hashmap-atomic-static': 'pmdk' }
     
     res = defaultdict(float)
 
@@ -68,7 +73,9 @@ def main():
 
     res = process(klee_stats_bin, args.experiment_out_dir)
 
+    print()
     pprint(res)
+    print()
 
 if __name__ == "__main__":
     main()

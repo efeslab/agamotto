@@ -5,7 +5,10 @@ This document describes the artifact for our OSDI '20 paper on <span style="font
 ### Downloads
 ---
 
-[VM Image][https://drive.google.com/file/d/1UYg1D5vsL58lJ7HwDoprs5bfPeqUaypW/view?usp=sharing]
+[VM Image](https://drive.google.com/file/d/1UYg1D5vsL58lJ7HwDoprs5bfPeqUaypW/view?usp=sharing): Already has all the dependencies installed.
+
+Username: `reviewer`
+Password: See submission site
 
 ## Artifact Overview
 ---
@@ -32,7 +35,7 @@ the main differences at a high-level below:
 1. <span style="font-variant:small-caps;">Agamotto</span> requires LLVM 8.
 
 
-#### Creating the VM
+#### Creating the VM (optional)
 
 ```
 ./vm_scripts/install-vm.sh
@@ -52,7 +55,7 @@ git clone https://github.com/efeslab/klee-nvm.git agamotto
 git submodule init
 ```
 
-#### Using the prebuilt VM
+#### Using the prebuilt VM (recommended)
 
 ```
 wget <VM URL> artifact/vm_scripts
@@ -67,6 +70,7 @@ ssh reviewer@localhost -p 5000
 Heavily adapted from: http://klee.github.io/build-llvm9/
 
 ```
+git clone https://github.com/efeslab/klee-nvm.git agamotto
 mkdir -p agamotto/build
 cd agamotto
 
@@ -100,7 +104,7 @@ LLVM_VERSION=8 SANITIZER_BUILD= BASE=$(realpath ./build/) REQUIRES_RTTI=1 DISABL
 
 # Finally build Agamotto
 
-cd agamotto/build
+cd build
 
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DENABLE_SOLVER_STP=ON \
@@ -122,18 +126,39 @@ make -j$(nproc)
 
 ```
 
+#### Running <span style="font-variant:small-caps;">Agamotto</span>
+
+Running <span style="font-variant:small-caps;">Agamotto</span> is very similar
+to running <span style="font-variant:small-caps;">Klee</span> (see [this tutorial](https://klee.github.io/tutorials/testing-coreutils/) for how to run general programs on <span style="font-variant:small-caps;">Klee</span>). We provide the following extensions via command line arguments below (these arguments are
+visible via `klee --help`)
+
+General arguments:
+- `--search=nvm`: This causes <span style="font-variant:small-caps;">Klee</span> to use <span style="font-variant:small-caps;">Agamotto</span>'s PM-aware heuristic search. 
+- `--custom-checkers=true`: This enables the use of semantic bug oracles.
+
+POSIX runtime arguments (part of the [symbolic environment model](https://klee.github.io/tutorials/using-symbolic/)):
+- `-sym-pmem <FILE> <NBYTES>`: Provide a symbolic persistent memory file of the specified size. The application-under-test can then call `mmap(FILE)` to access a region of persistment memory. The file contents
+are symbolic on initialization and can represent any value.
+- `-sym-pmem-zeroed <FILE> <NBYTES>`: Same as `-sym-pmem`, but the initial values are all 0.
+- `-sym-pmem-delay <FILE> <NBYTES>`: Same as the above, but tricks the application into thinking that it created `FILE`.
+- `-sym-pmem-init-from <INIT_FILE_PATH>`: Initialize the symbolic persistent memory file (named the same as `INIT_FILE_PATH`) to concrete values based on values from the real file at the specified path.
+
+
 ## Results Reproduced
 
 There are four main results from <span style="font-variant:small-caps;">Agamotto</span>:
 
 1. The number of new bugs found.
-2. The performance of <span style="font-variant:small-caps;">Agamotto</span>'s 
+2. The number of bugs reproduced from prior work.
+3. The performance of <span style="font-variant:small-caps;">Agamotto</span>'s 
 search strategy compared to <span style="font-variant:small-caps;">Klee</span>'s default search strategy.
-3. The overhead of <span style="font-variant:small-caps;">Agamotto</span>'s static analysis.
+4. The overhead of <span style="font-variant:small-caps;">Agamotto</span>'s static analysis.
 
 ### 1. Reproduce the newly found bugs.
 
-First, we rerun all of the symbolic tests that we ran for our evaluation.
+First, we rerun all of the symbolic tests that we ran for our evaluation. 
+The `run_*_eval.sh` scripts are wrappers which execute <span style="font-variant:small-caps;">Agamotto</span>
+with the appropriate command line parameters required.
 
 ```
 cd artifact/targets
@@ -144,23 +169,69 @@ cd artifact/targets
 ./run_redis_eval.sh
 ```
 
-Then, run the script.
+This creates <span style="font-variant:small-caps;">Klee</span> output files under `artifact/results`. These are the same as running standard <span style="font-variant:small-caps;">Klee</span> tests, but additionally outputs `all_pmem_err.csv` and `all.pmem.err`, which provide tabular and textual descriptions of all 
+encountered PM bugs, respectively. In the `artifact/results` directory, we provide a number of scripts
+to parse <span style="font-variant:small-caps;">Agamotto</span>'s output automatically.
+
+For identifying new bugs, we run this script:
 
 ```
+cd artifact/results
+./count_new_bugs.py
 ```
 
-### 2. Measure the performance of <span style="font-variant:small-caps;">Agamotto</span>'s search strategy
+This should provide the following output:
 
-Run the experiments as performed earlier. If already run, there is no need to re-run them.
+IAN: TODO
 
-### 3. Calculate the offline overhead of <span style="font-variant:small-caps;">Agamotto</span>
-
-Run the experiments as performed earlier. If already run, there is no need to re-run them.
-
-Then, run the script.
+### 2. Reproducing bugs from prior work.
 
 ```
+cd artifact/targets
+./run_prior_art_repro.sh
+cd ../results
+./count_reproduced_bugs.py
 ```
+
+This should provide the following output:
+
+IAN: TODO
+
+### 3. Measure the performance of <span style="font-variant:small-caps;">Agamotto</span>'s search strategy
+
+Run the experiments as performed for finding new bugs. If already run, there is no need to re-run them.
+
+Then, run:
+```
+cd artifact/results
+IAN: TODO
+```
+
+This should provide output similar to the following:
+
+IAN: TODO
+
+Note that this experiment is dependent on the underlying CPU for timing and 
+may vary.
+
+
+### 4. Calculate the offline overhead of <span style="font-variant:small-caps;">Agamotto</span>
+
+Run the experiments as performed for finding new bugs. If already run, there is no need to re-run them.
+
+Then, run:
+```
+cd artifact/results
+./get_offline_overhead.py
+```
+
+This should provide output similar to the following:
+
+IAN: TODO
+
+Note that this experiment is dependent on the underlying CPU for timing and 
+may vary.
+
 
 ### 4. Reproduce the bugs from prior work.
 

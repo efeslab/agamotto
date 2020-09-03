@@ -8,11 +8,11 @@ This repository contains the code and experiments for the OSDI '20 paper
 
 `artifact/`: This directory contains all of the information needed to build <span style="font-variant:small-caps;">Agamotto</span> and reproduce the key results from the paper.
 
-`lib/NvmHeuristics.{cpp,h}`: This contains the core logic behind <span style="font-variant:small-caps;">Agamotto</span>'s search strategy.
+`lib/Core/NvmHeuristics.{cpp,h}`: This contains the core logic behind <span style="font-variant:small-caps;">Agamotto</span>'s search strategy.
 
-`lib/RootCause.{cpp,h}`: This contains the bug tracking and reporting mechanisms used in <span style="font-variant:small-caps;">Agamotto</span>.
+`lib/Core/RootCause.{cpp,h}`: This contains the bug tracking and reporting mechanisms used in <span style="font-variant:small-caps;">Agamotto</span>.
 
-`lib/CustomCheckerHandler.{cpp,h}`: Contains the APIs for the custom semantic bug oracles.
+`lib/Core/CustomCheckerHandler.{cpp,h}`: Contains the APIs for the custom semantic bug oracles.
 
 `runtime/POSIX/`: Contains PM-specific modifications to the environment model (modeling persistent files), as well as ports of [Cloud9's][https://github.com/dslab-epfl/cloud9] extended environment model. Also contains symbolic socket handlers used in the evaluation of Redis and memcached.
 

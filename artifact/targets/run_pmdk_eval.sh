@@ -10,7 +10,8 @@ source common.sh
 
 # 1. Agamotto
 $KLEE --output-dir=$OUTDIR/klee-pmdk-btree-static --search=nvm --nvm-heuristic-type=static \
-  --custom-checkers=false --max-time=86400 --write-errors-only=true --max-memory=10000  \
+  --custom-checkers=false --write-errors-only=true \
+  $CONSTRAINTS \
   --disable-verify=true --libc=uclibc \
   --link-llvm-lib=$PMDK_DIR/libpmemobj.so.bc \
   --link-llvm-lib=$PMDK_DIR/libpmem.so.bc \
@@ -19,7 +20,8 @@ $KLEE --output-dir=$OUTDIR/klee-pmdk-btree-static --search=nvm --nvm-heuristic-t
 
 # 2. KLEE default (random-path + covnew)
 $KLEE --output-dir=$OUTDIR/klee-pmdk-btree-default \
-  --custom-checkers=false --max-time=86400 --write-errors-only=true --max-memory=10000  \
+  --custom-checkers=false --write-errors-only=true \
+  $CONSTRAINTS \
   --disable-verify=true --libc=uclibc \
   --link-llvm-lib=$PMDK_DIR/libpmemobj.so.bc \
   --link-llvm-lib=$PMDK_DIR/libpmem.so.bc \
@@ -32,7 +34,8 @@ $KLEE --output-dir=$OUTDIR/klee-pmdk-btree-default \
 
 # 1. Agamotto
 $KLEE --output-dir=$OUTDIR/klee-pmdk-rbtree-static --search=nvm --nvm-heuristic-type=static \
-  --custom-checkers=false --max-time=86400 --write-errors-only=true --max-memory=10000  \
+  --custom-checkers=false --write-errors-only=true \
+  $CONSTRAINTS \
   --disable-verify=true --libc=uclibc \
   --link-llvm-lib=$PMDK_DIR/libpmemobj.so.bc \
   --link-llvm-lib=$PMDK_DIR/libpmem.so.bc \
@@ -41,7 +44,8 @@ $KLEE --output-dir=$OUTDIR/klee-pmdk-rbtree-static --search=nvm --nvm-heuristic-
 
 # 2. KLEE default (random-path + covnew)
 $KLEE --output-dir=$OUTDIR/klee-pmdk-rbtree-default \
-  --custom-checkers=false --max-time=86400 --write-errors-only=true --max-memory=10000  \
+  --custom-checkers=false --write-errors-only=true \
+  $CONSTRAINTS \
   --disable-verify=true --libc=uclibc \
   --link-llvm-lib=$PMDK_DIR/libpmemobj.so.bc \
   --link-llvm-lib=$PMDK_DIR/libpmem.so.bc \
@@ -54,7 +58,8 @@ $KLEE --output-dir=$OUTDIR/klee-pmdk-rbtree-default \
 
 # 1. Agamotto
 $KLEE --output-dir=$OUTDIR/klee-pmdk-hashmap-atomic-static --search=nvm --nvm-heuristic-type=static \
-  --custom-checkers=false --max-time=86400 --write-errors-only=true --max-memory=10000  \
+  --custom-checkers=false --write-errors-only=true \
+  $CONSTRAINTS \
   --disable-verify=true --libc=uclibc \
   --link-llvm-lib=$PMDK_DIR/libpmemobj.so.bc \
   --link-llvm-lib=$PMDK_DIR/libpmem.so.bc \
@@ -63,7 +68,8 @@ $KLEE --output-dir=$OUTDIR/klee-pmdk-hashmap-atomic-static --search=nvm --nvm-he
 
 # 2. KLEE default (random-path + covnew)
 $KLEE --output-dir=$OUTDIR/klee-pmdk-hashmap-atomic-default \
-  --custom-checkers=false --max-time=86400 --write-errors-only=true --max-memory=10000  \
+  --custom-checkers=false --write-errors-only=true \
+  $CONSTRAINTS \
   --disable-verify=true --libc=uclibc \
   --link-llvm-lib=$PMDK_DIR/libpmemobj.so.bc \
   --link-llvm-lib=$PMDK_DIR/libpmem.so.bc \

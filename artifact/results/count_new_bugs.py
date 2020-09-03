@@ -15,7 +15,7 @@ FALSE_POS = {
         'do_slabs_free at slabs.c:540',
     ],
 
-    'test case': [
+    'test case (we introduced this bug)': [
         '__klee_posix_wrapped_main at nvmbugs/000_pmdk_btree_map/driver.c:74'
     ],
 
@@ -397,49 +397,6 @@ def uniquify(df, diagnosed):
 
     return sdf
 
-def old_main():
-    parser = ArgumentParser()
-    parser.add_argument('system', type=str, help='which system',
-                        choices=['memcached', 'pmdk', 'recipe', 'nvm-direct'])
-    parser.add_argument('file_path', type=Path, help='CSV file to open')
-    parser.add_argument('--output-file', '-o', required=True, 
-                        type=Path, help='Where to output unique-d CSV')
-
-    args = parser.parse_args()
-    assert(args.file_path.exists())
-    assert(args.file_path != args.output_file)
-
-    df = pd.read_csv(args.file_path)
-
-    df = remove_diagnosed(df, FALSE_POS)
-
-    # df = remove_known_volatile_usages(df)
-    # if (args.system == 'memcached'):
-    #     df = remove_diagnosed(df, DIAGNOSED_MEMCACHED)
-    # elif (args.system == 'pmdk' or args.system == 'recipe'):
-    #     df = remove_diagnosed(df, DIAGNOSED_PMDK)
-    # elif args.system == 'nvm-direct':
-    #     df = remove_diagnosed(df, DIAGNOSED_NVMDIRECT)
-    # df = df.reset_index().drop('index', axis=1)
-    # embed()
-    # return
-
-    # cdf = df[df['Type'] == CORRECTNESS]
-    # pdf = df[df['Type'] != CORRECTNESS]
-
-    if args.system == 'memcached':
-        df = uniquify(df, DIAGNOSED_MEMCACHED)
-    elif args.system == 'pmdk': 
-        df = uniquify(df, DIAGNOSED_PMDK)
-    elif args.system == 'recipe':
-        df = remove_diagnosed(df, DIAGNOSED_PMDK)
-        df = uniquify(df, DIAGNOSED_RECIPE)
-    elif args.system == 'nvm-direct':
-        df = uniquify(df, DIAGNOSED_NVMDIRECT)
-
-    df.to_csv(args.output_file)
-
-    print(f'Total diagnosed: {len(DIAGNOSED_MEMCACHED) + len(DIAGNOSED_PMDK) + len(DIAGNOSED_NVMDIRECT)}')
 
 SYSTEMS = ['pmdk', 'recipe', 'memcached', 'nvm-direct', 'redis']
 FILTER_PMDK = ['recipe']
@@ -541,11 +498,11 @@ def convert_all(root_dir, out_dir):
     sdf = pd.concat(summary_dfs).sort_values(by=['System', 'BugType'])
     sdf.to_csv('summary.csv', index=False)
 
-    
     from pprint import pprint
     pprint(dict(summary_info), indent=4)
     print(f'\nOverall:\n\tTotal: {total}\n\tCorrectness: {correctness}\n\tPerformance: {performance}')
     print(f'\tTransient: {transient}')
+    
 
 def main():
     parser = ArgumentParser('Parse all of the bug reports in a given directory.')

@@ -31,7 +31,7 @@ namespace klee {
                    clNvmEnumValN(NvmHeuristicBuilder::Type::Static),
                    clNvmEnumValN(NvmHeuristicBuilder::Type::Dynamic)
                    KLEE_LLVM_CL_VAL_END),
-        cl::init(NvmHeuristicBuilder::Type::None),
+        cl::init(NvmHeuristicBuilder::Type::Static),
         cl::cat(NvmCat));
 
   #undef clNvmEnumValN
@@ -710,6 +710,8 @@ void NvmStaticHeuristic::computePriority(void) {
         possibleFns.insert(f);
       } else if (Function *f = cb->getCalledFunction()) {
         possibleFns.insert(f);
+      } else if (auto *f = dyn_cast<Function>(cb->getCalledValue()->stripPointerCastsNoFollowAliases())) {
+        possibleFns.insert(f);
       } else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(cb->getCalledValue())) {
         Function *f = dyn_cast<Function>(ga->getAliasee());
         assert(f && "bad assumption about aliases!");
@@ -719,6 +721,7 @@ void NvmStaticHeuristic::computePriority(void) {
           errs() << *cb << "\n";
           errs() << cb->getCalledValue() << "\n";
           if (cb->getCalledValue()) errs() << *cb->getCalledValue() << "\n";
+          if (cb->getCalledValue()) errs() << *cb->getCalledValue()->stripPointerCastsNoFollowAliases() << "\n";
         }
         assert(cb->isIndirectCall());
 

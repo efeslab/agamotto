@@ -8,10 +8,10 @@ cd redis-pmem-2-prebuilt
 
 rm -rf $OUTDIR/klee-redis-static
 
-# ./run.sh build/redis-server.bc "--search=nvm --nvm-heuristic-type=static" "$OUTDIR/klee-redis-static" &
+./run.sh build/redis-server.bc "--search=nvm --nvm-heuristic-type=static" "$OUTDIR/klee-redis-static"
 
 # 2. Default (random-path + covnew)
 
-rm -rf $OUTDIR/klee-redis-default
+# rm -rf $OUTDIR/klee-redis-default
 
-./run.sh build/redis-server.bc "--search=dfs" "$OUTDIR/klee-redis-default" &
+# ./run.sh build/redis-server.bc "--search=dfs" "$OUTDIR/klee-redis-default" &
