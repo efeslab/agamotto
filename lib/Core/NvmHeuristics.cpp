@@ -31,7 +31,7 @@ namespace klee {
                    clNvmEnumValN(NvmHeuristicBuilder::Type::Static),
                    clNvmEnumValN(NvmHeuristicBuilder::Type::Dynamic)
                    KLEE_LLVM_CL_VAL_END),
-        cl::init(NvmHeuristicBuilder::Type::Static),
+        cl::init(NvmHeuristicBuilder::Type::None),
         cl::cat(NvmCat));
 
   #undef clNvmEnumValN

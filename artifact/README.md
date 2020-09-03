@@ -152,7 +152,7 @@ There are four main results from <span style="font-variant:small-caps;">Agamotto
 2. The performance of <span style="font-variant:small-caps;">Agamotto</span>'s 
 search strategy compared to <span style="font-variant:small-caps;">Klee</span>'s default search strategy.
 3. The overhead of <span style="font-variant:small-caps;">Agamotto</span>'s static analysis.
-4. The number of bugs reproduced from prior work.
+<!-- 4. The number of bugs reproduced from prior work. -->
 
 ### 1. Reproduce the newly found bugs.
 
@@ -205,12 +205,13 @@ Run the experiments as performed for finding new bugs. If already run, there is 
 Then, run:
 ```
 cd artifact/results
-IAN: TODO
+./graph_performance.py {pmdk,recipe,memcached,nvm-direct,redis}
 ```
 
-This should provide output similar to the following:
-
-IAN: TODO
+This generates `{pmdk,recipe,memcached,nvm-direct,redis}.pdf` in the same directory. These
+graphs represent the performance of <span style="font-variant:small-caps;">Agamotto</span>'s search strategy
+versus <span style="font-variant:small-caps;">Klee</span>'s default search strategy, and should be 
+similar to the results shown in the evaluation in our paper.
 
 Note that this experiment is dependent on the underlying CPU for timing and 
 may vary.
@@ -228,7 +229,14 @@ cd artifact/results
 
 This should provide output similar to the following:
 
-IAN: TODO
+```
+memcached-pm    4.217978
+redis-pmem      0.000000
+nvm-direct      0.025899
+recipe          1.847798
+pmdk            0.357568
+Name: Offline Overhead (minutes), dtype: float64
+```
 
 Note that this experiment is dependent on the underlying CPU for timing and 
 may vary. In addition, we have modified our alias analysis algorithm from our original submission,
