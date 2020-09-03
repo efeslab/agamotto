@@ -6,30 +6,23 @@ TARGET=$1
 SEARCH=$2
 OUTPUT=$3
 
-PMEM=1
+PMEM_FILE_NAME=redis.pmem
+# PMEM_FILE_SIZE=2147483648  # 2 * 1024 * 1024 * 1024
+# PMEM_FILE_SIZE=67108864  # 64 * 1024 * 1024
+PMEM_FILE_SIZE=8388608  # 8 * 1024 * 1024
+# PMEM_INIT_OPTS="--sym-pmem-init-from $PMEM_FILE_NAME"
 
-# if [[ $PMEM -eq 1 ]]; then
-	PMEM_FILE_NAME=./redis.pmem
-	# PMEM_FILE_SIZE=2147483648  # 2 * 1024 * 1024 * 1024
-	# PMEM_FILE_SIZE=67108864  # 64 * 1024 * 1024
-	PMEM_FILE_SIZE=8388608  # 8 * 1024 * 1024
-	# PMEM_INIT_OPTS="--sym-pmem-init-from $PMEM_FILE_NAME"
-	
-	# Must be a new file to reproduce 
-	PMEM_INIT_OPTS"--sym-pmem-delay $PMEM_FILE_NAME $PMEM_FILE_SIZE"
+# Must be a new file to reproduce 
+PMEM_INIT_OPTS="--sym-pmem-delay $PMEM_FILE_NAME $PMEM_FILE_SIZE"
 
-	REDIS_CONF=redis-pmem.conf
-	# SEARCH="--search=nvm --nvm-heuristic-type=static"
-	# SEARCH="--search=nurs:covnew"
-	#SEARCH="--search=nurs:depth"
-	# SEARCH="--search=dfs"
+REDIS_CONF=redis-pmem.conf
+# SEARCH="--search=nvm --nvm-heuristic-type=static"
+# SEARCH="--search=nurs:covnew"
+#SEARCH="--search=nurs:depth"
+# SEARCH="--search=dfs"
 
-	# SEARCH="$SEARCH --use-batching-search"
-# else
-# 	PMEM_INIT_OPTS=
-# 	REDIS_CONF=redis.conf
-# 	SEARCH="--search=nurs:covnew"
-# fi
+# SEARCH="$SEARCH --use-batching-search"
+
 
 CLIENT_FILE_NAME=client.txt
 SERVER_PORT=6379
@@ -75,8 +68,7 @@ $KLEE --output-dir=$OUTPUT \
 	$TARGET \
 	$PMEM_INIT_OPTS \
 	$TCP_OPTS \
-	$REDIS_CONF --posix-debug
+	$REDIS_CONF
 
-	
 	# --only-output-states-covering-new \
 	#--use-query-log=all:kquery \

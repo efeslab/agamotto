@@ -133,7 +133,7 @@ to running <span style="font-variant:small-caps;">Klee</span> (see [this tutoria
 visible via `klee --help`)
 
 General arguments:
-- `--search=nvm`: This causes <span style="font-variant:small-caps;">Klee</span> to use <span style="font-variant:small-caps;">Agamotto</span>'s PM-aware heuristic search. 
+- `--search=nvm --nvm-heuristic-type=static`: This causes <span style="font-variant:small-caps;">Klee</span> to use <span style="font-variant:small-caps;">Agamotto</span>'s PM-aware heuristic search. 
 - `--custom-checkers=true`: This enables the use of semantic bug oracles.
 
 POSIX runtime arguments (part of the [symbolic environment model](https://klee.github.io/tutorials/using-symbolic/)):
@@ -149,9 +149,10 @@ are symbolic on initialization and can represent any value.
 There are four main results from <span style="font-variant:small-caps;">Agamotto</span>:
 
 1. The number of new bugs found.
-3. The performance of <span style="font-variant:small-caps;">Agamotto</span>'s 
+2. The performance of <span style="font-variant:small-caps;">Agamotto</span>'s 
 search strategy compared to <span style="font-variant:small-caps;">Klee</span>'s default search strategy.
-4. The overhead of <span style="font-variant:small-caps;">Agamotto</span>'s static analysis.
+3. The overhead of <span style="font-variant:small-caps;">Agamotto</span>'s static analysis.
+4. The number of bugs reproduced from prior work.
 
 ### 1. Reproduce the newly found bugs.
 
