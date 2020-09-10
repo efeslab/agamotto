@@ -41,31 +41,55 @@ The procedure for building <span style="font-variant:small-caps;">Agamotto</span
 ./vm_scripts/install-vm.sh
 # configure 
 
-mkdir -p mnt
+mkdir -p mnt; mkdir -p boot
 sudo guestmount -a agamotto.qcow2 -i -o allow_other mnt
 cp mnt/vmlinuz boot
 cp mnt/initrd.img boot
 sudo guestunmount mnt
 
-# login
-<!-- sudo apt install  -->
-
+# run and login
+./run-vm.sh
+# --- from inside the VM
 cd ~/
 git clone https://github.com/efeslab/klee-nvm.git agamotto 
 git submodule init
+git submodule update
 ```
 
 #### Using the prebuilt VM (recommended)
 
 ```
-wget <VM URL> artifact/vm_scripts
-cd artifact/vm_scripts
+# Download agamotto.qcow2 from the Google drive link
+mv agamotto.qcow2 artifact/vm_scripts
+
+# This is necessary to extract the vmlinuz and initrd.img for the run-vm.sh script
+mkdir -p mnt; mkdir -p boot
+sudo guestmount -a agamotto.qcow2 -i -o allow_other mnt
+cp mnt/vmlinuz boot
+cp mnt/initrd.img boot
+sudo guestunmount mnt
+
 ./run-vm.sh
-ssh reviewer@localhost -p 5000
+# The repo is in ~/agamotto
 ```
 
 All the dependencies should be installed. You can then update the version of <span style="font-variant:small-caps;">Agamotto</span> and rebuild it by simply running:
 
+```
+cd ~/agamotto
+git checkout <version>
+cd build/
+make -j$(nproc)
+```
+
+#### Using the VM
+
+`run-vm.sh` will run the QEMU VM (use `^a-X` to kill QEMU). You can login directly
+at the login prompt, but the rendering of the terminal may behave strangely.
+To login using ssh (which is recommend), run the following:
+
+```
+ssh reviewer@localhost -p 5000 # this port can be configured in run-vm.sh
 ```
 cd agamotto
 git checkout <COMMIT_HASH>
