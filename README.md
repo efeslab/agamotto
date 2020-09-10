@@ -2,7 +2,7 @@
 ================================================================
 
 This repository contains the code and experiments for the OSDI '20 paper 
-[<span style="font-variant:small-caps;">Agamotto</span>: How Persistent is your Persistent Memory Application?](https://www.usenix.org/conference/osdi20/presentation/neal). <span style="font-variant:small-caps;">Agamotto</span> is based on <span style="font-variant:small-caps;">Klee</span> (described below).
+["<span style="font-variant:small-caps;">Agamotto</span>: How Persistent is your Persistent Memory Application?"](https://www.usenix.org/conference/osdi20/presentation/neal) <span style="font-variant:small-caps;">Agamotto</span> is based on <span style="font-variant:small-caps;">Klee</span> (described below).
 
 ## Core Additions and Layout
 
@@ -14,7 +14,7 @@ This repository contains the code and experiments for the OSDI '20 paper
 
 `lib/Core/CustomCheckerHandler.{cpp,h}`: Contains the APIs for the custom semantic bug oracles.
 
-`runtime/POSIX/`: Contains PM-specific modifications to the environment model (modeling persistent files), as well as ports of [Cloud9's][https://github.com/dslab-epfl/cloud9] extended environment model. Also contains symbolic socket handlers used in the evaluation of Redis and memcached.
+`runtime/POSIX/`: Contains PM-specific modifications to the environment model (modeling persistent files), as well as ports of [Cloud9's](https://github.com/dslab-epfl/cloud9) extended environment model. Also contains symbolic socket handlers used in the evaluation of Redis and memcached.
 
 ---
 ### KLEE Symbolic Virtual Machine
