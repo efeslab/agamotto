@@ -211,6 +211,7 @@ For identifying new bugs, we run this script:
 
 ```
 cd artifact/results
+sudo -H pip3 install -r requirements.txt
 ./parse_bugs_and_perf.py
 ```
 
@@ -238,6 +239,7 @@ Run the experiments as performed for finding new bugs. If already run, there is 
 Then, run:
 ```
 cd artifact/results
+sudo -H pip3 install -r requirements.txt
 ./graph_performance.py {pmdk,recipe,memcached,nvm-direct,redis}
 ```
 
@@ -257,6 +259,7 @@ Run the experiments as performed for finding new bugs. If already run, there is 
 Then, run:
 ```
 cd artifact/results
+sudo -H pip3 install -r requirements.txt
 ./get_offline_overhead.py
 ```
 
@@ -289,6 +292,7 @@ Then, run the script to count the bugs that were reproduced.
 
 ```
 cd artifacts/results
+sudo -H pip3 install -r requirements.txt
 ./count_reproduced_bugs.py
 ```
 
