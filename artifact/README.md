@@ -266,11 +266,11 @@ sudo -H pip3 install -r requirements.txt
 This should provide output similar to the following:
 
 ```
-memcached-pm      4.745251
-redis-pmem      101.692201
-nvm-direct        0.025899
-recipe            1.847798
-pmdk              0.357568
+memcached-pm      2.198278
+redis-pmem       19.661336
+nvm-direct        0.021961
+recipe            0.549605
+pmdk              0.596972
 Name: Offline Overhead (minutes), dtype: float64
 ```
 
