@@ -9,6 +9,7 @@ source common.sh
 ################################################################################
 
 # 1. Agamotto
+rm -rf $OUTDIR/klee-pmdk-btree-static
 $KLEE --output-dir=$OUTDIR/klee-pmdk-btree-static --search=nvm --nvm-heuristic-type=static \
   --custom-checkers=false --write-errors-only=true \
   $CONSTRAINTS \
@@ -19,6 +20,7 @@ $KLEE --output-dir=$OUTDIR/klee-pmdk-btree-static --search=nvm --nvm-heuristic-t
   $BUILD/bin/000_Buggy.bc --sym-pmem-delay PMEM 8388608 PMEM --sym-arg 2 &
 
 # 2. KLEE default (random-path + covnew)
+rm -rf $OUTDIR/klee-pmdk-btree-default
 $KLEE --output-dir=$OUTDIR/klee-pmdk-btree-default \
   --custom-checkers=false --write-errors-only=true \
   $CONSTRAINTS \
@@ -33,6 +35,7 @@ $KLEE --output-dir=$OUTDIR/klee-pmdk-btree-default \
 ################################################################################
 
 # 1. Agamotto
+rm -rf $OUTDIR/klee-pmdk-rbtree-static
 $KLEE --output-dir=$OUTDIR/klee-pmdk-rbtree-static --search=nvm --nvm-heuristic-type=static \
   --custom-checkers=false --write-errors-only=true \
   $CONSTRAINTS \
@@ -43,6 +46,7 @@ $KLEE --output-dir=$OUTDIR/klee-pmdk-rbtree-static --search=nvm --nvm-heuristic-
   $BUILD/bin/003_Buggy.bc --sym-pmem-delay PMEM 8388608 PMEM --sym-arg 2 &
 
 # 2. KLEE default (random-path + covnew)
+rm -rf $OUTDIR/klee-pmdk-rbtree-default
 $KLEE --output-dir=$OUTDIR/klee-pmdk-rbtree-default \
   --custom-checkers=false --write-errors-only=true \
   $CONSTRAINTS \
@@ -57,6 +61,7 @@ $KLEE --output-dir=$OUTDIR/klee-pmdk-rbtree-default \
 ################################################################################
 
 # 1. Agamotto
+rm -rf $OUTDIR/klee-pmdk-hashmap-atomic-static
 $KLEE --output-dir=$OUTDIR/klee-pmdk-hashmap-atomic-static --search=nvm --nvm-heuristic-type=static \
   --custom-checkers=false --write-errors-only=true \
   $CONSTRAINTS \
@@ -67,6 +72,7 @@ $KLEE --output-dir=$OUTDIR/klee-pmdk-hashmap-atomic-static --search=nvm --nvm-he
   $BUILD/bin/005_Clean.bc --sym-pmem-delay PMEM 8388608 PMEM --sym-arg 2 &
 
 # 2. KLEE default (random-path + covnew)
+rm -rf $OUTDIR/klee-pmdk-hashmap-atomic-default
 $KLEE --output-dir=$OUTDIR/klee-pmdk-hashmap-atomic-default \
   --custom-checkers=false --write-errors-only=true \
   $CONSTRAINTS \

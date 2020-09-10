@@ -54,6 +54,10 @@ cd ~/
 git clone https://github.com/efeslab/klee-nvm.git agamotto 
 git submodule init
 git submodule update
+mkdir -p build
+source build.env
+cd build
+# Proceed to the instructions on "Compiling" below
 ```
 
 #### Using the prebuilt VM (recommended)
@@ -77,6 +81,7 @@ All the dependencies should be installed. You can then update the version of <sp
 
 ```
 cd ~/agamotto
+source build.env
 git checkout <version>
 cd build/
 make -j$(nproc)
@@ -90,11 +95,6 @@ To login using ssh (which is recommend), run the following:
 
 ```
 ssh reviewer@localhost -p 5000 # this port can be configured in run-vm.sh
-```
-cd agamotto
-git checkout <COMMIT_HASH>
-cd build
-make -j40
 ```
 
 #### Compiling <span style="font-variant:small-caps;">Agamotto</span>
@@ -139,6 +139,7 @@ LLVM_VERSION=8 SANITIZER_BUILD= BASE=$(realpath ./build/) REQUIRES_RTTI=1 DISABL
 cd build
 
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DENABLE_CRC32_SUPPORT=ON \
   -DENABLE_SOLVER_STP=ON \
   -DENABLE_POSIX_RUNTIME=ON \
   -DENABLE_KLEE_UCLIBC=ON \
