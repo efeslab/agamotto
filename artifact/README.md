@@ -99,19 +99,16 @@ ssh reviewer@localhost -p 5000 # this port can be configured in run-vm.sh
 
 #### Compiling <span style="font-variant:small-caps;">Agamotto</span>
 
-Heavily adapted from: http://klee.github.io/build-llvm9/
+The following instructions are heavily adapted from the  http://klee.github.io/build-llvm9/
 
 ```
-git clone https://github.com/efeslab/klee-nvm.git agamotto
-mkdir -p agamotto/build
-cd agamotto
-
+# Install prerequisite packages:
 sudo apt install -y python3-pip build-essential curl libcap-dev git cmake libncurses5-dev python-minimal python-pip unzip libtcmalloc-minimal4 libgoogle-perftools-dev libsqlite3-dev doxygen python3-pip libselinux1-dev clang-8 llvm-8 llvm-8-dev llvm-8-tools pandoc
 
 sudo -H pip3 install wllvm tabulate lit
 
-# Install STP https://github.com/stp/stp
-sudo apt-get install -y cmake bison flex libboost-all-dev python perl minisat
+# Install STP (https://github.com/stp/stp)
+sudo apt install -y cmake bison flex libboost-all-dev python perl minisat
 git clone https://github.com/stp/stp
 cd stp
 git submodule init && git submodule update
@@ -121,21 +118,25 @@ cmake ..
 cmake --build .
 sudo cmake --install .
 
-source build.env
+# Clone Agamotto, set up build directory
+git clone https://github.com/efeslab/agamotto.git -b artifact_eval_osdi20
+cd agamotto
+git submodule init && git submodule update
+mkdir -p build
 
 # uCLibc
-
 cd klee-uclibc
 ./configure --make-llvm-lib --with-llvm-config=$(which llvm-config-8)
 make -j$(nproc)
 cd ..
 
 # LibCXX
-
 LLVM_VERSION=8 SANITIZER_BUILD= BASE=$(realpath ./build/) REQUIRES_RTTI=1 DISABLE_ASSERTIONS=1 ENABLE_DEBUG=0 ENABLE_OPTIMIZED=1 ./scripts/build/build.sh libcxx
 
-# Finally build Agamotto
+# Finally, build Agamotto
 
+# -- build.env contains environment variables required for WLLVM
+source build.env
 cd build
 
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \

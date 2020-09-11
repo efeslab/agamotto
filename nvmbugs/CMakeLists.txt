@@ -160,8 +160,8 @@ execute_process(COMMAND extract-bc "memcached" -o "${CMAKE_BINARY_DIR}/bin/memca
 set(MEMCACHED_ROOT_DIR ${CMAKE_CURRENT_BINARY_DIR}/memcached-pmem-patched)
 
 if(NOT EXISTS "${MEMCACHED_ROOT_DIR}")
-    message("no memcached at ${memcached_ROOT_DIR}")
-    execute_process(COMMAND git clone git@github.com:efeslab/memcached-pmem.git ${MEMCACHED_ROOT_DIR})
+    message("no memcached at ${MEMCACHED_ROOT_DIR}")
+    execute_process(COMMAND git clone https://github.com/efeslab/memcached-pmem.git ${MEMCACHED_ROOT_DIR})
     execute_process(COMMAND git -C ${MEMCACHED_ROOT_DIR} checkout master)
 
     set(MEMCACHED_LIBS_FLAGS "-levent -lpmem")

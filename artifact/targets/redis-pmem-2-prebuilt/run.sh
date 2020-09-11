@@ -113,7 +113,7 @@ mkdir -p pmem
 
 set -x
 # gdb --args $KLEE \
-time $KLEE \
+$KLEE \
 	--output-dir=$OUTPUT \
 	--disable-verify=true \
 	$CONSTRAINTS \
