@@ -3,7 +3,7 @@
 from argparse import ArgumentParser
 from IPython import embed
 from pathlib import Path
-
+import math
 import pandas as pd
 
 pd.set_option('display.max_rows', 500)
@@ -485,11 +485,14 @@ def convert_all(root_dir, out_dir):
         df = uniquify(df, DIAGNOSED_MAPPING[system])
 
         summary_info[system]['Total'] = df['UniqueBugsAtTime'].max()
+        if math.isnan(summary_info[system]['Total']):
+            print(f'Warning: {system} has no bugs!')
+            summary_info[system]['Total'] = 0
         gdf = df.drop_duplicates(subset='BugDiagnosis', keep='first')
         gdf['System'] = [system] * len(gdf)
         summary_info[system]['Correctness'] = len(gdf[gdf['BugType'] == 'correctness'])
         summary_info[system]['Performance'] = len(gdf[gdf['BugType'] != 'correctness'])
-        # embed()
+        #embed()
         assert(summary_info[system]['Total'] == \
                summary_info[system]['Correctness'] + summary_info[system]['Performance'])
         total += summary_info[system]['Total']

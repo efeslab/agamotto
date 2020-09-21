@@ -117,9 +117,9 @@ def get_dfs(system, xmax, root_dir=Path('./parsed')):
             use_depth = False
         print(csv_file)
     
-    if not use_covnew:
+    if not use_covnew and 'covnew' in SEARCHES:
         SEARCHES.pop('covnew')
-    if not use_depth:
+    if not use_depth and 'dfs' in SEARCHES:
         SEARCHES.pop('dfs')
 
     for csv_file in csv_files:
