@@ -103,7 +103,10 @@ The following instructions are heavily adapted from the  http://klee.github.io/b
 
 ```
 # Install prerequisite packages:
-sudo apt install -y python3-pip build-essential curl libcap-dev git cmake libncurses5-dev python-minimal python-pip unzip libtcmalloc-minimal4 libgoogle-perftools-dev libsqlite3-dev doxygen python3-pip libselinux1-dev clang-8 llvm-8 llvm-8-dev llvm-8-tools pandoc
+sudo apt install -y python3-pip build-essential curl libcap-dev git cmake \
+libncurses5-dev python-minimal python-pip unzip libtcmalloc-minimal4 \
+libgoogle-perftools-dev libsqlite3-dev doxygen python3-pip libselinux1-dev \
+clang-8 llvm-8 llvm-8-dev llvm-8-tools pandoc
 
 sudo -H pip3 install wllvm tabulate lit
 
@@ -131,7 +134,8 @@ make -j$(nproc)
 cd ..
 
 # LibCXX
-LLVM_VERSION=8 SANITIZER_BUILD= BASE=$(realpath ./build/) REQUIRES_RTTI=1 DISABLE_ASSERTIONS=1 ENABLE_DEBUG=0 ENABLE_OPTIMIZED=1 ./scripts/build/build.sh libcxx
+LLVM_VERSION=8 SANITIZER_BUILD= BASE=$(realpath ./build/) REQUIRES_RTTI=1 \
+DISABLE_ASSERTIONS=1 ENABLE_DEBUG=0 ENABLE_OPTIMIZED=1 ./scripts/build/build.sh libcxx
 
 # Finally, build Agamotto
 
