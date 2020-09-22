@@ -77,14 +77,14 @@ PMEM_NO_FLUSH=0
 PMEM_IS_PMEM_FORCE=1
 EOF
 
-if [[ -e appendonly.aof ]]; then
-	cp appendonly.aof appendonly.aof.bk;
-	rm appendonly.aof
-	for f in ./pmem/*.ag; do
-		cp $f $f.bk
-	done
-fi
-touch appendonly.aof
+#if [[ -e appendonly.aof ]]; then
+#	cp appendonly.aof appendonly.aof.bk;
+#	rm appendonly.aof
+#	for f in ./pmem/*.ag; do
+#		cp $f $f.bk
+#	done
+#fi
+#touch appendonly.aof
 
 # --link-llvm-lib=$KLEE_NVM_BUILD/nvmbugs/pmdk/install/lib/pmdk_debug/libvmmalloc.so.bc \
 	# --search=bfs \
