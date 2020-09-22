@@ -195,6 +195,9 @@ DIAGNOSED_PMDK = {
         'obj_replica_init at obj.c:1110',
         'obj_replica_init_local at obj.c:1007'
     ],
+    'transient use 7 [libpmemobj] (ulog)': [
+        'ulog_clobber at ulog.c:701',
+    ],
 
     # Examples: hashmap
     'universal performance 1 [hashmap_atomic] (2 cache lines flushed when 1 would do)': [
@@ -357,13 +360,21 @@ def remove_diagnosed(df, diagnosed):
 
     return df.drop(index=to_remove), df.drop(index=to_keep)
 
+FAIL_ON_UNDIAGNOSED = False
+
 def get_diagnosed(series, diagnosed):
     for bug, loc_list in diagnosed.items():
         for x in series:
             if x in loc_list:
                 return x
-    
-    raise Exception('Not yet diagnosed!')
+
+    print('Found an undiagnosed bug!')
+    print(series)
+
+    if FAIL_ON_UNDIAGNOSED: 
+        raise Exception('Not yet diagnosed!')
+    else:
+        return None
 
 def uniquify(df, diagnosed):
     unique_bugs = {}
@@ -383,8 +394,12 @@ def uniquify(df, diagnosed):
     bugs = []
     bug_types = []
     last_diagnosis = None
+    to_drop = []
     for i in range(0, len(sdf)):
         bug = get_diagnosed(sdf.loc[i], diagnosed)
+        if bug is None:
+            to_drop += [i]
+            continue
         if bug in unique_bugs:
             uniqueNum += 1
             last_diagnosis = unique_bugs[bug]
@@ -392,6 +407,7 @@ def uniquify(df, diagnosed):
         data += [uniqueNum]
         bugs += [bug]
         bug_types += [last_diagnosis]
+    sdf = sdf.drop(index=to_drop)
     sdf['UniqueBugsAtTime'] = data
     sdf['BugDiagnosis'] = bugs
     sdf['BugType'] = bug_types
@@ -518,7 +534,13 @@ def main():
                         default=CURDIR)
     parser.add_argument('--outdir', type=Path, help='Where to output parsed results',
                         default=(CURDIR / 'parsed'))
+    parser.add_argument('--fail-on-undiagnosed', action='store_true', default=False,
+            help='Raise an error if we have any undiagnosed bugs. Helpful for quick diagnosing')
     args = parser.parse_args()
+
+    global FAIL_ON_UNDIAGNOSED
+    FAIL_ON_UNDIAGNOSED = args.fail_on_undiagnosed
+
     convert_all(args.experiment_output_dir, args.outdir)
 
 if __name__ == '__main__':
