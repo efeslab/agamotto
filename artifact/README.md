@@ -245,7 +245,11 @@ Then, run:
 ```
 cd artifact/results
 sudo -H pip3 install -r requirements.txt
-./graph_performance.py {pmdk,recipe,memcached,nvm-direct,redis}
+./graph_performance.py pmdk
+./graph_performance.py recipe
+./graph_performance.py memcached
+./graph_performance.py nvm-direct
+./graph_performance.py redis
 ```
 
 This generates `{pmdk,recipe,memcached,nvm-direct,redis}.pdf` in the same directory. These
