@@ -3,3 +3,8 @@
 *.c text
 *.cpp text
 old_klee_out/** filter=lfs diff=lfs merge=lfs -text
+# Set the default behavior, in case people don't have core.autocrlf set.
+* text=auto
+
+# Declare files that will always have CRLF line endings on checkout.
+artifact/targets/redis-pmem-2-prebuilt/clients/*.txt text eol=crlf
