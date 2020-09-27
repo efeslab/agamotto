@@ -5,7 +5,7 @@ This document describes the artifact for our OSDI '20 paper on <span style="font
 ### Downloads
 
 
-[VM Image](https://drive.google.com/file/d/1UYg1D5vsL58lJ7HwDoprs5bfPeqUaypW/view?usp=sharing): Already has all the dependencies installed. Runs on KVM QEMU.
+[VM Image](https://drive.google.com/file/d/1UG29UOcxE6INndZqMX0G_9VSBrCd-xUg/view?usp=sharing): Already has all the dependencies installed. Runs on KVM QEMU.
 
 - Username: `reviewer`
 - Password: See submission site
