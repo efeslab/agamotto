@@ -2,6 +2,11 @@
 
 This document describes the artifact for our OSDI '20 paper on <span style="font-variant:small-caps;">Agamotto</span>, a symbolic-execution based approach for systematically finding bugs in persistent memory applications and libraries. The remainder of this document describes how to run <span style="font-variant:small-caps;">Agamotto</span> and reproduce the key results from our paper.
 
+### Resources
+
+- [A Google Sheet](https://docs.google.com/spreadsheets/d/1cwNR_5lKvxLAHp56luGM2KZ5dMcEsjibxQjAuSUV7BQ/edit?usp=sharing) which contains our two appendices; the results of the bug study and the bugs we found in our evaluation.
+- [A link to the paper](https://www.usenix.org/conference/osdi20/presentation/neal) on the OSDI webpage.
+
 ### Downloads
 
 
