@@ -252,6 +252,7 @@ DIAGNOSED_RECIPE = {
     'transient use 1 [recipe] (tmp table for resizing)': [
         'ht_resize_pes at src/clht_lb_res.c:843',
         'ht_resize_pes at src/clht_lb_res.c:973',
+        'ht_resize_pes at src/clht_lb_res.c:1002',
     ],
     'transient use 2 [recipe] (next off)': [
         'clht_put at src/clht_lb_res.c:557'
@@ -352,11 +353,16 @@ def remove_diagnosed(df, diagnosed):
     to_remove = []
     to_keep = []
     for i, row in df.iterrows():
+        remove_row = False
         for x in row:
             if x in dgn:
-                to_remove += [i]
-            else:
-                to_keep += [i]
+                remove_row = True
+                break
+
+        if remove_row:
+            to_remove += [i]
+        else:
+            to_keep += [i]
 
     return df.drop(index=to_remove), df.drop(index=to_keep)
 
@@ -389,6 +395,7 @@ def uniquify(df, diagnosed):
             unique_bugs[x] = diagnosis
 
     sdf = df.sort_values('Timestamp').reset_index().drop('index', axis=1)
+    #embed()
     uniqueNum = 0
     data = []
     bugs = []
@@ -454,7 +461,7 @@ def convert_all(root_dir, out_dir):
             system = f'{system}-{parts[2]}'
             print(exp_dir_str, system)
         search = parts[-1]
-        if 'repro' in search or 'debug' in search:
+        if 'repro' in search or 'debug' in search or 'old' in search:
             continue
 
         if system not in SYSTEMS:
@@ -463,13 +470,13 @@ def convert_all(root_dir, out_dir):
             raise Exception(f'{search} not in SEARCHES!')
 
         df = pd.read_csv(csv_file)
+
         df, _ = remove_diagnosed(df, FALSE_POS)
 
         if system in FILTER_PMDK:
             df, xdf = remove_diagnosed(df, DIAGNOSED_PMDK)
             df_dict['pmdk'][search] += [xdf]
             # xdf = df - fdf
-            # embed()
         
         df_dict[system][search] += [df]
     
