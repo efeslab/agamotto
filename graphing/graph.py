@@ -5,6 +5,7 @@ from IPython import embed
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib
 
 def graph(dfs, xlabel, ylabel):
   ax = plt.gca()

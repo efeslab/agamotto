@@ -8,7 +8,8 @@ mkdir -p $OUTDIR
 
 PMDK_DIR=$DIR/pmdk-prebuilt
 
-CONSTRAINTS="--max-time=$((60 * 60)) --max-memory=20000"
+#CONSTRAINTS="--max-time=$((60 * 60)) --max-memory=20000"
+CONSTRAINTS="--max-memory=20000"
 
 # Common setup commands
 ulimit -s unlimited

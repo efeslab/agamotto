@@ -9,34 +9,82 @@ import subprocess
 import shlex
 import re
 import pandas as pd
+import numpy as np
+
+import matplotlib.pyplot as plt
 
 DIR = Path(__file__).absolute().parent
 
 def graph(args):
 
+    plt.rcParams['hatch.linewidth'] = 0.5                                       
+    plt.rcParams['font.family']     = 'serif'
+    plt.rcParams['font.serif']      = 'Times New Roman'     
+    # http://phyletica.org/matplotlib-fonts/
+    plt.rcParams['pdf.fonttype']    = 42
+    plt.rcParams['ps.fonttype']     = 42                            
+    plt.rcParams['font.size']       = 8                                         
+    plt.rcParams['axes.labelsize']  = 8    
+
     df = pd.read_csv(args.input)
 
-    embed()
-    exit()
+    # Change some labels
+    df = df.replace('original', 'Original')
+    df = df.replace('fixed', 'Patched')
 
-    ax = plt.gca()
-    for df in dfs:
-        try:
-            df = df.drop_duplicates(subset='x')
-            pivoted = df.pivot(index='x', columns='label', values='y')
-            pivoted.plot.line(ax=ax)
-        except:
-            embed()
-            raise
+    df['throughput'] = df['throughput'] / 1e3
+
+    # embed()
+    # exit()
+
+    # Filter
+    df = df[df['threads'] <= 4]
+
+    gb = df.groupby(['threads', 'system'])
+
+    # Do the mean
+    df = gb.mean()
+    df = df.unstack()
+
+    # embed()
+    ci = 1.96 * (gb.std() / np.sqrt(gb.count()))
+    xci = ci.unstack()['throughput']
+
+    # embed()
+    # exit()
+
+    # xdf = df.groupby(['threads', 'system']).mean()['throughput']
+    xdf = df['throughput']
+
+    print(xdf)
+    print(xdf['Patched'] / xdf['Original'])
+
+    # embed()
+    
+    xdf.plot.bar(yerr=xci, linewidth=0.5, edgecolor='black')
+
+    # ax = plt.gca()
+    # for df in dfs:
+    #     try:
+    #         df = df.drop_duplicates(subset='x')
+    #         pivoted = df.pivot(index='x', columns='label', values='y')
+    #         pivoted.plot.line(ax=ax)
+    #     except:
+    #         embed()
+    #         raise
+
+    xlabel = 'Number of threads'
+    ylabel = 'Throughput (kops/sec)'
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
-    plt.legend(loc='best')
+    plt.xticks(rotation='horizontal')
+    plt.legend(loc='upper left')
 
     fig = plt.gcf()
-    fig.set_size_inches(3.5, 3.0)
+    fig.set_size_inches(3.5, 1.5)
     fig.tight_layout()
 
-    plt.savefig(output_file, dpi=300, bbox_inches='tight', pad_inches=0.02)
+    plt.savefig(args.output, dpi=300, bbox_inches='tight', pad_inches=0.02)
     plt.close()
 
 def run(args):
