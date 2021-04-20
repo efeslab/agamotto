@@ -232,6 +232,9 @@ int kill(pid_t pid, int sig) {
     klee_warning("killing pid 0, which we interpret as a shutdown");
     exit(0);
   }
+
+  klee_warning("Interpretting kill() as shutdown!");
+  exit(0);
   
   klee_warning("ignoring (EPERM)");
   errno = EPERM;

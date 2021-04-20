@@ -7,6 +7,7 @@
 static void memcached_1_5_13_client_func(void *);
 static void memcached_update_client_func(void *);
 static void memcached_rand_client_func(void *);
+static void memcached_file_client_func(void *);
 
 memcached_handler_t
 __memcached_1_5_13_handler = SIMULATED_CLIENT_HANDLER("memcached_1.5.13",
@@ -21,6 +22,133 @@ memcached_handler_t
 __memcached_rand_handler   = SIMULATED_CLIENT_HANDLER("memcached_rand",
                                                       MEMCACHED_PORT,
                                                       memcached_rand_client_func);
+
+memcached_handler_t
+__memcached_file_handler   = SIMULATED_CLIENT_HANDLER("memcached_file",
+                                                      MEMCACHED_PORT,
+                                                      memcached_file_client_func);
+
+/**
+ * utilities
+ */
+
+static void memcached_send(simulated_client_handler_t *self_hdl, char *req) {
+  static const char flushSeq[] = "\r\n";
+  char payload[2048];
+
+  memset(payload, 0, sizeof(payload));
+  
+  int ret;
+
+  snprintf(payload, sizeof(payload), "%s%s", req, flushSeq);
+
+  posix_debug_msg("[MEMCACHED FILE] SENDING '%s'", payload);
+
+  ret = _write_socket(self_hdl->client_sock, payload, strlen(payload));
+
+  posix_debug_msg("[MEMCACHED FILE] SENDING returned %d (want %lu)", ret, strlen(payload));
+
+  klee_assert(ret == strlen(payload) && "nope!");
+}
+
+static void memcached_recv(simulated_client_handler_t *self_hdl, char *req, size_t len) {
+  int ret;
+
+  ret = _read_socket(self_hdl->client_sock, req, len - 1);
+
+  posix_debug_msg("[MEMCACHED FILE] RECV '%s'", req);
+  posix_debug_msg("[MEMCACHED FILE] RECV returned %d (want %lu)", ret, strlen(req));
+
+  klee_assert(ret == strlen(req) && "nope!");
+}
+
+/**
+ * memcached file handler
+ */
+#define EMITERR(msg) klee_report_error(__FILE__, __LINE__, msg, "user.err")
+
+#define ATOI(arg, msg) ({ \
+  int __i = atoi((arg)); \
+  if (__i == 0) \
+    EMITERR(msg); \
+  __i; \
+})
+
+static void memcached_file_argparse(void *self,
+                                    const char **file_out) {
+  socket_event_handler_t *base = (socket_event_handler_t *)self;
+  int argc = base->argc;
+  const char **argv = base->argv;
+  const char *msg = "redis_file socket handler expects a string argument <request-file>";
+
+  if (argc == 0 || argc > 1) {
+    EMITERR(msg);
+  }
+
+  *file_out = argv[0];
+}
+
+static void newline_check(char *req) {
+  posix_debug_msg("[MEMCACHED FILE] %s '%s'", __FUNCTION__, req);
+  char *newline = strchr(req, '\n');
+  if (!newline) {
+    newline = strchr(req, '\r');
+    klee_assert(newline != NULL);
+    *newline = 0;
+  } else {
+    if (newline[-1] == '\r') {
+      newline[-1] = 0;
+    }
+    // Exclude \r\n, send_redis_req will append it
+    *newline = 0;
+  }
+
+  klee_assert(strchr(req, '\n') == NULL);
+  klee_assert(strchr(req, '\r') == NULL);
+}
+
+static void memcached_file_client_func(void *self) {
+  simulated_client_handler_t *client = (simulated_client_handler_t *)self;
+  posix_debug_msg("[MEMCACHED FILE] INIT\n");
+
+  const char *fname = NULL;
+  memcached_file_argparse(self, &fname);
+  posix_debug_msg("[MEMCACHED FILE] FILE IS '%s'\n", fname);
+
+  int ret = 0;
+  FILE *file = fopen(fname, "r");
+  char req[2048];
+  bool is_shutdown = false;
+  while (fgets(req, sizeof(req), file)) {
+
+    newline_check(req);
+
+    posix_debug_msg("[MEMCACHED FILE] '%s'\n", req);
+
+    memcached_send(client, req);
+    
+    if (!strncmp(req, "set", 3)) {
+      // Need to send the next line as well
+      if (!fgets(req, sizeof(req), file)) assert(0 && "bad file! no value to send");
+      newline_check(req);
+      posix_debug_msg("[MEMCACHED FILE] SEND VALUE '%s'\n", req);
+      memcached_send(client, req);
+    }
+
+    if (!strncmp(req, "shutdown", 8)) {
+      is_shutdown = true;
+    }
+
+    memset(req, 0, 2048);
+    memcached_recv(client, req, 2048);
+    posix_debug_msg("[MEMCACHED FILE] RECV '%s'\n", req);
+  }
+
+  if (!is_shutdown) memcached_send(client, "shutdown");
+
+  fclose(file);
+  posix_debug_msg("[MEMCACHED FILE] DONE\n");
+}
 
 /**
  * memcached 1.5.13 handler
