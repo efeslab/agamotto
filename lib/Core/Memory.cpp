@@ -840,9 +840,7 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
   // (so that we can properly identify unpersisted lines in the middle of an epoch).
   ref<Expr> cacheLine = getCacheLine(offset);
   ref<Expr> falseExpr = getDirtyExpr();
-
-  if (isUpdateListHeadEqualTo(pendingCacheLineUpdates, cacheLine, falseExpr)) return;
-
+  
   /**
    * We also want to see if this cache line is currently dirty. If so, we have
    * to create an extended root cause.
@@ -857,12 +855,25 @@ void PersistentState::dirtyCacheLineAtOffset(const ExecutionState &state,
   auto prevWrites = getRootCause(state, pendingRootCauseWrites, cacheLine);
   state.constraints.removeConstraint(inBoundsConstraint);
 
-  cacheLineUpdates.extend(cacheLine, falseExpr);
-  pendingCacheLineUpdates.extend(cacheLine, falseExpr);
-
   // Now update root cause.
   ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, PM_Unpersisted, prevWrites);
-  // ref<Expr> rootCauseExpr = createRootCauseIdExpr(state, PM_Unpersisted);
+
+  // iangneal: problems with root cause tracking
+  if (!isUpdateListHeadEqualTo(pendingCacheLineUpdates, cacheLine, falseExpr)) {
+    cacheLineUpdates.extend(cacheLine, falseExpr);
+    pendingCacheLineUpdates.extend(cacheLine, falseExpr);
+
+    // rootCauseWrites.extend(cacheLine, rootCauseExpr);
+    // pendingRootCauseWrites.extend(cacheLine, rootCauseExpr);
+  } else {
+    // iangneal: just replace the head
+    // rootCauseWrites.pop();
+    // pendingRootCauseWrites.pop();
+
+    // rootCauseWrites.extend(cacheLine, rootCauseExpr);
+    // pendingRootCauseWrites.extend(cacheLine, rootCauseExpr);
+  }
+
   rootCauseWrites.extend(cacheLine, rootCauseExpr);
   pendingRootCauseWrites.extend(cacheLine, rootCauseExpr);
 }

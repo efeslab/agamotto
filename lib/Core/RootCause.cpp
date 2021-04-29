@@ -180,6 +180,7 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
                                          const KInstruction *pc,
                                          RootCauseReason reason) {
   RootCauseLocation rcl(state, allocationSite, pc, reason);
+
   if (rootToId.count(rcl)) {
     return rootToId.at(rcl);
   }
@@ -193,6 +194,20 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
   idToRoot[newId] = std::move(uniqRcl);
 
   return newId;
+}
+
+std::unordered_set<uint64_t>
+RootCauseManager::getAllMaskedIDs(const std::unordered_set<uint64_t> &ids) {
+  std::unordered_set<uint64_t> ret(ids);
+
+  for (auto id : ids) {
+    auto subset = getAllMaskedIDs(idToRoot.at(id)->rootCause.getMaskedSet());
+    ret.insert(subset.begin(), subset.end());
+  }
+
+  assert(ret.size() >= ids.size());
+
+  return ret;
 }
 
 uint64_t 
@@ -221,19 +236,35 @@ RootCauseManager::getRootCauseLocationID(const ExecutionState &state,
    * we shouldn't have to do anything recursively here.
    */
 
-  for (auto id : ids) {
+  // for (auto id : ids) {
+  //   if (!idToRoot.count(id)) {
+  //     llvm::errs() << id << "\n" << getSummary();
+  //   }
+  //   assert(idToRoot.count(id) && "we messed something up with our id tracking");
+  //   rcl.addMaskedError(id);
+  //   uniqRcl->rootCause.addMaskedError(id);
+  //   idToRoot.at(id)->rootCause.addMaskingError(newId);
+
+  //   errs() << "\tID " << id << " masked by ID " << newId << " !\n"; 
+
+  //   for (auto subId : idToRoot.at(id)->rootCause.getMaskedSet()) {
+  //     assert(idToRoot.count(subId) && "we messed something up with our id tracking");
+  //     rcl.addMaskedError(subId);
+  //     uniqRcl->rootCause.addMaskedError(id);
+  //     idToRoot.at(subId)->rootCause.addMaskingError(newId);
+  //   }
+  // }
+
+  for (auto id : getAllMaskedIDs(ids)) {
     if (!idToRoot.count(id)) {
       llvm::errs() << id << "\n" << getSummary();
     }
     assert(idToRoot.count(id) && "we messed something up with our id tracking");
     rcl.addMaskedError(id);
+    uniqRcl->rootCause.addMaskedError(id);
     idToRoot.at(id)->rootCause.addMaskingError(newId);
 
-    for (auto subId : idToRoot.at(id)->rootCause.getMaskedSet()) {
-      assert(idToRoot.count(subId) && "we messed something up with our id tracking");
-      rcl.addMaskedError(subId);
-      idToRoot.at(subId)->rootCause.addMaskingError(newId);
-    }
+    // errs() << "\tID " << id << " masked by ID " << newId << " !\n"; 
   }
 
   rootToId[rcl] = newId;

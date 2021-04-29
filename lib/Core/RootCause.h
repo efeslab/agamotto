@@ -138,6 +138,8 @@ namespace klee {
       uint64_t getNewId(const ExecutionState &state, 
                         const RootCauseLocation &rcl);
 
+      std::unordered_set<uint64_t> getAllMaskedIDs(const std::unordered_set<uint64_t> &ids);
+
     public:
       RootCauseManager() {}
 
