@@ -9,15 +9,16 @@
 
 #include "Passes.h"
 #include "klee/Config/Version.h"
-#include "klee/Internal/Support/ErrorHandling.h"
+#include "klee/Support/ErrorHandling.h"
+
+#include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
-#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Instructions.h"
-
-#include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/raw_ostream.h"
 #if LLVM_VERSION_CODE >= LLVM_VERSION(6, 0)
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
@@ -47,7 +48,11 @@ bool RaiseAsmPass::runOnInstruction(Module &M, Instruction *I) {
   if (!ci)
     return false;
 
+#if LLVM_VERSION_CODE >= LLVM_VERSION(8, 0)
+  InlineAsm *ia = dyn_cast<InlineAsm>(ci->getCalledOperand());
+#else
   InlineAsm *ia = dyn_cast<InlineAsm>(ci->getCalledValue());
+#endif
   if (!ia)
     return false;
 
@@ -63,7 +68,8 @@ bool RaiseAsmPass::runOnInstruction(Module &M, Instruction *I) {
        triple.getOS() == llvm::Triple::Darwin ||
        triple.getOS() == llvm::Triple::FreeBSD)) {
 
-    if (ia->getAsmString() == "" && ia->hasSideEffects()) {
+    if (ia->getAsmString() == "" && ia->hasSideEffects() &&
+        ia->getFunctionType()->getReturnType()->isVoidTy()) {
       IRBuilder<> Builder(I);
 #if LLVM_VERSION_CODE >= LLVM_VERSION(3, 9)
       Builder.CreateFence(llvm::AtomicOrdering::SequentiallyConsistent);

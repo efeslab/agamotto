@@ -10,7 +10,7 @@
 #ifndef KLEE_SOLVERSTATS_H
 #define KLEE_SOLVERSTATS_H
 
-#include "klee/Statistic.h"
+#include "klee/Statistics/Statistic.h"
 
 namespace klee {
 namespace stats {
@@ -23,7 +23,6 @@ namespace stats {
   extern Statistic queryCacheMisses;
   extern Statistic queryCexCacheHits;
   extern Statistic queryCexCacheMisses;
-  extern Statistic queryConstructTime;
   extern Statistic queryConstructs;
   extern Statistic queryCounterexamples;
   extern Statistic queryTime;

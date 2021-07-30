@@ -9,16 +9,17 @@
 
 #include "StatsTracker.h"
 
-#include "klee/ExecutionState.h"
-#include "klee/Statistics.h"
+#include "ExecutionState.h"
+
 #include "klee/Config/Version.h"
-#include "klee/Internal/Module/InstructionInfoTable.h"
-#include "klee/Internal/Module/KModule.h"
-#include "klee/Internal/Module/KInstruction.h"
-#include "klee/Internal/Support/ModuleUtil.h"
-#include "klee/Internal/System/MemoryUsage.h"
-#include "klee/Internal/Support/ErrorHandling.h"
+#include "klee/Module/InstructionInfoTable.h"
+#include "klee/Module/KInstruction.h"
+#include "klee/Module/KModule.h"
 #include "klee/Solver/SolverStats.h"
+#include "klee/Statistics/Statistics.h"
+#include "klee/Support/ErrorHandling.h"
+#include "klee/Support/ModuleUtil.h"
+#include "klee/System/MemoryUsage.h"
 
 #include "CallPathManager.h"
 #include "CoreStats.h"
@@ -28,8 +29,10 @@
 
 #include "llvm/ADT/SmallBitVector.h"
 #include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/CFG.h"
+#if LLVM_VERSION_CODE < LLVM_VERSION(8, 0)
 #include "llvm/IR/CallSite.h"
+#endif
+#include "llvm/IR/CFG.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
@@ -136,8 +139,13 @@ static bool instructionIsCoverable(Instruction *i) {
     } else {
       Instruction *prev = &*(--it);
       if (isa<CallInst>(prev) || isa<InvokeInst>(prev)) {
-        Function *target =
-            getDirectCallTarget(CallSite(prev), /*moduleIsFullyLinked=*/true);
+        Function *target = getDirectCallTarget(
+#if LLVM_VERSION_CODE >= LLVM_VERSION(8, 0)
+            cast<CallBase>(*prev),
+#else
+            CallSite(prev),
+#endif
+            /*moduleIsFullyLinked=*/true);
         if (target && target->doesNotReturn())
           return false;
       }
@@ -194,7 +202,7 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
     }
   }
 
-  if (OutputIStats)
+  if (useStatistics() || userSearcherRequiresMD2U())
     theStatisticManager->useIndexedStats(km->infos->getMaxID());
 
   for (auto &kfp : km->functions) {
@@ -252,6 +260,9 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
       klee_error("%s", sqlite3ErrToStringAndFree("Can't set options for database: ", zErrMsg).c_str());
     }
 
+    // create table
+    writeStatsHeader();
+
     // begin transaction
     auto rc = sqlite3_step(transactionBeginStmt);
     if (rc != SQLITE_DONE) {
@@ -259,8 +270,6 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
     }
     sqlite3_reset(transactionBeginStmt);
 
-    // create table
-    writeStatsHeader();
     writeStatsLine();
 
     if (statsWriteInterval)
@@ -431,8 +440,8 @@ void StatsTracker::markBranchVisited(ExecutionState *visitedTrue,
 
 void StatsTracker::writeStatsHeader() {
   std::ostringstream create, insert;
-  create << "CREATE TABLE stats ";
-  create     << "(Instructions INTEGER,"
+  create << "CREATE TABLE stats ("
+             << "Instructions INTEGER,"
              << "FullBranches INTEGER,"
              << "PartialBranches INTEGER,"
              << "NumBranches INTEGER,"
@@ -441,7 +450,6 @@ void StatsTracker::writeStatsHeader() {
              << "MallocUsage INTEGER,"
              << "NumQueries INTEGER,"
              << "NumQueryConstructs INTEGER,"
-             << "NumObjects INTEGER,"
              << "WallTime REAL,"
              << "CoveredInstructions INTEGER,"
              << "UncoveredInstructions INTEGER,"
@@ -451,11 +459,9 @@ void StatsTracker::writeStatsHeader() {
              << "ForkTime INTEGER,"
              << "ResolveTime INTEGER,"
              << "QueryCexCacheMisses INTEGER,"
-#ifdef KLEE_ARRAY_DEBUG
-	           << "ArrayHashTime INTEGER,"
-#endif
-             << "QueryCexCacheHits INTEGER"
-             << ")";
+             << "QueryCexCacheHits INTEGER,"
+             << "ArrayHashTime INTEGER"
+         << ')';
   char *zErrMsg = nullptr;
   if(sqlite3_exec(statsFile, create.str().c_str(), nullptr, nullptr, &zErrMsg)) {
     klee_error("%s", sqlite3ErrToStringAndFree("ERROR creating table: ", zErrMsg).c_str());
@@ -467,55 +473,49 @@ void StatsTracker::writeStatsHeader() {
    * happen, but if it does this statement will fail with SQLITE_CONSTRAINT error. If this happens you should either
    * remove the constraints or consider using `IGNORE` mode.
    */
-  insert << "INSERT OR FAIL INTO stats ( "
-             << "Instructions ,"
-             << "FullBranches ,"
-             << "PartialBranches ,"
-             << "NumBranches ,"
-             << "UserTime ,"
-             << "NumStates ,"
-             << "MallocUsage ,"
-             << "NumQueries ,"
-             << "NumQueryConstructs ,"
-             << "NumObjects ,"
-             << "WallTime ,"
-             << "CoveredInstructions ,"
-             << "UncoveredInstructions ,"
-             << "QueryTime ,"
-             << "SolverTime ,"
-             << "CexCacheTime ,"
-             << "ForkTime ,"
-             << "ResolveTime ,"
-             << "QueryCexCacheMisses ,"
-#ifdef KLEE_ARRAY_DEBUG
-             << "ArrayHashTime,"
-#endif
-             << "QueryCexCacheHits "
-             << ") VALUES ( "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-#ifdef KLEE_ARRAY_DEBUG
-             << "?, "
-#endif
+  insert << "INSERT OR FAIL INTO stats ("
+             << "Instructions,"
+             << "FullBranches,"
+             << "PartialBranches,"
+             << "NumBranches,"
+             << "UserTime,"
+             << "NumStates,"
+             << "MallocUsage,"
+             << "NumQueries,"
+             << "NumQueryConstructs,"
+             << "WallTime,"
+             << "CoveredInstructions,"
+             << "UncoveredInstructions,"
+             << "QueryTime,"
+             << "SolverTime,"
+             << "CexCacheTime,"
+             << "ForkTime,"
+             << "ResolveTime,"
+             << "QueryCexCacheMisses,"
+             << "QueryCexCacheHits,"
+             << "ArrayHashTime"
+         << ") VALUES ("
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
              << "? "
-             << ")";
+         << ')';
 
   if(sqlite3_prepare_v2(statsFile, insert.str().c_str(), -1, &insertStmt, nullptr) != SQLITE_OK) {
     klee_error("Cannot create prepared statement: %s", sqlite3_errmsg(statsFile));
@@ -536,19 +536,20 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, 7, util::GetTotalMallocUsage() + executor.memory->getUsedDeterministicSize());
   sqlite3_bind_int64(insertStmt, 8, stats::queries);
   sqlite3_bind_int64(insertStmt, 9, stats::queryConstructs);
-  sqlite3_bind_int64(insertStmt, 10, 0);  // was numObjects
-  sqlite3_bind_int64(insertStmt, 11, elapsed().toMicroseconds());
-  sqlite3_bind_int64(insertStmt, 12, stats::coveredInstructions);
-  sqlite3_bind_int64(insertStmt, 13, stats::uncoveredInstructions);
-  sqlite3_bind_int64(insertStmt, 14, stats::queryTime);
-  sqlite3_bind_int64(insertStmt, 15, stats::solverTime);
-  sqlite3_bind_int64(insertStmt, 16, stats::cexCacheTime);
-  sqlite3_bind_int64(insertStmt, 17, stats::forkTime);
-  sqlite3_bind_int64(insertStmt, 18, stats::resolveTime);
-  sqlite3_bind_int64(insertStmt, 19, stats::queryCexCacheMisses);
-  sqlite3_bind_int64(insertStmt, 20, stats::queryCexCacheHits);
+  sqlite3_bind_int64(insertStmt, 10, elapsed().toMicroseconds());
+  sqlite3_bind_int64(insertStmt, 11, stats::coveredInstructions);
+  sqlite3_bind_int64(insertStmt, 12, stats::uncoveredInstructions);
+  sqlite3_bind_int64(insertStmt, 13, stats::queryTime);
+  sqlite3_bind_int64(insertStmt, 14, stats::solverTime);
+  sqlite3_bind_int64(insertStmt, 15, stats::cexCacheTime);
+  sqlite3_bind_int64(insertStmt, 16, stats::forkTime);
+  sqlite3_bind_int64(insertStmt, 17, stats::resolveTime);
+  sqlite3_bind_int64(insertStmt, 18, stats::queryCexCacheMisses);
+  sqlite3_bind_int64(insertStmt, 19, stats::queryCexCacheHits);
 #ifdef KLEE_ARRAY_DEBUG
-  sqlite3_bind_int64(insertStmt, 21, stats::arrayHashTime);
+  sqlite3_bind_int64(insertStmt, 20, stats::arrayHashTime);
+#else
+  sqlite3_bind_int64(insertStmt, 20, -1LL);
 #endif
   int errCode = sqlite3_step(insertStmt);
   if(errCode != SQLITE_DONE) klee_error("Error writing stats data: %s", sqlite3_errmsg(statsFile));
@@ -794,8 +795,13 @@ void StatsTracker::computeReachableUncovered() {
              it != ie; ++it) {
           Instruction *inst = &*it;
           if (isa<CallInst>(inst) || isa<InvokeInst>(inst)) {
-            CallSite cs(inst);
+#if LLVM_VERSION_CODE >= LLVM_VERSION(8, 0)
+            const CallBase &cs = cast<CallBase>(*inst);
+            if (isa<InlineAsm>(cs.getCalledOperand())) {
+#else
+            const CallSite cs(inst);
             if (isa<InlineAsm>(cs.getCalledValue())) {
+#endif
               // We can never call through here so assume no targets
               // (which should be correct anyhow).
               callTargets.insert(std::make_pair(inst,

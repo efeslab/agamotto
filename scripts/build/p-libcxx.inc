@@ -1,6 +1,6 @@
 # Build scripts for libc++
 setup_build_variables_libcxx() {
-  LIBCXX_SRC="${BASE}/libc++-${LLVM_VERSION_SHORT}"
+  LIBCXX_SRC="${BASE}/llvm-${LLVM_VERSION_SHORT}"
   LIBCXX_BUILD="${BASE}/libc++-build-${LLVM_VERSION_SHORT}"
   LIBCXX_INSTALL="${BASE}/libc++-install-${LLVM_VERSION_SHORT}"
 }
@@ -17,7 +17,13 @@ download_libcxx() {
 
 
   git clone --single-branch --branch "${version}" --depth 1 "https://github.com/llvm/llvm-project.git" "${LIBCXX_SRC}"
-  
+
+  # Apply existing patches if needed
+  if [ -f "${DIR}/patches/libcxx${LLVM_VERSION_SHORT}.patch" ]; then
+     cd "${LIBCXX_SRC}" || (echo "Directory does not exist"; exit 1)
+     patch -p1 --follow-symlinks -i "${DIR}/patches/libcxx${LLVM_VERSION_SHORT}.patch" || return 1
+  fi
+
   # Prepare LLVM subprojects for older LLVM versions
   cd "${LIBCXX_SRC}/llvm/projects"
   ln -s ../../libcxx .
@@ -108,7 +114,6 @@ get_docker_config_id_libcxx() {
 get_build_artifacts_libcxx() {
   (
     setup_build_variables_libcxx
-    echo "${LIBCXX_SRC}"
     echo "${LIBCXX_INSTALL}"
   )
 }

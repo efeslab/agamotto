@@ -9,7 +9,7 @@
 
 #include "klee-replay.h"
 
-#include "klee/Internal/ADT/KTest.h"
+#include "klee/ADT/KTest.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -24,8 +24,15 @@
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
 #include <signal.h>
+
+#ifndef fgetc_unlocked
 #define fgetc_unlocked(x) fgetc (x)
+#endif
+
+#ifndef fputc_unlocked
 #define fputc_unlocked(x,y) fputc (x,y)
+#endif
+
 #else
 #include <sys/signal.h>
 #endif

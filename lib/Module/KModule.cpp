@@ -12,22 +12,24 @@
 #include "Passes.h"
 
 #include "klee/Config/Version.h"
-#include "klee/Internal/Module/Cell.h"
-#include "klee/Internal/Module/InstructionInfoTable.h"
-#include "klee/Internal/Module/KInstruction.h"
-#include "klee/Internal/Module/KModule.h"
-#include "klee/Internal/Support/Debug.h"
-#include "klee/Internal/Support/ErrorHandling.h"
-#include "klee/Internal/Support/ModuleUtil.h"
-#include "klee/Interpreter.h"
-#include "klee/OptionCategories.h"
+#include "klee/Core/Interpreter.h"
+#include "klee/Support/OptionCategories.h"
+#include "klee/Module/Cell.h"
+#include "klee/Module/InstructionInfoTable.h"
+#include "klee/Module/KInstruction.h"
+#include "klee/Module/KModule.h"
+#include "klee/Support/Debug.h"
+#include "klee/Support/ErrorHandling.h"
+#include "klee/Support/ModuleUtil.h"
 
 #if LLVM_VERSION_CODE >= LLVM_VERSION(4, 0)
 #include "llvm/Bitcode/BitcodeWriter.h"
 #else
 #include "llvm/Bitcode/ReaderWriter.h"
 #endif
+#if LLVM_VERSION_CODE < LLVM_VERSION(8, 0)
 #include "llvm/IR/CallSite.h"
+#endif
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
@@ -293,6 +295,7 @@ void KModule::optimiseAndPrepare(
   default: klee_error("invalid --switch-type");
   }
   pm3.add(new IntrinsicCleanerPass(*targetData));
+  pm3.add(createScalarizerPass());
   pm3.add(new PhiCleanerPass());
   pm3.add(new FunctionAliasPass());
   pm3.run(*module);
@@ -472,13 +475,18 @@ KFunction::KFunction(llvm::Function *_function,
       ki->dest = registerMap[inst];
 
       if (isa<CallInst>(it) || isa<InvokeInst>(it)) {
-        CallSite cs(inst);
+#if LLVM_VERSION_CODE >= LLVM_VERSION(8, 0)
+        const CallBase &cs = cast<CallBase>(*inst);
+        Value *val = cs.getCalledOperand();
+#else
+        const CallSite cs(inst);
+        Value *val = cs.getCalledValue();
+#endif
         unsigned numArgs = cs.arg_size();
         ki->operands = new int[numArgs+1];
-        ki->operands[0] = getOperandNum(cs.getCalledValue(), registerMap, km,
-                                        ki);
+        ki->operands[0] = getOperandNum(val, registerMap, km, ki);
         for (unsigned j=0; j<numArgs; j++) {
-          Value *v = cs.getArgument(j);
+          Value *v = cs.getArgOperand(j);
           ki->operands[j+1] = getOperandNum(v, registerMap, km, ki);
         }
       } else {

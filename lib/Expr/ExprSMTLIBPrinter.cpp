@@ -8,8 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "klee/Expr/ExprSMTLIBPrinter.h"
+#include "klee/Support/Casting.h"
 
-#include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 
@@ -279,7 +279,7 @@ void ExprSMTLIBPrinter::printReadExpr(const ref<ReadExpr> &e) {
   printSeperator();
 
   // print array with updates recursively
-  printUpdatesAndArray(e->updates.head, e->updates.root);
+  printUpdatesAndArray(e->updates.head.get(), e->updates.root);
 
   // print index
   printSeperator();
@@ -483,7 +483,7 @@ void ExprSMTLIBPrinter::printUpdatesAndArray(const UpdateNode *un,
     printSeperator();
 
     // recurse to get the array or update that this store operations applies to
-    printUpdatesAndArray(un->next, root);
+    printUpdatesAndArray(un->next.get(), root);
 
     printSeperator();
 
@@ -505,9 +505,8 @@ void ExprSMTLIBPrinter::printUpdatesAndArray(const UpdateNode *un,
 
 void ExprSMTLIBPrinter::scanAll() {
   // perform scan of all expressions
-  for (ConstraintManager::const_iterator i = query->constraints.begin();
-       i != query->constraints.end(); i++)
-    scan(*i);
+  for (const auto &constraint : query->constraints)
+    scan(constraint);
 
   // Scan the query too
   scan(query->expr);
@@ -629,10 +628,8 @@ void ExprSMTLIBPrinter::printHumanReadableQuery() {
 
   if (abbrMode != ABBR_LET) {
     // Generate assert statements for each constraint
-    for (ConstraintManager::const_iterator i = query->constraints.begin();
-         i != query->constraints.end(); i++) {
-      printAssert(*i);
-    }
+    for (const auto &constraint : query->constraints)
+      printAssert(constraint);
 
     *o << "; QueryExpr\n";
 
@@ -695,7 +692,7 @@ void ExprSMTLIBPrinter::printAction() {
 }
 
 void ExprSMTLIBPrinter::scan(const ref<Expr> &e) {
-  assert(!(e.isNull()) && "found NULL expression");
+  assert(e && "found NULL expression");
 
   if (isa<ConstantExpr>(e))
     return; // we don't need to scan simple constants
@@ -713,7 +710,7 @@ void ExprSMTLIBPrinter::scan(const ref<Expr> &e) {
           haveConstantArray = true;
 
         // scan the update list
-        scanUpdates(re->updates.head);
+        scanUpdates(re->updates.head.get());
       }
     }
 
@@ -824,7 +821,7 @@ void ExprSMTLIBPrinter::scanUpdates(const UpdateNode *un) {
   while (un != NULL) {
     scan(un->index);
     scan(un->value);
-    un = un->next;
+    un = un->next.get();
   }
 }
 

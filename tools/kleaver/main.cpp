@@ -7,7 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "klee/Common.h"
 #include "klee/Config/Version.h"
 #include "klee/Expr/Constraints.h"
 #include "klee/Expr/Expr.h"
@@ -17,12 +16,13 @@
 #include "klee/Expr/ExprVisitor.h"
 #include "klee/Expr/Parser/Lexer.h"
 #include "klee/Expr/Parser/Parser.h"
-#include "klee/Internal/Support/PrintVersion.h"
-#include "klee/OptionCategories.h"
+#include "klee/Solver/Common.h"
+#include "klee/Support/OptionCategories.h"
+#include "klee/Statistics/Statistics.h"
 #include "klee/Solver/Solver.h"
 #include "klee/Solver/SolverCmdLine.h"
 #include "klee/Solver/SolverImpl.h"
-#include "klee/Statistics.h"
+#include "klee/Support/PrintVersion.h"
 
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/CommandLine.h"
@@ -227,7 +227,7 @@ static bool EvaluateInputAST(const char *Filename,
       assert("FIXME: Support counterexample query commands!");
       if (QC->Values.empty() && QC->Objects.empty()) {
         bool result;
-        if (S->mustBeTrue(Query(ConstraintManager(QC->Constraints), QC->Query),
+        if (S->mustBeTrue(Query(ConstraintSet(QC->Constraints), QC->Query),
                           result)) {
           llvm::outs() << (result ? "VALID" : "INVALID");
         } else {
@@ -243,8 +243,7 @@ static bool EvaluateInputAST(const char *Filename,
         assert(QC->Query->isFalse() &&
                "FIXME: Support counterexamples with non-trivial query!");
         ref<ConstantExpr> result;
-        if (S->getValue(Query(ConstraintManager(QC->Constraints), 
-                              QC->Values[0]),
+        if (S->getValue(Query(ConstraintSet(QC->Constraints), QC->Values[0]),
                         result)) {
           llvm::outs() << "INVALID\n";
           llvm::outs() << "\tExpr 0:\t" << result;
@@ -255,10 +254,10 @@ static bool EvaluateInputAST(const char *Filename,
         }
       } else {
         std::vector< std::vector<unsigned char> > result;
-        
-        if (S->getInitialValues(Query(ConstraintManager(QC->Constraints), 
-                                      QC->Query),
-                                QC->Objects, result)) {
+
+        if (S->getInitialValues(
+                Query(ConstraintSet(QC->Constraints), QC->Query), QC->Objects,
+                result)) {
           llvm::outs() << "INVALID\n";
 
           for (unsigned i = 0, e = result.size(); i != e; ++i) {
@@ -302,15 +301,15 @@ static bool EvaluateInputAST(const char *Filename,
   if (uint64_t queries = *theStatisticManager->getStatisticByName("Queries")) {
     llvm::outs()
       << "--\n"
-      << "total queries = " << queries << "\n"
-      << "total queries constructs = " 
-      << *theStatisticManager->getStatisticByName("QueriesConstructs") << "\n"
+      << "total queries = " << queries << '\n'
+      << "total query constructs = "
+      << *theStatisticManager->getStatisticByName("QueryConstructs") << '\n'
       << "valid queries = " 
-      << *theStatisticManager->getStatisticByName("QueriesValid") << "\n"
+      << *theStatisticManager->getStatisticByName("QueriesValid") << '\n'
       << "invalid queries = " 
-      << *theStatisticManager->getStatisticByName("QueriesInvalid") << "\n"
+      << *theStatisticManager->getStatisticByName("QueriesInvalid") << '\n'
       << "query cex = " 
-      << *theStatisticManager->getStatisticByName("QueriesCEX") << "\n";
+      << *theStatisticManager->getStatisticByName("QueriesCEX") << '\n';
   }
 
   return success;
@@ -364,9 +363,9 @@ static bool printInputAsSMTLIBv2(const char *Filename,
 			 * constraint in the constraint set is set to NULL and
 			 * will later cause a NULL pointer dereference.
 			 */
-			ConstraintManager constraintM(QC->Constraints);
-			Query query(constraintM,QC->Query);
-			printer.setQuery(query);
+                        ConstraintSet constraintM(QC->Constraints);
+                        Query query(constraintM, QC->Query);
+                        printer.setQuery(query);
 
 			if(!QC->Objects.empty())
 				printer.setArrayValuesToGet(QC->Objects);
