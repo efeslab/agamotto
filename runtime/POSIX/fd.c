@@ -34,14 +34,49 @@
 #include <dirent.h>
 #include <sys/select.h>
 #include <unistd.h>
-// Forward declaration
-static int _dup(int oldfd, int startfd);
-// For multiplexing multiple syscalls into a single _read/_write op. set
-#define _IO_TYPE_SCATTER_GATHER  0x1
-#define _IO_TYPE_POSITIONAL      0x2
-////////////////////////////////////////////////////////////////////////////////
-// Internal routines
-////////////////////////////////////////////////////////////////////////////////
+
+/* Returns pointer to the symbolic file structure fs the pathname is symbolic */
+static exe_disk_file_t *__get_sym_file(const char *pathname) {
+  if (!pathname)
+    return NULL;
+
+  // Handle the case where symbolic file is given as an absolute path, ie.
+  // /current/work/dir/A
+  if (pathname[0] == '/') {
+    char cwd[1024] = {0};
+    if (getcwd(cwd, 1024)) {
+      size_t cwd_len = strlen(cwd);
+      // strip trailing / if present
+      if (cwd_len > 0 && cwd[cwd_len - 1] == '/') {
+        cwd[--cwd_len] = '\0';
+      }
+      if (strncmp(pathname, cwd, cwd_len) == 0) {
+        if (pathname[cwd_len] != '\0')
+          pathname += cwd_len + 1;
+      }
+    }
+  }
+  char c = pathname[0];
+  unsigned i;
+
+  if (c == 0 || pathname[1] != 0)
+    return NULL;
+
+  for (i=0; i<__exe_fs.n_sym_files; ++i) {
+    if (c == 'A' + (char) i) {
+      exe_disk_file_t *df = &__exe_fs.sym_files[i];
+      if (df->stat->st_ino == 0)
+        return NULL;
+      return df;
+    }
+  }
+  
+  return NULL;
+}
+
+static void *__concretize_ptr(const void *p);
+static size_t __concretize_size(size_t s);
+static const char *__concretize_string(const char *s);
 
 /* Returns pointer to the file entry for a valid fd */
 fd_entry_t *__get_fd(int fd) {
@@ -473,6 +508,7 @@ int fcntl(int fd, int cmd, ...) {
   fd_entry_t *fde = __get_fd(fd);
   va_list ap;
   unsigned arg; /* 32 bit assumption (int/ptr) */
+  struct flock *lock;
 
   if (!fde) {
     errno = EBADF;
@@ -485,6 +521,10 @@ int fcntl(int fd, int cmd, ...) {
    if (cmd==F_GETFD || cmd==F_GETFL || cmd==F_GETOWN) {
 #endif
     arg = 0;
+  } else if (cmd == F_GETLK || cmd == F_SETLK || cmd == F_SETLKW) {
+    va_start(ap, cmd);
+    lock = va_arg(ap, struct flock *);
+    va_end(ap);
   } else {
     va_start(ap, cmd);
     arg = va_arg(ap, int);
@@ -498,6 +538,7 @@ int fcntl(int fd, int cmd, ...) {
       return syscall(__NR_fcntl, file->concrete_fd, cmd, arg);
     }
   }
+
   switch (cmd) {
   case F_GETFD: {
     int flags = 0;
@@ -538,7 +579,7 @@ int fcntl(int fd, int cmd, ...) {
     return res;
   }
   case F_SETLK: {
-    // (stolerbs): TODO: should we do anything else here?
+    // TODO: should we do anything else here?
     return 0;
   }
   default:
@@ -739,8 +780,16 @@ DEFINE_MODEL(int, select, int nfds, fd_set *readfds, fd_set *writefds,
     totalfds += res;
   }
 
-  if (INJECT_FAULT(select, ENOMEM)) {
-    return -1;
+  if (!buf) {
+    size = 1024; // typically PATH_MAX
+    buf = malloc(size);
+    if (!buf) {
+      errno = ENOMEM;
+      return NULL;
+    }
+  } else if (!size) {
+    errno = EINVAL;
+    return NULL;
   }
 
   if (timeout != NULL && totalfds == 0) {

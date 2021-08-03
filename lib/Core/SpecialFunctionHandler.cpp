@@ -9,23 +9,27 @@
 
 #include "SpecialFunctionHandler.h"
 
+#include "ExecutionState.h"
 #include "Executor.h"
 #include "Memory.h"
 #include "MemoryManager.h"
+#include "MergeHandler.h"
 #include "Searcher.h"
+#include "StatsTracker.h"
 #include "TimingSolver.h"
 
-#include "klee/ExecutionState.h"
-#include "klee/Internal/Module/KInstruction.h"
-#include "klee/Internal/Module/KModule.h"
-#include "klee/Internal/Support/Debug.h"
-#include "klee/Internal/Support/ErrorHandling.h"
-#include "klee/MergeHandler.h"
-#include "klee/OptionCategories.h"
+#include "klee/Config/config.h"
+#include "klee/Module/KInstruction.h"
+#include "klee/Module/KModule.h"
 #include "klee/Solver/SolverCmdLine.h"
+#include "klee/Support/Casting.h"
+#include "klee/Support/Debug.h"
+#include "klee/Support/ErrorHandling.h"
+#include "klee/Support/OptionCategories.h"
 
 #include "llvm/ADT/Twine.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 
 #include <errno.h>
@@ -132,6 +136,11 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("malloc", handleMalloc, true),
   add("memalign", handleMemalign, true),
   add("realloc", handleRealloc, true),
+
+#ifdef SUPPORT_KLEE_EH_CXX
+  add("_klee_eh_Unwind_RaiseException_impl", handleEhUnwindRaiseExceptionImpl, false),
+  add("klee_eh_typeid_for", handleEhTypeid, true),
+#endif
 
   // operator delete[](void*)
   add("_ZdaPv", handleDeleteArray, false),
@@ -304,23 +313,32 @@ SpecialFunctionHandler::readStringAtAddress(ExecutionState &state,
   const MemoryObject *mo = op.first;
   const ObjectState *os = op.second;
 
-  char *buf = new char[mo->size];
-  unsigned offset = cast<ConstantExpr>(mo->getOffsetExpr(address))->getZExtValue();
-  assert(offset >= 0 && offset < mo->size && "bad pointer into MemoryObject");
+  auto relativeOffset = mo->getOffsetExpr(address);
+  // the relativeOffset must be concrete as the address is concrete
+  size_t offset = cast<ConstantExpr>(relativeOffset)->getZExtValue();
 
-  unsigned i;
-  for (i = offset; i < mo->size - 1; i++) {
+  std::ostringstream buf;
+  char c = 0;
+  for (size_t i = offset; i < mo->size; ++i) {
     ref<Expr> cur = os->read8(i);
     cur = executor.toUnique(state, cur);
     assert(isa<ConstantExpr>(cur) && 
            "hit symbolic char while reading concrete string");
-    buf[i] = cast<ConstantExpr>(cur)->getZExtValue(8);
+    c = cast<ConstantExpr>(cur)->getZExtValue(8);
+    if (c == '\0') {
+      // we read the whole string
+      break;
+    }
+
+    buf << c;
   }
-  buf[i] = 0;
-  
-  std::string result(buf + offset);
-  delete[] buf;
-  return result;
+
+  if (c != '\0') {
+      klee_warning_once(0, "String not terminated by \\0 passed to "
+                           "one of the klee_ functions");
+  }
+
+  return buf.str();
 }
 
 /****/
@@ -472,7 +490,8 @@ void SpecialFunctionHandler::handleMemalign(ExecutionState &state,
   }
 
   std::pair<ref<Expr>, ref<Expr>> alignmentRangeExpr =
-      executor.solver->getRange(state, arguments[0]);
+      executor.solver->getRange(state.constraints, arguments[0],
+                                state.queryMetaData);
   ref<Expr> alignmentExpr = alignmentRangeExpr.first;
   auto alignmentConstExpr = dyn_cast<ConstantExpr>(alignmentExpr);
 
@@ -495,6 +514,46 @@ void SpecialFunctionHandler::handleMemalign(ExecutionState &state,
                         alignment);
 }
 
+#ifdef SUPPORT_KLEE_EH_CXX
+void SpecialFunctionHandler::handleEhUnwindRaiseExceptionImpl(
+    ExecutionState &state, KInstruction *target,
+    std::vector<ref<Expr>> &arguments) {
+  assert(arguments.size() == 1 &&
+         "invalid number of arguments to _klee_eh_Unwind_RaiseException_impl");
+
+  ref<ConstantExpr> exceptionObject = dyn_cast<ConstantExpr>(arguments[0]);
+  if (!exceptionObject) {
+    executor.terminateStateOnError(state,
+                                   "Internal error: Symbolic exception pointer",
+                                   Executor::Unhandled);
+    return;
+  }
+
+  if (isa_and_nonnull<SearchPhaseUnwindingInformation>(
+          state.unwindingInformation.get())) {
+    executor.terminateStateOnExecError(
+        state,
+        "Internal error: Unwinding restarted during an ongoing search phase");
+    return;
+  }
+
+  state.unwindingInformation =
+      std::make_unique<SearchPhaseUnwindingInformation>(exceptionObject,
+                                                        state.stack.size() - 1);
+
+  executor.unwindToNextLandingpad(state);
+}
+
+void SpecialFunctionHandler::handleEhTypeid(ExecutionState &state,
+                                            KInstruction *target,
+                                            std::vector<ref<Expr>> &arguments) {
+  assert(arguments.size() == 1 &&
+         "invalid number of arguments to klee_eh_typeid_for");
+
+  executor.bindLocal(target, state, executor.getEhTypeidFor(arguments[0]));
+}
+#endif // SUPPORT_KLEE_EH_CXX
+
 void SpecialFunctionHandler::handleAssume(ExecutionState &state,
                             KInstruction *target,
                             std::vector<ref<Expr> > &arguments) {
@@ -506,7 +565,8 @@ void SpecialFunctionHandler::handleAssume(ExecutionState &state,
     e = NeExpr::create(e, ConstantExpr::create(0, e->getWidth()));
   
   bool res;
-  bool success __attribute__ ((unused)) = executor.solver->mustBeFalse(state, e, res);
+  bool success __attribute__((unused)) = executor.solver->mustBeFalse(
+      state.constraints, e, res, state.queryMetaData);
   assert(success && "FIXME: Unhandled solver failure");
   if (res) {
     if (SilentKleeAssume) {
@@ -621,19 +681,20 @@ void SpecialFunctionHandler::handlePrintRange(ExecutionState &state,
   if (!isa<ConstantExpr>(arguments[1])) {
     // FIXME: Pull into a unique value method?
     ref<ConstantExpr> value;
-    bool success __attribute__ ((unused)) = executor.solver->getValue(state, arguments[1], value);
+    bool success __attribute__((unused)) = executor.solver->getValue(
+        state.constraints, arguments[1], value, state.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
     bool res;
-    success = executor.solver->mustBeTrue(state, 
-                                          EqExpr::create(arguments[1], value), 
-                                          res);
+    success = executor.solver->mustBeTrue(state.constraints,
+                                          EqExpr::create(arguments[1], value),
+                                          res, state.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
     if (res) {
       llvm::errs() << " == " << value;
     } else { 
       llvm::errs() << " ~= " << value;
-      std::pair< ref<Expr>, ref<Expr> > res =
-        executor.solver->getRange(state, arguments[1]);
+      std::pair<ref<Expr>, ref<Expr>> res = executor.solver->getRange(
+          state.constraints, arguments[1], state.queryMetaData);
       llvm::errs() << " (in [" << res.first << ", " << res.second <<"])";
     }
   }
@@ -1001,12 +1062,12 @@ void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
 
     // FIXME: Type coercion should be done consistently somewhere.
     bool res;
-    bool success __attribute__ ((unused)) =
-      executor.solver->mustBeTrue(*s, 
-                                  EqExpr::create(ZExtExpr::create(arguments[1],
-                                                                  Context::get().getPointerWidth()),
-                                                 mo->getSizeExpr()),
-                                  res);
+    bool success __attribute__((unused)) = executor.solver->mustBeTrue(
+        s->constraints,
+        EqExpr::create(
+            ZExtExpr::create(arguments[1], Context::get().getPointerWidth()),
+            mo->getSizeExpr()),
+        res, s->queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
     
     if (res) {

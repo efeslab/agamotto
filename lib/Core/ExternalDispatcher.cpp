@@ -10,7 +10,9 @@
 #include "ExternalDispatcher.h"
 #include "klee/Config/Version.h"
 
+#if LLVM_VERSION_CODE < LLVM_VERSION(8, 0)
 #include "llvm/IR/CallSite.h"
+#endif
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/IRBuilder.h"
@@ -196,7 +198,7 @@ bool ExternalDispatcherImpl::executeCall(Function *f, Instruction *i,
         std::move(dispatchModuleUniq)); // MCJIT takes ownership
     // Force code generation
     uint64_t fnAddr =
-        executionEngine->getFunctionAddress(dispatcher->getName());
+        executionEngine->getFunctionAddress(dispatcher->getName().str());
     executionEngine->finalizeObject();
     assert(fnAddr && "failed to get function address");
     (void)fnAddr;
@@ -253,15 +255,16 @@ bool ExternalDispatcherImpl::runProtectedCall(Function *f, uint64_t *args) {
 Function *ExternalDispatcherImpl::createDispatcher(Function *target,
                                                    Instruction *inst,
                                                    Module *module) {
-  if (!resolveSymbol(target->getName()))
+  if (!resolveSymbol(target->getName().str()))
     return 0;
 
-  CallSite cs;
-  if (inst->getOpcode() == Instruction::Call) {
-    cs = CallSite(cast<CallInst>(inst));
-  } else {
-    cs = CallSite(cast<InvokeInst>(inst));
-  }
+#if LLVM_VERSION_CODE >= LLVM_VERSION(8, 0)
+  const CallBase &cs = cast<CallBase>(*inst);
+#else
+  const CallSite cs(inst->getOpcode() == Instruction::Call
+                        ? CallSite(cast<CallInst>(inst))
+                        : CallSite(cast<InvokeInst>(inst)));
+#endif
 
   Value **args = new Value *[cs.arg_size()];
 
@@ -292,8 +295,7 @@ Function *ExternalDispatcherImpl::createDispatcher(Function *target,
 
   // Each argument will be passed by writing it into gTheArgsP[i].
   unsigned i = 0, idx = 2;
-  for (CallSite::arg_iterator ai = cs.arg_begin(), ae = cs.arg_end(); ai != ae;
-       ++ai, ++i) {
+  for (auto ai = cs.arg_begin(), ae = cs.arg_end(); ai != ae; ++ai, ++i) {
     // Determine the type the argument will be passed as. This accommodates for
     // the corresponding code in Executor.cpp for handling calls to bitcasted
     // functions.

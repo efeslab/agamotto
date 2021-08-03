@@ -7,18 +7,17 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "ExecutionState.h"
+
 #include "Memory.h"
 
-#include "klee/ExecutionState.h"
-
 #include "klee/Expr/Expr.h"
-#include "klee/Internal/Module/Cell.h"
-#include "klee/Internal/Module/InstructionInfoTable.h"
-#include "klee/Internal/Module/KInstruction.h"
-#include "klee/Internal/Module/KModule.h"
-#include "klee/Internal/Support/ErrorHandling.h"
-#include "klee/OptionCategories.h"
-#include "klee/Interpreter.h"
+#include "klee/Module/Cell.h"
+#include "klee/Module/InstructionInfoTable.h"
+#include "klee/Module/KInstruction.h"
+#include "klee/Module/KModule.h"
+#include "klee/Support/Casting.h"
+#include "klee/Support/OptionCategories.h"
 
 #include "llvm/IR/Function.h"
 #include "llvm/Support/CommandLine.h"
@@ -48,6 +47,29 @@ cl::opt<bool> DebugLogStateMerge(
 
 /***/
 
+
+std::uint32_t ExecutionState::nextID = 1;
+
+/***/
+
+StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
+  : caller(_caller), kf(_kf), callPathNode(0), 
+    minDistToUncoveredOnReturn(0), varargs(0) {
+  locals = new Cell[kf->numRegisters];
+}
+
+StackFrame::StackFrame(const StackFrame &s) 
+  : caller(s.caller),
+    kf(s.kf),
+    callPathNode(s.callPathNode),
+    allocas(s.allocas),
+    minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn),
+    varargs(s.varargs) {
+  locals = new Cell[s.kf->numRegisters];
+  for (unsigned i=0; i<s.kf->numRegisters; i++)
+    locals[i] = s.locals[i];
+}
+
 void ExecutionState::setupMain(KFunction *kf) {
   // single process, make its id always be 0
   // the first thread, set its id to be 1
@@ -62,7 +84,6 @@ void ExecutionState::setupTime() {
 
 ExecutionState::ExecutionState(Executor *executor, KFunction *kf) :
     wlistCounter(1),
-    rootCauseMgr(executor->rootCauseMgr),
     depth(0),
     instsSinceCovNew(0),
     coveredNew(false),
@@ -72,6 +93,7 @@ ExecutionState::ExecutionState(Executor *executor, KFunction *kf) :
     executor_(executor) {
   setupMain(kf);
   setupTime();
+  setID();
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
@@ -85,21 +107,19 @@ ExecutionState::~ExecutionState() {
     while (!t.stack.empty()) popFrame(t);
   }
 
-  for (unsigned int i=0; i<symbolics.size(); i++)
-  {
-    const MemoryObject *mo = symbolics[i].first;
-    assert(mo->refCount > 0);
-    mo->refCount--;
-    if (mo->refCount == 0)
-      delete mo;
-  }
-
   for (auto cur_mergehandler: openMergeStack){
     cur_mergehandler->removeOpenState(this);
   }
 }
 
 ExecutionState::ExecutionState(const ExecutionState& state):
+    pc(state.pc),
+    prevPC(state.prevPC),
+    stack(state.stack),
+    incomingBBIndex(state.incomingBBIndex),
+    depth(state.depth),
+    addressSpace(state.addressSpace),
+    constraints(state.constraints),
     threads(state.threads),
     waitingLists(state.waitingLists),
     wlistCounter(state.wlistCounter),
@@ -114,12 +134,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
 
     pathOS(state.pathOS),
     symPathOS(state.symPathOS),
-
-    instsSinceCovNew(state.instsSinceCovNew),
-    coveredNew(state.coveredNew),
-    forkDisabled(state.forkDisabled),
     coveredLines(state.coveredLines),
-    ptreeNode(state.ptreeNode),
     symbolics(state.symbolics),
     persistentObjects(state.persistentObjects),
     arrayNames(state.arrayNames),
@@ -127,10 +142,13 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     steppedInstructions(state.steppedInstructions),
     executor_(state.executor_)
 {
-  for (unsigned int i=0; i<symbolics.size(); i++)
-    symbolics[i].first->refCount++;
-
-  for (auto cur_mergehandler: openMergeStack)
+    instsSinceCovNew(state.instsSinceCovNew),
+    unwindingInformation(state.unwindingInformation
+                             ? state.unwindingInformation->clone()
+                             : nullptr),
+    coveredNew(state.coveredNew),
+    forkDisabled(state.forkDisabled) {
+  for (const auto &cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);
   crtThreadIt = threads.find(state.crtThreadIt->first);
 }
@@ -138,16 +156,27 @@ ExecutionState::ExecutionState(const ExecutionState& state):
 ExecutionState *ExecutionState::branch() {
   depth++;
 
-  ExecutionState *falseState = new ExecutionState(*this);
+  auto *falseState = new ExecutionState(*this);
+  falseState->setID();
   falseState->coveredNew = false;
   falseState->coveredLines.clear();
 
   return falseState;
 }
 
+void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {
+  stack.emplace_back(StackFrame(caller, kf));
+}
+
+void ExecutionState::popFrame() {
+  const StackFrame &sf = stack.back();
+  for (const auto * memoryObject : sf.allocas)
+    addressSpace.unbindObject(memoryObject);
+  stack.pop_back();
+}
+
 void ExecutionState::addSymbolic(const MemoryObject *mo, const Array *array) {
-  mo->refCount++;
-  symbolics.push_back(std::make_pair(mo, array));
+  symbolics.emplace_back(ref<const MemoryObject>(mo), array);
 }
 
 /**/
@@ -157,9 +186,9 @@ llvm::raw_ostream &klee::operator<<(llvm::raw_ostream &os, const MemoryMap &mm) 
   MemoryMap::iterator it = mm.begin();
   MemoryMap::iterator ie = mm.end();
   if (it!=ie) {
-    os << "MO" << it->first->id << ":" << it->second;
+    os << "MO" << it->first->id << ":" << it->second.get();
     for (++it; it!=ie; ++it)
-      os << ", MO" << it->first->id << ":" << it->second;
+      os << ", MO" << it->first->id << ":" << it->second.get();
   }
   os << "}";
   return os;
@@ -175,7 +204,8 @@ bool ExecutionState::merge(const ExecutionState &b) {
 
   // XXX is it even possible for these to differ? does it matter? probably
   // implies difference in object states?
-  if (symbolics!=b.symbolics)
+
+  if (symbolics != b.symbolics)
     return false;
 
   {
@@ -257,7 +287,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
       }
       return false;
     }
-    if (ai->second != bi->second) {
+    if (ai->second.get() != bi->second.get()) {
       if (DebugLogStateMerge)
         llvm::errs() << "\t\tmutated: " << ai->first->id << "\n";
       mutated.insert(ai->first);
@@ -292,7 +322,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
     for (unsigned i=0; i<af.kf->numRegisters; i++) {
       ref<Expr> &av = af.locals[i].value;
       const ref<Expr> &bv = bf.locals[i].value;
-      if (av.isNull() || bv.isNull()) {
+      if (!av || !bv) {
         // if one is null then by implication (we are at same pc)
         // we cannot reuse this local, so just ignore
       } else {
@@ -318,33 +348,59 @@ bool ExecutionState::merge(const ExecutionState &b) {
     }
   }
 
-  constraints = ConstraintManager();
-  for (std::set< ref<Expr> >::iterator it = commonConstraints.begin(), 
-         ie = commonConstraints.end(); it != ie; ++it)
-    constraints.addConstraint(*it);
-  constraints.addConstraint(OrExpr::create(inA, inB));
+  constraints = ConstraintSet();
+
+  ConstraintManager m(constraints);
+  for (const auto &constraint : commonConstraints)
+    m.addConstraint(constraint);
+  m.addConstraint(OrExpr::create(inA, inB));
 
   return true;
 }
+
 void ExecutionState::pushFrame(Thread &t, KInstIterator caller, KFunction *kf) {
   t.stack.push_back(StackFrame(caller,kf));
   ++kf->frequency;
 }
 
 void ExecutionState::popFrame(Thread &t) {
-  StackFrame &sf = t.stack.back();
+  StackFrame &sf = t.stack().back();
   for (std::vector<const MemoryObject*>::iterator it = sf.allocas.begin(), 
          ie = sf.allocas.end(); it != ie; ++it) {
     const MemoryObject *mo = *it;
     const ObjectState *os = addressSpace.findObject(mo);
     assert(os && "trying to unbind null!");
-    const PersistentState *ps = dyn_cast<PersistentState>(os);
-    if (ps) {
-      auto rootCauses = executor_->markPersistenceErrors(*this, mo, ps);
-      if (rootCauses.size()) {
-        klee_warning("ERROR: alloca pmem error");
-      }
-      persistentObjects.erase(mo);
+    addressSpace.unbindObject(mo);
+  }
+  
+  t.stack().pop_back();
+}
+
+void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
+  unsigned idx = 0;
+  const KInstruction *target = prevPC;
+  for (ExecutionState::stack_ty::const_reverse_iterator
+         it = stack.rbegin(), ie = stack.rend();
+       it != ie; ++it) {
+    const StackFrame &sf = *it;
+    Function *f = sf.kf->function;
+    const InstructionInfo &ii = *target->info;
+    out << "\t#" << idx++;
+    std::stringstream AssStream;
+    AssStream << std::setw(8) << std::setfill('0') << ii.assemblyLine;
+    out << AssStream.str();
+    out << " in " << f->getName().str() << " (";
+    // Yawn, we could go up and print varargs if we wanted to.
+    unsigned index = 0;
+    for (Function::arg_iterator ai = f->arg_begin(), ae = f->arg_end();
+         ai != ae; ++ai) {
+      if (ai!=f->arg_begin()) out << ", ";
+
+      out << ai->getName().str();
+      // XXX should go through function
+      ref<Expr> value = sf.locals[sf.kf->getArgRegister(index++)].value;
+      if (isa_and_nonnull<ConstantExpr>(value))
+        out << "=" << value;
     }
     addressSpace.unbindObject(mo);
   }
@@ -432,4 +488,9 @@ void ExecutionState::dumpConstraints(llvm::raw_ostream &out) const {
 }
 void ExecutionState::dumpConstraints() const {
   dumpConstraints(llvm::errs());
+}
+
+void ExecutionState::addConstraint(ref<Expr> e) {
+  ConstraintManager c(constraints);
+  c.addConstraint(e);
 }

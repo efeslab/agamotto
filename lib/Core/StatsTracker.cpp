@@ -9,16 +9,17 @@
 
 #include "StatsTracker.h"
 
-#include "klee/ExecutionState.h"
-#include "klee/Statistics.h"
+#include "ExecutionState.h"
+
 #include "klee/Config/Version.h"
-#include "klee/Internal/Module/InstructionInfoTable.h"
-#include "klee/Internal/Module/KModule.h"
-#include "klee/Internal/Module/KInstruction.h"
-#include "klee/Internal/Support/ModuleUtil.h"
-#include "klee/Internal/System/MemoryUsage.h"
-#include "klee/Internal/Support/ErrorHandling.h"
+#include "klee/Module/InstructionInfoTable.h"
+#include "klee/Module/KInstruction.h"
+#include "klee/Module/KModule.h"
 #include "klee/Solver/SolverStats.h"
+#include "klee/Statistics/Statistics.h"
+#include "klee/Support/ErrorHandling.h"
+#include "klee/Support/ModuleUtil.h"
+#include "klee/System/MemoryUsage.h"
 
 #include "CallPathManager.h"
 #include "CoreStats.h"
@@ -26,19 +27,22 @@
 #include "MemoryManager.h"
 #include "UserSearcher.h"
 
+#include "llvm/ADT/SmallBitVector.h"
 #include "llvm/IR/BasicBlock.h"
+#if LLVM_VERSION_CODE < LLVM_VERSION(8, 0)
 #include "llvm/IR/CallSite.h"
+#endif
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Process.h"
-#include "llvm/Support/Path.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Path.h"
+#include "llvm/Support/Process.h"
 
 #include <fstream>
 #include <unistd.h>
@@ -135,8 +139,13 @@ static bool instructionIsCoverable(Instruction *i) {
     } else {
       Instruction *prev = &*(--it);
       if (isa<CallInst>(prev) || isa<InvokeInst>(prev)) {
-        Function *target =
-            getDirectCallTarget(CallSite(prev), /*moduleIsFullyLinked=*/true);
+        Function *target = getDirectCallTarget(
+#if LLVM_VERSION_CODE >= LLVM_VERSION(8, 0)
+            cast<CallBase>(*prev),
+#else
+            CallSite(prev),
+#endif
+            /*moduleIsFullyLinked=*/true);
         if (target && target->doesNotReturn())
           return false;
       }
@@ -193,7 +202,7 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
     }
   }
 
-  if (OutputIStats)
+  if (useStatistics() || userSearcherRequiresMD2U())
     theStatisticManager->useIndexedStats(km->infos->getMaxID());
 
   for (auto &kfp : km->functions) {
@@ -251,6 +260,9 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
       klee_error("%s", sqlite3ErrToStringAndFree("Can't set options for database: ", zErrMsg).c_str());
     }
 
+    // create table
+    writeStatsHeader();
+
     // begin transaction
     auto rc = sqlite3_step(transactionBeginStmt);
     if (rc != SQLITE_DONE) {
@@ -258,8 +270,6 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
     }
     sqlite3_reset(transactionBeginStmt);
 
-    // create table
-    writeStatsHeader();
     writeStatsLine();
 
     if (statsWriteInterval)
@@ -432,8 +442,8 @@ void StatsTracker::markBranchVisited(ExecutionState *visitedTrue,
 
 void StatsTracker::writeStatsHeader() {
   std::ostringstream create, insert;
-  create << "CREATE TABLE stats ";
-  create     << "(Instructions INTEGER,"
+  create << "CREATE TABLE stats ("
+             << "Instructions INTEGER,"
              << "FullBranches INTEGER,"
              << "PartialBranches INTEGER,"
              << "NumBranches INTEGER,"
@@ -442,7 +452,6 @@ void StatsTracker::writeStatsHeader() {
              << "MallocUsage INTEGER,"
              << "NumQueries INTEGER,"
              << "NumQueryConstructs INTEGER,"
-             << "NumObjects INTEGER,"
              << "WallTime REAL,"
              << "CoveredInstructions INTEGER,"
              << "UncoveredInstructions INTEGER,"
@@ -452,21 +461,9 @@ void StatsTracker::writeStatsHeader() {
              << "ForkTime INTEGER,"
              << "ResolveTime INTEGER,"
              << "QueryCexCacheMisses INTEGER,"
-#ifdef KLEE_ARRAY_DEBUG
-	           << "ArrayHashTime INTEGER,"
-#endif
              << "QueryCexCacheHits INTEGER,"
-             // (iangneal): For NVM-KLEE
-             << "NvmHeuristicTime INTEGER, "
-             << "NvmOfflineTime INTEGER, "
-             << "NvmAndersenTime INTEGER, "
-             << "NvmBugsTotalUniq INTEGER,"
-             << "NvmBugsTotalOcc INTEGER,"
-             << "NvmBugsPerfUniq INTEGER,"
-             << "NvmBugsPerfOcc INTEGER,"
-             << "NvmBugsCrtUniq INTEGER,"
-             << "NvmBugsCrtOcc INTEGER" 
-             << ")";
+             << "ArrayHashTime INTEGER"
+         << ')';
   char *zErrMsg = nullptr;
   if(sqlite3_exec(statsFile, create.str().c_str(), nullptr, nullptr, &zErrMsg)) {
     klee_error("%s", sqlite3ErrToStringAndFree("ERROR creating table: ", zErrMsg).c_str());
@@ -478,74 +475,49 @@ void StatsTracker::writeStatsHeader() {
    * happen, but if it does this statement will fail with SQLITE_CONSTRAINT error. If this happens you should either
    * remove the constraints or consider using `IGNORE` mode.
    */
-  insert << "INSERT OR FAIL INTO stats ( "
-             << "Instructions ,"
-             << "FullBranches ,"
-             << "PartialBranches ,"
-             << "NumBranches ,"
-             << "UserTime ,"
-             << "NumStates ,"
-             << "MallocUsage ,"
-             << "NumQueries ,"
-             << "NumQueryConstructs ,"
-             << "NumObjects ,"
-             << "WallTime ,"
-             << "CoveredInstructions ,"
-             << "UncoveredInstructions ,"
-             << "QueryTime ,"
-             << "SolverTime ,"
-             << "CexCacheTime ,"
-             << "ForkTime ,"
-             << "ResolveTime ,"
-             << "QueryCexCacheMisses ,"
-#ifdef KLEE_ARRAY_DEBUG
-             << "ArrayHashTime,"
-#endif
-             << "QueryCexCacheHits ," 
-             // (iangneal): For NVM-KLEE
-             << "NvmHeuristicTime ,"
-             << "NvmOfflineTime ,"
-             << "NvmAndersenTime ,"
-             << "NvmBugsTotalUniq ,"
-             << "NvmBugsTotalOcc ,"
-             << "NvmBugsPerfUniq ,"
-             << "NvmBugsPerfOcc ,"
-             << "NvmBugsCrtUniq ,"
-             << "NvmBugsCrtOcc "      
-             << ") VALUES ( "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-             << "?, "
-#ifdef KLEE_ARRAY_DEBUG
-             << "?, "
-#endif
+  insert << "INSERT OR FAIL INTO stats ("
+             << "Instructions,"
+             << "FullBranches,"
+             << "PartialBranches,"
+             << "NumBranches,"
+             << "UserTime,"
+             << "NumStates,"
+             << "MallocUsage,"
+             << "NumQueries,"
+             << "NumQueryConstructs,"
+             << "WallTime,"
+             << "CoveredInstructions,"
+             << "UncoveredInstructions,"
+             << "QueryTime,"
+             << "SolverTime,"
+             << "CexCacheTime,"
+             << "ForkTime,"
+             << "ResolveTime,"
+             << "QueryCexCacheMisses,"
+             << "QueryCexCacheHits,"
+             << "ArrayHashTime"
+         << ") VALUES ("
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
+             << "?,"
              << "? "
-             << ")";
+         << ')';
 
   if(sqlite3_prepare_v2(statsFile, insert.str().c_str(), -1, &insertStmt, nullptr) != SQLITE_OK) {
     klee_error("Cannot create prepared statement: %s", sqlite3_errmsg(statsFile));
@@ -567,29 +539,20 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, 7, util::GetTotalMallocUsage() + executor.memory->getUsedDeterministicSize());
   sqlite3_bind_int64(insertStmt, 8, stats::queries);
   sqlite3_bind_int64(insertStmt, 9, stats::queryConstructs);
-  sqlite3_bind_int64(insertStmt, 10, 0);  // was numObjects
-  sqlite3_bind_int64(insertStmt, 11, elapsed().toMicroseconds() - stats::nvmOfflineTime);
-  sqlite3_bind_int64(insertStmt, 12, stats::coveredInstructions);
-  sqlite3_bind_int64(insertStmt, 13, stats::uncoveredInstructions);
-  sqlite3_bind_int64(insertStmt, 14, stats::queryTime);
-  sqlite3_bind_int64(insertStmt, 15, stats::solverTime);
-  sqlite3_bind_int64(insertStmt, 16, stats::cexCacheTime);
-  sqlite3_bind_int64(insertStmt, 17, stats::forkTime);
-  sqlite3_bind_int64(insertStmt, 18, stats::resolveTime);
-  sqlite3_bind_int64(insertStmt, 19, stats::queryCexCacheMisses);
-  sqlite3_bind_int64(insertStmt, 20, stats::queryCexCacheHits);
-  // (iangneal): For NVM-KLEE
-  sqlite3_bind_int64(insertStmt, 21, stats::nvmHeuristicTime);
-  sqlite3_bind_int64(insertStmt, 22, stats::nvmOfflineTime);
-  sqlite3_bind_int64(insertStmt, 23, stats::nvmAndersenTime);
-  sqlite3_bind_int64(insertStmt, 24, stats::nvmBugsTotalUniq);
-  sqlite3_bind_int64(insertStmt, 25, stats::nvmBugsTotalOccurences);
-  sqlite3_bind_int64(insertStmt, 26, stats::nvmBugsPerfUniq);
-  sqlite3_bind_int64(insertStmt, 27, stats::nvmBugsPerfOccurences);
-  sqlite3_bind_int64(insertStmt, 28, stats::nvmBugsCrtUniq);
-  sqlite3_bind_int64(insertStmt, 29, stats::nvmBugsCrtOccurences);
+  sqlite3_bind_int64(insertStmt, 10, elapsed().toMicroseconds());
+  sqlite3_bind_int64(insertStmt, 11, stats::coveredInstructions);
+  sqlite3_bind_int64(insertStmt, 12, stats::uncoveredInstructions);
+  sqlite3_bind_int64(insertStmt, 13, stats::queryTime);
+  sqlite3_bind_int64(insertStmt, 14, stats::solverTime);
+  sqlite3_bind_int64(insertStmt, 15, stats::cexCacheTime);
+  sqlite3_bind_int64(insertStmt, 16, stats::forkTime);
+  sqlite3_bind_int64(insertStmt, 17, stats::resolveTime);
+  sqlite3_bind_int64(insertStmt, 18, stats::queryCexCacheMisses);
+  sqlite3_bind_int64(insertStmt, 19, stats::queryCexCacheHits);
 #ifdef KLEE_ARRAY_DEBUG
-  sqlite3_bind_int64(insertStmt, 30, stats::arrayHashTime);
+  sqlite3_bind_int64(insertStmt, 20, stats::arrayHashTime);
+#else
+  sqlite3_bind_int64(insertStmt, 20, -1LL);
 #endif
   int errCode = sqlite3_step(insertStmt);
   if(errCode != SQLITE_DONE) klee_error("Error writing stats data: %s", sqlite3_errmsg(statsFile));
@@ -621,7 +584,6 @@ void StatsTracker::updateStateStatistics(uint64_t addend) {
 
 void StatsTracker::writeIStats() {
   const auto m = executor.kmodule->module.get();
-  uint64_t istatsMask = 0;
   llvm::raw_fd_ostream &of = *istatsFile;
   
   // We assume that we didn't move the file pointer
@@ -637,26 +599,26 @@ void StatsTracker::writeIStats() {
 
   StatisticManager &sm = *theStatisticManager;
   unsigned nStats = sm.getNumStatistics();
+  llvm::SmallBitVector istatsMask(nStats);
 
-  // Max is 13, sadly
-  istatsMask |= 1<<sm.getStatisticID("Queries");
-  istatsMask |= 1<<sm.getStatisticID("QueriesValid");
-  istatsMask |= 1<<sm.getStatisticID("QueriesInvalid");
-  istatsMask |= 1<<sm.getStatisticID("QueryTime");
-  istatsMask |= 1<<sm.getStatisticID("ResolveTime");
-  istatsMask |= 1<<sm.getStatisticID("Instructions");
-  istatsMask |= 1<<sm.getStatisticID("InstructionTimes");
-  istatsMask |= 1<<sm.getStatisticID("InstructionRealTimes");
-  istatsMask |= 1<<sm.getStatisticID("Forks");
-  istatsMask |= 1<<sm.getStatisticID("CoveredInstructions");
-  istatsMask |= 1<<sm.getStatisticID("UncoveredInstructions");
-  istatsMask |= 1<<sm.getStatisticID("States");
-  istatsMask |= 1<<sm.getStatisticID("MinDistToUncovered");
+  istatsMask.set(sm.getStatisticID("Queries"));
+  istatsMask.set(sm.getStatisticID("QueriesValid"));
+  istatsMask.set(sm.getStatisticID("QueriesInvalid"));
+  istatsMask.set(sm.getStatisticID("QueryTime"));
+  istatsMask.set(sm.getStatisticID("ResolveTime"));
+  istatsMask.set(sm.getStatisticID("Instructions"));
+  istatsMask.set(sm.getStatisticID("InstructionTimes"));
+  istatsMask.set(sm.getStatisticID("InstructionRealTimes"));
+  istatsMask.set(sm.getStatisticID("Forks"));
+  istatsMask.set(sm.getStatisticID("CoveredInstructions"));
+  istatsMask.set(sm.getStatisticID("UncoveredInstructions"));
+  istatsMask.set(sm.getStatisticID("States"));
+  istatsMask.set(sm.getStatisticID("MinDistToUncovered"));
 
   of << "positions: instr line\n";
 
   for (unsigned i=0; i<nStats; i++) {
-    if (istatsMask & (1<<i)) {
+    if (istatsMask.test(i)) {
       Statistic &s = sm.getStatistic(i);
       of << "event: " << s.getShortName() << " : " 
          << s.getName() << "\n";
@@ -665,14 +627,14 @@ void StatsTracker::writeIStats() {
 
   of << "events: ";
   for (unsigned i=0; i<nStats; i++) {
-    if (istatsMask & (1<<i))
+    if (istatsMask.test(i))
       of << sm.getStatistic(i).getShortName() << " ";
   }
   of << "\n";
   
   // set state counts, decremented after we process so that we don't
   // have to zero all records each time.
-  if (istatsMask & (1<<stats::states.getID()))
+  if (istatsMask.test(stats::states.getID()))
     updateStateStatistics(1);
 
   std::string sourceFile = "";
@@ -681,7 +643,7 @@ void StatsTracker::writeIStats() {
   if (UseCallPaths)
     callPathManager.getSummaryStatistics(callSiteStats);
 
-  of << "ob=" << objectFilename << "\n";
+  of << "ob=" << llvm::sys::path::filename(objectFilename).str() << "\n";
 
   for (Module::iterator fnIt = m->begin(), fn_ie = m->end(); 
        fnIt != fn_ie; ++fnIt) {
@@ -711,7 +673,7 @@ void StatsTracker::writeIStats() {
           of << ii.assemblyLine << " ";
           of << ii.line << " ";
           for (unsigned i=0; i<nStats; i++)
-            if (istatsMask&(1<<i))
+            if (istatsMask.test(i))
               of << sm.getIndexedValue(sm.getStatistic(i), index) << " ";
           of << "\n";
 
@@ -736,7 +698,7 @@ void StatsTracker::writeIStats() {
                 of << ii.assemblyLine << " ";
                 of << ii.line << " ";
                 for (unsigned i=0; i<nStats; i++) {
-                  if (istatsMask&(1<<i)) {
+                  if (istatsMask.test(i)) {
                     Statistic &s = sm.getStatistic(i);
                     uint64_t value;
 
@@ -760,7 +722,7 @@ void StatsTracker::writeIStats() {
     }
   }
 
-  if (istatsMask & (1<<stats::states.getID()))
+  if (istatsMask.test(stats::states.getID()))
     updateStateStatistics((uint64_t)-1);
   
   // Clear then end of the file if necessary (no truncate op?).
@@ -836,8 +798,13 @@ void StatsTracker::computeReachableUncovered() {
              it != ie; ++it) {
           Instruction *inst = &*it;
           if (isa<CallInst>(inst) || isa<InvokeInst>(inst)) {
-            CallSite cs(inst);
+#if LLVM_VERSION_CODE >= LLVM_VERSION(8, 0)
+            const CallBase &cs = cast<CallBase>(*inst);
+            if (isa<InlineAsm>(cs.getCalledOperand())) {
+#else
+            const CallSite cs(inst);
             if (isa<InlineAsm>(cs.getCalledValue())) {
+#endif
               // We can never call through here so assume no targets
               // (which should be correct anyhow).
               callTargets.insert(std::make_pair(inst,

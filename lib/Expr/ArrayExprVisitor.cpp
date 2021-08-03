@@ -7,9 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ArrayExprVisitor.h"
+#include "klee/Expr/ArrayExprVisitor.h"
 
-#include "klee/Internal/Support/ErrorHandling.h"
+#include "klee/Support/ErrorHandling.h"
 
 #include <algorithm>
 
@@ -63,7 +63,7 @@ ConstantArrayExprVisitor::visitConcat(const ConcatExpr &ce) {
     // that is read at a symbolic index
     if (base->updates.root->isConstantArray() &&
         !isa<ConstantExpr>(base->index)) {
-      for (const UpdateNode *un = base->updates.head; un; un = un->next) {
+      for (const auto *un = base->updates.head.get(); un; un = un->next.get()) {
         if (!isa<ConstantExpr>(un->index) || !isa<ConstantExpr>(un->value)) {
           incompatible = true;
           return Action::skipChildren();
@@ -97,7 +97,7 @@ ExprVisitor::Action ConstantArrayExprVisitor::visitRead(const ReadExpr &re) {
   // It is an interesting ReadExpr if it contains a concrete array
   // that is read at a symbolic index
   if (re.updates.root->isConstantArray() && !isa<ConstantExpr>(re.index)) {
-    for (const UpdateNode *un = re.updates.head; un; un = un->next) {
+    for (const auto *un = re.updates.head.get(); un; un = un->next.get()) {
       if (!isa<ConstantExpr>(un->index) || !isa<ConstantExpr>(un->value)) {
         incompatible = true;
         return Action::skipChildren();
@@ -204,7 +204,7 @@ ExprVisitor::Action ArrayReadExprVisitor::inspectRead(ref<Expr> hash,
       if (re.updates.head) {
         // Check preconditions on UpdateList nodes
         bool hasConcreteValues = false;
-        for (const UpdateNode *un = re.updates.head; un; un = un->next) {
+        for (const auto *un = re.updates.head.get(); un; un = un->next.get()) {
           // Symbolic case - \inv(update): index is concrete
           if (!isa<ConstantExpr>(un->index)) {
             incompatible = true;

@@ -15,4 +15,5 @@ add_subdirectory(klee)
 # cloud9's POSIX runtime
 #add_subdirectory(klee-replay)
 add_subdirectory(klee-stats)
+add_subdirectory(klee-zesti)
 add_subdirectory(ktest-tool)

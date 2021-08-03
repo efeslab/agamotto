@@ -29,9 +29,10 @@ namespace klee {
     };
   }
 
-  template <typename T> using ExprHashMap = std::unordered_map<ref<Expr>, T,
-                       klee::util::ExprHash,
-                       klee::util::ExprCmp>;
+  template <class T>
+  class ExprHashMap
+      : public std::unordered_map<ref<Expr>, T, klee::util::ExprHash,
+                                  klee::util::ExprCmp> {};
 
   typedef std::unordered_set<ref<Expr>, klee::util::ExprHash,
                              klee::util::ExprCmp>

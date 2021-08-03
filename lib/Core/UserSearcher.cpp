@@ -10,11 +10,17 @@
 #include "UserSearcher.h"
 
 #include "Executor.h"
+#include "MergeHandler.h"
+#include "Searcher.h"
 
+<<<<<<< HEAD
 #include "klee/OptionCategories.h"
 #include "klee/Internal/Support/ErrorHandling.h"
 #include "klee/MergeHandler.h"
 #include "klee/Solver/SolverCmdLine.h"
+=======
+#include "klee/Support/ErrorHandling.h"
+>>>>>>> master
 
 #include "llvm/Support/CommandLine.h"
 
@@ -105,10 +111,10 @@ void klee::initializeSearchOptions() {
 
 bool klee::userSearcherRequiresMD2U() {
   return (std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_MD2U) != CoreSearch.end() ||
-	  std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_CovNew) != CoreSearch.end() ||
-	  std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_ICnt) != CoreSearch.end() ||
-	  std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_CPICnt) != CoreSearch.end() ||
-	  std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_QC) != CoreSearch.end());
+          std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_CovNew) != CoreSearch.end() ||
+          std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_ICnt) != CoreSearch.end() ||
+          std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_CPICnt) != CoreSearch.end() ||
+          std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_QC) != CoreSearch.end());
 }
 
 bool klee::userSearcherRequiresNvmAnalysis() {
@@ -116,6 +122,7 @@ bool klee::userSearcherRequiresNvmAnalysis() {
       != CoreSearch.end());
 }
 
+<<<<<<< HEAD
 Searcher *getNewSearcher(Searcher::CoreSearchType type, Executor &executor) {
   Searcher *searcher = NULL;
  
@@ -160,6 +167,22 @@ Searcher *getNewSearcher(Searcher::CoreSearchType type, Executor &executor) {
     searcher = new WeightedRandomSearcher(executor, WeightedRandomSearcher::QueryCost); break;
   // (iangneal): Initialize NVM heuristics.
   case Searcher::NvmMod: searcher = new NvmPathSearcher(executor); break;
+=======
+Searcher *getNewSearcher(Searcher::CoreSearchType type, RNG &rng, PTree &processTree) {
+  Searcher *searcher = nullptr;
+  switch (type) {
+    case Searcher::DFS: searcher = new DFSSearcher(); break;
+    case Searcher::BFS: searcher = new BFSSearcher(); break;
+    case Searcher::RandomState: searcher = new RandomSearcher(rng); break;
+    case Searcher::RandomPath: searcher = new RandomPathSearcher(processTree, rng); break;
+    case Searcher::NURS_CovNew: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::CoveringNew, rng); break;
+    case Searcher::NURS_MD2U: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::MinDistToUncovered, rng); break;
+    case Searcher::NURS_Depth: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::Depth, rng); break;
+    case Searcher::NURS_RP: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::RP, rng); break;
+    case Searcher::NURS_ICnt: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::InstCount, rng); break;
+    case Searcher::NURS_CPICnt: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::CPInstCount, rng); break;
+    case Searcher::NURS_QC: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::QueryCost, rng); break;
+>>>>>>> master
   }
 
   return searcher;
@@ -167,14 +190,14 @@ Searcher *getNewSearcher(Searcher::CoreSearchType type, Executor &executor) {
 
 Searcher *klee::constructUserSearcher(Executor &executor) {
 
-  Searcher *searcher = getNewSearcher(CoreSearch[0], executor);
+  Searcher *searcher = getNewSearcher(CoreSearch[0], executor.theRNG, *executor.processTree);
 
   if (CoreSearch.size() > 1) {
     std::vector<Searcher *> s;
     s.push_back(searcher);
 
     for (unsigned i = 1; i < CoreSearch.size(); i++)
-      s.push_back(getNewSearcher(CoreSearch[i], executor));
+      s.push_back(getNewSearcher(CoreSearch[i], executor.theRNG, *executor.processTree));
 
     searcher = new InterleavedSearcher(s);
   }
@@ -189,12 +212,6 @@ Searcher *klee::constructUserSearcher(Executor &executor) {
   }
 
   if (UseMerge) {
-    if (std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::RandomPath) !=
-        CoreSearch.end()) {
-      klee_error("use-merge currently does not support random-path, please use "
-                 "another search strategy");
-    }
-
     auto *ms = new MergingSearcher(searcher);
     executor.setMergingSearcher(ms);
 

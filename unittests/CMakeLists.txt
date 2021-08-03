@@ -166,9 +166,11 @@ add_subdirectory(Assignment)
 add_subdirectory(Expr)
 add_subdirectory(Ref)
 add_subdirectory(Solver)
+add_subdirectory(Searcher)
 add_subdirectory(TreeStream)
 add_subdirectory(DiscretePDF)
 add_subdirectory(Time)
+add_subdirectory(RNG)
 
 # Set up lit configuration
 set (UNIT_TEST_EXE_SUFFIX "Test")
@@ -186,5 +188,5 @@ add_custom_target(unittests
     "${LIT_TOOL}" ${LIT_ARGS} "${CMAKE_CURRENT_BINARY_DIR}"
     DEPENDS ${UNIT_TEST_DEPENDS}
     COMMENT "Running unittests"
-    ${ADD_CUSTOM_COMMAND_USES_TERMINAL_ARG}
+    USES_TERMINAL
 )

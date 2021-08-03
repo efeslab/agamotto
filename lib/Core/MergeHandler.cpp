@@ -7,12 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "klee/MergeHandler.h"
+#include "MergeHandler.h"
 
 #include "CoreStats.h"
+#include "ExecutionState.h"
 #include "Executor.h"
 #include "Searcher.h"
-#include "klee/ExecutionState.h"
 
 namespace klee {
 
@@ -135,8 +135,8 @@ bool MergeHandler::hasMergedStates() {
 
 MergeHandler::MergeHandler(Executor *_executor, ExecutionState *es)
     : executor(_executor), openInstruction(es->steppedInstructions),
-      closedMean(0), closedStateCount(0), refCount(0) {
-  executor->mergingSearcher->mergeGroups.push_back(this);
+      closedMean(0), closedStateCount(0) {
+    executor->mergingSearcher->mergeGroups.push_back(this);
   addOpenState(es);
 }
 
