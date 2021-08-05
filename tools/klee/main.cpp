@@ -984,11 +984,11 @@ void externalsAndGlobalsCheck(const llvm::Module *m) {
          bbIt != bb_ie; ++bbIt) {
       for (BasicBlock::const_iterator it = bbIt->begin(), ie = bbIt->end();
            it != ie; ++it) {
-        if (const CallInst *ci = dyn_cast<CallInst>(it)) {
+        if (const llvm::CallInst *ci = dyn_cast<llvm::CallInst>(it)) {
 #if LLVM_VERSION_CODE >= LLVM_VERSION(8, 0)
-          if (isa<InlineAsm>(ci->getCalledOperand())) {
+          if (isa<llvm::InlineAsm>(ci->getCalledOperand())) {
 #else
-          if (isa<InlineAsm>(ci->getCalledValue())) {
+          if (isa<llvm::InlineAsm>(ci->getCalledValue())) {
 #endif
             klee_warning_once(&*fnIt,
                               "function \"%s\" has inline asm",
@@ -1190,7 +1190,7 @@ createLibCWrapper(std::vector<std::unique_ptr<llvm::Module>> &modules,
 }
 
 static void
-linkWithUclibc(StringRef libDir, std::string opt_suffix,
+linkWithUclibc(llvm::StringRef libDir, std::string opt_suffix,
                std::vector<std::unique_ptr<llvm::Module>> &modules) {
   llvm::LLVMContext &ctx = modules[0]->getContext();
 

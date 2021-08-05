@@ -121,9 +121,6 @@ namespace klee {
     HANDLER(handleCalloc);
     HANDLER(handleCheckMemoryAccess);
     HANDLER(handleDefineFixedObject);
-    HANDLER(handleDefineFixedObjectFromExisting);
-    HANDLER(handleInitConcreteZero);
-    HANDLER(handleUndefineFixedObject);
     HANDLER(handleDelete);    
     HANDLER(handleDeleteArray);
 #ifdef SUPPORT_KLEE_EH_CXX
@@ -163,12 +160,6 @@ namespace klee {
     HANDLER(handleMulOverflow);
     HANDLER(handleSubOverflow);
     HANDLER(handleDivRemOverflow);
-    /* Persistent Memory Management */
-    HANDLER(handleAllocPmem);
-    HANDLER(handleMarkPersistent);
-    HANDLER(handleIsPmem);
-    HANDLER(handleIsPersisted);
-    HANDLER(handleIsOrderedBefore);
     /* Thread Scheduling Management */
     HANDLER(handleThreadCreate);
     HANDLER(handleThreadTerminate);

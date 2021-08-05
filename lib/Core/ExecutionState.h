@@ -139,10 +139,6 @@ public:
 
   /// @brief Reference to executor makes it easier to create new threads
   Executor *executor_;
-private:
-  
-
-  ExecutionState() : ptreeNode(0) {}
 
 public:
   #ifdef KLEE_UNITTEST

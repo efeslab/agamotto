@@ -166,18 +166,6 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("__ubsan_handle_mul_overflow", handleMulOverflow, false),
   add("__ubsan_handle_divrem_overflow", handleDivRemOverflow, false),
 
-  /* Persistent Memory Management */
-  add("klee_pmem_alloc_pmem", handleAllocPmem, true),
-  add("klee_pmem_mark_persistent", handleMarkPersistent, true),
-  add("klee_pmem_check_persisted", handleIsPersisted, false),
-  add("klee_pmem_check_ordered_before", handleIsOrderedBefore, false),
-  add("klee_pmem_is_pmem", handleIsPmem, true),
-
-  /* For the good of the MMAP! */
-  add("klee_define_fixed_object_from_existing", handleDefineFixedObjectFromExisting, false),
-  add("klee_init_concrete_zero", handleInitConcreteZero, false),
-  add("klee_undefine_fixed_object", handleUndefineFixedObject, false),
-
   /* Thread Scheduling Management */
   add("klee_thread_create", handleThreadCreate, false),
   addDNR("klee_thread_terminate", handleThreadTerminate),
@@ -877,31 +865,6 @@ void SpecialFunctionHandler::handleDefineFixedObject(ExecutionState &state,
   MemoryObject *mo = executor.memory->allocateFixed(address, size, state.prevPC()->inst);
   executor.bindObjectInState(state, mo, false);
   mo->isUserSpecified = true; // XXX hack;
-}
-
-void SpecialFunctionHandler::handleDefineFixedObjectFromExisting(
-  ExecutionState &state, KInstruction *target, std::vector<ref<Expr> > &arguments) 
-{
-  assert(arguments.size()==2 &&
-         "invalid number of arguments to klee_define_fixed_object");
-  assert(isa<ConstantExpr>(arguments[0]) &&
-         "expect constant address argument to klee_define_fixed_object");
-  assert(isa<ConstantExpr>(arguments[1]) &&
-         "expect constant size argument to klee_define_fixed_object");
-  
-  uint64_t address = cast<ConstantExpr>(arguments[0])->getZExtValue();
-  uint64_t size = cast<ConstantExpr>(arguments[1])->getZExtValue();
-  MemoryObject *mo = executor.memory->allocateFixed(address, size, state.prevPC()->inst);
-  executor.bindObjectInState(state, mo, false);
-  mo->isUserSpecified = true; // XXX hack;
-
-  const ObjectState *cos = state.addressSpace.findObject(mo);
-  ObjectState *os = state.addressSpace.getWriteable(mo, cos);
-  assert(os);
-  char *data = (char*)address;
-  for (uint64_t i = 0; i < size; ++i) {
-    os->write8(i, data[i]);
-  }
 }
 
 void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
