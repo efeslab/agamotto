@@ -10,20 +10,22 @@
 #ifndef KLEE_EXECUTIONSTATE_H
 #define KLEE_EXECUTIONSTATE_H
 
-#include "AddressSpace.h"
-#include "MergeHandler.h"
-
 #include "klee/ADT/TreeStream.h"
+#include "klee/Core/Interpreter.h"
 #include "klee/Expr/Constraints.h"
 #include "klee/Expr/Expr.h"
 #include "klee/Module/KInstIterator.h"
-#include "klee/Solver/Solver.h"
 #include "klee/System/Time.h"
+
+#include "AddressSpace.h"
+#include "MergeHandler.h"
+#include "Threading.h"
 
 #include <map>
 #include <memory>
 #include <set>
 #include <vector>
+#include <string>
 
 namespace klee {
 class Array;
@@ -34,113 +36,9 @@ struct KInstruction;
 class MemoryObject;
 class PTreeNode;
 struct InstructionInfo;
+class Executor;
 
 llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const MemoryMap &mm);
-
-struct StackFrame {
-  KInstIterator caller;
-  KFunction *kf;
-  CallPathNode *callPathNode;
-
-  std::vector<const MemoryObject *> allocas;
-  Cell *locals;
-
-  /// Minimum distance to an uncovered instruction once the function
-  /// returns. This is not a good place for this but is used to
-  /// quickly compute the context sensitive minimum distance to an
-  /// uncovered instruction. This value is updated by the StatsTracker
-  /// periodically.
-  unsigned minDistToUncoveredOnReturn;
-
-  // For vararg functions: arguments not passed via parameter are
-  // stored (packed tightly) in a local (alloca) memory object. This
-  // is set up to match the way the front-end generates vaarg code (it
-  // does not pass vaarg through as expected). VACopy is lowered inside
-  // of intrinsic lowering.
-  MemoryObject *varargs;
-
-  StackFrame(KInstIterator caller, KFunction *kf);
-  StackFrame(const StackFrame &s);
-  ~StackFrame();
-};
-
-/// Contains information related to unwinding (Itanium ABI/2-Phase unwinding)
-class UnwindingInformation {
-public:
-  enum class Kind {
-    SearchPhase, // first phase
-    CleanupPhase // second phase
-  };
-
-private:
-  const Kind kind;
-
-public:
-  // _Unwind_Exception* of the thrown exception, used in both phases
-  ref<ConstantExpr> exceptionObject;
-
-  Kind getKind() const { return kind; }
-
-  explicit UnwindingInformation(ref<ConstantExpr> exceptionObject, Kind k)
-      : kind(k), exceptionObject(exceptionObject) {}
-  virtual ~UnwindingInformation() = default;
-
-  virtual std::unique_ptr<UnwindingInformation> clone() const = 0;
-};
-
-struct SearchPhaseUnwindingInformation : public UnwindingInformation {
-  // Keeps track of the stack index we have so far unwound to.
-  std::size_t unwindingProgress;
-
-  // MemoryObject that contains a serialized version of the last executed
-  // landingpad, so we can clean it up after the personality fn returns.
-  MemoryObject *serializedLandingpad = nullptr;
-
-  SearchPhaseUnwindingInformation(ref<ConstantExpr> exceptionObject,
-                                  std::size_t const unwindingProgress)
-      : UnwindingInformation(exceptionObject,
-                             UnwindingInformation::Kind::SearchPhase),
-        unwindingProgress(unwindingProgress) {}
-
-  std::unique_ptr<UnwindingInformation> clone() const {
-    return std::make_unique<SearchPhaseUnwindingInformation>(*this);
-  }
-
-  static bool classof(const UnwindingInformation *u) {
-    return u->getKind() == UnwindingInformation::Kind::SearchPhase;
-  }
-};
-
-struct CleanupPhaseUnwindingInformation : public UnwindingInformation {
-  // Phase 1 will try to find a catching landingpad.
-  // Phase 2 will unwind up to this landingpad or return from
-  // _Unwind_RaiseException if none was found.
-
-  // The selector value of the catching landingpad that was found
-  // during the search phase.
-  ref<ConstantExpr> selectorValue;
-
-  // Used to know when we have to stop unwinding and to
-  // ensure that unwinding stops at the frame for which
-  // we first found a handler in the search phase.
-  const std::size_t catchingStackIndex;
-
-  CleanupPhaseUnwindingInformation(ref<ConstantExpr> exceptionObject,
-                                   ref<ConstantExpr> selectorValue,
-                                   const std::size_t catchingStackIndex)
-      : UnwindingInformation(exceptionObject,
-                             UnwindingInformation::Kind::CleanupPhase),
-        selectorValue(selectorValue),
-        catchingStackIndex(catchingStackIndex) {}
-
-  std::unique_ptr<UnwindingInformation> clone() const {
-    return std::make_unique<CleanupPhaseUnwindingInformation>(*this);
-  }
-
-  static bool classof(const UnwindingInformation *u) {
-    return u->getKind() == UnwindingInformation::Kind::CleanupPhase;
-  }
-};
 
 /// @brief ExecutionState representing a path under exploration
 class ExecutionState {
@@ -153,28 +51,27 @@ private:
   ExecutionState(const ExecutionState &state);
 
 public:
-  using stack_ty = std::vector<StackFrame>;
+  typedef std::map<thread_uid_t, Thread> threads_ty;
+  typedef std::map<wlist_id_t, std::set<thread_uid_t>> wlists_ty;
+  typedef Thread::stack_ty stack_ty;
 
-  // Execution - Control Flow specific
+private:
+  // for initialization
+  void setupMain(KFunction *kf);
+  void setupTime();
 
-  /// @brief Pointer to instruction to be executed after the current
-  /// instruction
-  KInstIterator pc;
-
-  /// @brief Pointer to instruction which is currently executed
-  KInstIterator prevPC;
-
-  /// @brief Stack representing the current instruction stream
-  stack_ty stack;
-
-  /// @brief Remember from which Basic Block control flow arrived
-  /// (i.e. to select the right phi values)
-  std::uint32_t incomingBBIndex;
+public:
+  // Execution - Control Flow specific (include multi-threading)
+  // FIXME: should I make them private?
+  threads_ty threads;
+  wlists_ty waitingLists;
+  // used to allocate new wlist_id
+  wlist_id_t wlistCounter;
+  // logical timestamp, each instruction takes one unit time
+  uint64_t stateTime;
+  threads_ty::iterator crtThreadIt;
 
   // Overall state of the state - Data specific
-
-  /// @brief Exploration depth, i.e., number of times KLEE branched for this state
-  std::uint32_t depth;
 
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;
@@ -187,6 +84,12 @@ public:
   /// @brief Metadata utilized and collected by solvers for this state
   mutable SolverQueryMetaData queryMetaData;
 
+  /// @brief Costs for all queries issued for this state, in seconds
+  mutable time::Span queryCost;
+
+  /// @brief Exploration depth, i.e., number of times KLEE branched for this state
+  unsigned depth;
+
   /// @brief History of complete path: represents branches taken to
   /// reach/create this state (both concrete and symbolic)
   TreeOStream pathOS;
@@ -195,12 +98,21 @@ public:
   /// taken to reach/create this state
   TreeOStream symPathOS;
 
+  /// @brief Counts how many instructions were executed since the last new
+  /// instruction was covered.
+  unsigned instsSinceCovNew;
+
+  /// @brief Whether a new instruction was covered in this state
+  bool coveredNew;
+
+  /// @brief Disables forking for this state. Set by user code
+  bool forkDisabled;
+
   /// @brief Set containing which lines in which files are covered by this state
-  std::map<const std::string *, std::set<std::uint32_t>> coveredLines;
+  std::map<const std::string *, std::set<unsigned> > coveredLines;
 
   /// @brief Pointer to the process tree of the current state
-  /// Copies of ExecutionState should not copy ptreeNode
-  PTreeNode *ptreeNode = nullptr;
+  PTreeNode *ptreeNode;
 
   /// @brief Ordered list of symbolics: used to generate test cases.
   //
@@ -210,15 +122,11 @@ public:
   /// @brief Set of used array names for this state.  Used to avoid collisions.
   std::set<std::string> arrayNames;
 
-  /// @brief The objects handling the klee_open_merge calls this state ran through
-  std::vector<ref<MergeHandler>> openMergeStack;
+  // The objects handling the klee_open_merge calls this state ran through
+  std::vector<ref<MergeHandler> > openMergeStack;
 
-  /// @brief The numbers of times this state has run through Executor::stepInstruction
+  // The numbers of times this state has run through Executor::stepInstruction
   std::uint64_t steppedInstructions;
-
-  /// @brief Counts how many instructions were executed since the last new
-  /// instruction was covered.
-  std::uint32_t instsSinceCovNew;
 
   /// @brief Keep track of unwinding state while unwinding, otherwise empty
   std::unique_ptr<UnwindingInformation> unwindingInformation;
@@ -229,11 +137,12 @@ public:
   /// @brief the state id
   std::uint32_t id {0};
 
-  /// @brief Whether a new instruction was covered in this state
-  bool coveredNew;
+  /// @brief Reference to executor makes it easier to create new threads
+  Executor *executor_;
+private:
+  
 
-  /// @brief Disables forking for this state. Set by user code
-  bool forkDisabled;
+  ExecutionState() : ptreeNode(0) {}
 
 public:
   #ifdef KLEE_UNITTEST
@@ -241,7 +150,7 @@ public:
   ExecutionState(){}
   #endif
   // only to create the initial state
-  explicit ExecutionState(KFunction *kf);
+  explicit ExecutionState(Executor *executor, KFunction *kf);
   // no copy assignment, use copy constructor
   ExecutionState &operator=(const ExecutionState &) = delete;
   // no move ctor
@@ -253,18 +162,57 @@ public:
 
   ExecutionState *branch();
 
-  void pushFrame(KInstIterator caller, KFunction *kf);
-  void popFrame();
+  void pushFrame(KInstIterator caller, KFunction *kf) { pushFrame(crtThread(), caller, kf); }
+  void pushFrame(Thread &t, KInstIterator caller, KFunction *kf);
+  void popFrame() { popFrame(crtThread()); }
+  void popFrame(Thread &t);
 
   void addSymbolic(const MemoryObject *mo, const Array *array);
 
   void addConstraint(ref<Expr> e);
 
   bool merge(const ExecutionState &b);
+
+  void dumpConstraints(llvm::raw_ostream &out) const;
+  void dumpConstraints() const;
   void dumpStack(llvm::raw_ostream &out) const;
+  void dumpStack() const { dumpStack(llvm::errs()); }
 
   std::uint32_t getID() const { return id; };
   void setID() { id = nextID++; };
+  
+  /* Multi-threading related function */
+
+  Thread &createThread(thread_id_t tid, KFunction *kf);
+  void terminateThread(threads_ty::iterator it);
+  threads_ty::iterator nextThread(threads_ty::iterator it) {
+    if (it != threads.end())
+      ++it;
+    if (it == threads.end())
+      it = threads.begin();
+    return it;
+  }
+  void scheduleNext(threads_ty::iterator it) {
+    assert(it != threads.end());
+    crtThreadIt = it;
+  }
+  wlist_id_t getWaitingList() { return wlistCounter++; }
+  void sleepThread(wlist_id_t wlist);
+  void notifyOne(wlist_id_t wlist, thread_uid_t tid);
+  void notifyAll(wlist_id_t wlist);
+
+  /* Shortcut methods */
+  Thread &crtThread() { return crtThreadIt->second; }
+  const Thread &crtThread() const { return crtThreadIt->second; }
+  KInstIterator &pc() { return crtThread().pc; }
+  const KInstIterator &pc() const { return crtThread().pc; }
+  KInstIterator &prevPC() { return crtThread().prevPC; }
+  const KInstIterator &prevPC() const { return crtThread().prevPC; }
+  stack_ty &stack() { return crtThread().stack; }
+  const stack_ty &stack() const { return crtThread().stack; }
+  unsigned &incomingBBIndex() { return crtThread().incomingBBIndex; }
+  unsigned incomingBBIndex() const { return crtThread().incomingBBIndex; }
+
 };
 
 struct ExecutionStateIDCompare {

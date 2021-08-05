@@ -28,6 +28,7 @@
 #include "klee/System/Time.h"
 
 #include "llvm/ADT/Twine.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <map>
@@ -80,10 +81,7 @@ namespace klee {
   class MergeHandler;
   class MergingSearcher;
   template<class T> class ref;
-  class RootCauseManager;
 
-  /// (iangneal): custom checker support
-  class CustomCheckerHandler;
 
   /// \todo Add a context object to keep track of data only live
   /// during an instruction step. Should contain addedStates,
@@ -109,7 +107,6 @@ public:
     Free,
     Model,
     Overflow,
-    PMem,
     Ptr,
     ReadOnly,
     ReportError,
@@ -131,12 +128,6 @@ private:
   InterpreterHandler *interpreterHandler;
   Searcher *searcher;
 
-  /// @brief (iangneal): Root cause tracking for NVM bugs. Could be extended
-  std::shared_ptr<RootCauseManager> rootCauseMgr;
-
-  /// (iangneal): custom checkers
-  std::unique_ptr<CustomCheckerHandler> customCheckerHandler;
-
   ExternalDispatcher *externalDispatcher;
   TimingSolver *solver;
   MemoryManager *memory;
@@ -146,11 +137,6 @@ private:
   SpecialFunctionHandler *specialFunctionHandler;
   TimerGroup timers;
   std::unique_ptr<PTree> processTree;
-
-  /// (iangneal): For NVM-KLEE, copy the module options so we can validate we
-  /// are using the correct searcher/warn the user if they are using the wrong
-  /// searcher for the kind of bugsthat they want, i.e. NVM  persistence bugs.
-  ModuleOptions modOpts;
 
   /// Used to track states that have been added during the current
   /// instructions step. 
@@ -182,9 +168,6 @@ private:
   /// Map of legal function addresses to the corresponding Function.
   /// Used to validate and dereference function pointers.
   std::unordered_map<std::uint64_t, llvm::Function*> legalFunctions;
-
-  /// (iangneal): For tracking unique pmem errors.
-  std::set<std::string> pmemErrorDescriptions;
 
   /// When non-null the bindings that will be used for calls to
   /// klee_make_symbolic in order replay.
@@ -359,35 +342,10 @@ private:
                               bool isWrite,
                               ref<Expr> address,
                               ref<Expr> value /* undef if read */,
-                              KInstruction *target /* undef if write */,
-                              bool isNontemporal=false /* false if read */);
-
-  void executePersistentMemoryFlush(ExecutionState &state,
-                                    ref<Expr> address);
-  void executePersistentMemoryFlush(ExecutionState &state,
-                                    const MemoryObject *mo,
-                                    PersistentState *ps,
-                                    ref<Expr> offset);
-
-  void executePersistentMemoryFence(ExecutionState &state);
+                              KInstruction *target /* undef if write */);
 
   void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
                            const std::string &name);
-
-  void executeMarkPersistent(ExecutionState &state, ref<ConstantExpr> address);
-  void executeMarkPersistent(ExecutionState &state, const MemoryObject *mo);
-  bool isPersistentMemory(ExecutionState &state, const MemoryObject *mo);
-
-  /// Resolve the address to update the nvmInfo in the state.
-  void executeUpdateNvmInfo(ExecutionState &state, KInstruction *loc, const ObjectState *cos);
-
-  /// Check persistence of all memory objects. Return ALL errors.
-  bool getAllPersistenceErrors(ExecutionState &state, std::unordered_set<std::string> &errors);
-  bool getPersistenceErrors(ExecutionState &state, const MemoryObject *mo, std::unordered_set<std::string> &errors);
-  
-  std::unordered_set<uint64_t> markPersistenceErrors(ExecutionState &state, 
-                                                     const MemoryObject *mo, 
-                                                     const PersistentState *ps);
 
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included
@@ -484,8 +442,6 @@ private:
 
   // remove state from queue and delete
   void terminateState(ExecutionState &state);
-    // remove state from queue and delete after checking for pmem errors
-  void terminateStateEarlyPmem(ExecutionState &state);
   // call exit handler and terminate state
   void terminateStateEarly(ExecutionState &state, const llvm::Twine &message);
   // call exit handler and terminate state
@@ -495,14 +451,6 @@ private:
                              enum TerminateReason termReason,
                              const char *suffix = NULL,
                              const llvm::Twine &longMessage = "");
-
-  void emitPmemError(ExecutionState &state, const std::unordered_set<std::string> &errors);
-  /**
-   * call error handler and terminate state for persistent memory errors.
-   * For each state terminated, outputs the unique errors that this state caused, 
-   * or ignores the location if there are no unique errors.
-   */
-  void terminateStateOnPmemError(ExecutionState &state, const std::unordered_set<std::string> &errors);
 
   // call error handler and terminate state, for execution errors
   // (things that should not be possible, like illegal instruction or
@@ -545,9 +493,6 @@ private:
   /// Only for debug purposes; enable via debugger or klee-control
   void dumpStates();
   void dumpPTree();
-
-  /// @brief (iangneal): dump all the bugs in one place
-  void dumpRootCauses();
 
   /* Multi-threading related function */
   // Pthread Create needs to specify a new StackFrame instead of just using the

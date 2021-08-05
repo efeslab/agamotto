@@ -832,9 +832,6 @@ else()
   message(STATUS "System tests disabled")
 endif()
 
-message("NVM-KLEE: building test case bugs.")
-add_subdirectory(nvmbugs)
-
 ################################################################################
 # Documentation
 ################################################################################

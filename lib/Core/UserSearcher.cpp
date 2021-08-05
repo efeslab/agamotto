@@ -13,14 +13,7 @@
 #include "MergeHandler.h"
 #include "Searcher.h"
 
-<<<<<<< HEAD
-#include "klee/OptionCategories.h"
-#include "klee/Internal/Support/ErrorHandling.h"
-#include "klee/MergeHandler.h"
-#include "klee/Solver/SolverCmdLine.h"
-=======
 #include "klee/Support/ErrorHandling.h"
->>>>>>> master
 
 #include "llvm/Support/CommandLine.h"
 
@@ -44,9 +37,6 @@ cl::list<Searcher::CoreSearchType> CoreSearch(
                    "randomly select a state to explore"),
         clEnumValN(Searcher::RandomPath, "random-path",
                    "use Random Path Selection (see OSDI'08 paper)"),
-        // (iangneal): Enable use of the NVM heuristic from the command line.
-        clEnumValN(Searcher::NvmMod, "nvm",
-                   "use NVM-Modifying Heuristic (upcoming OSDI'20 paper)"),
         clEnumValN(Searcher::NURS_CovNew, "nurs:covnew",
                    "use Non Uniform Random Search (NURS) with Coverage-New"),
         clEnumValN(Searcher::NURS_MD2U, "nurs:md2u",
@@ -92,10 +82,6 @@ cl::opt<std::string> BatchTime(
 
 } // namespace
 
-namespace klee {
-  extern cl::opt<NvmHeuristicBuilder::Type> NvmCheck;
-}
-
 void klee::initializeSearchOptions() {
   // default values
   if (CoreSearch.empty()) {
@@ -117,57 +103,6 @@ bool klee::userSearcherRequiresMD2U() {
           std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_QC) != CoreSearch.end());
 }
 
-bool klee::userSearcherRequiresNvmAnalysis() {
-  return (std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NvmMod)
-      != CoreSearch.end());
-}
-
-<<<<<<< HEAD
-Searcher *getNewSearcher(Searcher::CoreSearchType type, Executor &executor) {
-  Searcher *searcher = NULL;
- 
-  // (iangneal): Handle some error/warning cases first.
-  switch (type) {
-  case Searcher::NvmMod:
-    assert(NvmCheck != NvmHeuristicBuilder::Type::Invalid);
-    if (NvmCheck == NvmHeuristicBuilder::Type::None) {
-      klee_error("must enable NVM information to use the NvmPathSearcher!");
-    }
-    break;
-  default:
-    if (NvmCheck != NvmHeuristicBuilder::Type::None &&
-        NvmCheck != NvmHeuristicBuilder::Type::Invalid) {
-      klee_warning_once((void*)getNewSearcher,
-          "using a non-NVM aware search heuristic may result in longer search"
-          " times.\n(Ignore this warning if you are running for the sake of"
-          " comparing coverage statistics.)");
-    }
-  }
-
-  switch (type) {
-  case Searcher::DFS: searcher = new DFSSearcher(executor); break;
-  case Searcher::BFS: searcher = new BFSSearcher(executor); break;
-  case Searcher::RandomState: searcher = new RandomSearcher(executor); break;
-  case Searcher::RandomPath: searcher = new RandomPathSearcher(executor); break;
-  case Searcher::NURS_CovNew: 
-    searcher = new WeightedRandomSearcher(executor, 
-                                          WeightedRandomSearcher::CoveringNew); 
-    break;
-  case Searcher::NURS_MD2U: 
-    searcher = new WeightedRandomSearcher(executor, WeightedRandomSearcher::MinDistToUncovered); break;
-  case Searcher::NURS_Depth: 
-    searcher = new WeightedRandomSearcher(executor, WeightedRandomSearcher::Depth); break;
-  case Searcher::NURS_RP: 
-    searcher = new WeightedRandomSearcher(executor, WeightedRandomSearcher::RP); break;
-  case Searcher::NURS_ICnt: 
-    searcher = new WeightedRandomSearcher(executor, WeightedRandomSearcher::InstCount); break;
-  case Searcher::NURS_CPICnt: 
-    searcher = new WeightedRandomSearcher(executor, WeightedRandomSearcher::CPInstCount); break;
-  case Searcher::NURS_QC: 
-    searcher = new WeightedRandomSearcher(executor, WeightedRandomSearcher::QueryCost); break;
-  // (iangneal): Initialize NVM heuristics.
-  case Searcher::NvmMod: searcher = new NvmPathSearcher(executor); break;
-=======
 Searcher *getNewSearcher(Searcher::CoreSearchType type, RNG &rng, PTree &processTree) {
   Searcher *searcher = nullptr;
   switch (type) {
@@ -182,7 +117,6 @@ Searcher *getNewSearcher(Searcher::CoreSearchType type, RNG &rng, PTree &process
     case Searcher::NURS_ICnt: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::InstCount, rng); break;
     case Searcher::NURS_CPICnt: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::CPInstCount, rng); break;
     case Searcher::NURS_QC: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::QueryCost, rng); break;
->>>>>>> master
   }
 
   return searcher;

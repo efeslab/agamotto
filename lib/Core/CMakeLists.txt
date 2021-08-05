@@ -6,13 +6,7 @@
 # License. See LICENSE.TXT for details.
 #
 #===------------------------------------------------------------------------===#
-# iangneal: support for Andersen's whole program pointer analysis
-set(ANDERSEN_SRC ${PROJECT_SOURCE_DIR}/deps/andersen-pa)
-set(ANDERSEN_BIN ${PROJECT_BINARY_DIR}/deps/andersen-pa)
 set(BUILD_TESTS OFF)
-add_subdirectory(${ANDERSEN_SRC} ${ANDERSEN_BIN})
-include_directories(${ANDERSEN_SRC}/include)
-list(APPEND KLEE_COMPONENT_EXTRA_INCLUDE_DIRS ${ANDERSEN_SRC}/include)
 
 klee_add_component(kleeCore
   AddressSpace.cpp
@@ -20,7 +14,6 @@ klee_add_component(kleeCore
   CallPathManager.cpp
   Context.cpp
   CoreStats.cpp
-  CustomCheckerHandler.cpp
   ExecutionState.cpp
   Executor.cpp
   ExecutorUtil.cpp
@@ -28,10 +21,7 @@ klee_add_component(kleeCore
   ImpliedValue.cpp
   Memory.cpp
   MemoryManager.cpp
-  NvmAnalysisUtils.cpp
-  NvmHeuristics.cpp
   PTree.cpp
-  RootCause.cpp
   Searcher.cpp
   SeedInfo.cpp
   SpecialFunctionHandler.cpp
@@ -63,5 +53,4 @@ target_link_libraries(kleeCore PRIVATE
   kleaverSolver
   kleaverExpr
   kleeSupport
-  Andersen
 )

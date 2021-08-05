@@ -31,13 +31,13 @@
  *
  */
 
-#include "klee/Threading.h"
-#include "klee/Internal/Module/Cell.h"
-#include "klee/Internal/Module/KModule.h"
-#include "klee/Internal/Module/InstructionInfoTable.h"
-#include "klee/Internal/Module/KInstruction.h"
+#include "klee/Module/Cell.h"
+#include "klee/Module/KModule.h"
+#include "klee/Module/InstructionInfoTable.h"
+#include "klee/Module/KInstruction.h"
 
 #include "Executor.h"
+#include "Threading.h"
 
 #include "llvm/IR/Function.h"
 
@@ -46,7 +46,6 @@
 using llvm::Function;
 
 namespace klee {
-  extern llvm::cl::opt<NvmHeuristicBuilder::Type> NvmCheck;
 /***/
 
 StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
@@ -83,23 +82,16 @@ Thread::Thread(thread_id_t tid, process_id_t pid,
                Executor *executor, KFunction *start_function)
     : enabled(true), 
       waitingList(0),
-      tuid(std::make_pair(tid, pid)), 
-      nvmInfo(nullptr) {
+      tuid(std::make_pair(tid, pid)) {
   validateAndInit(start_function);
-
-  if (NvmCheck != NvmHeuristicBuilder::Type::None) {
-    nvmInfo = NvmHeuristicBuilder::create(NvmCheck, executor, start_function);
-  }
 }
 
 Thread::Thread(thread_id_t tid, 
-               process_id_t pid, 
-               std::shared_ptr<NvmHeuristicInfo> &&info, 
+               process_id_t pid,
                KFunction *start_function)
     : enabled(true), 
       waitingList(0),
-      tuid(std::make_pair(tid, pid)), 
-      nvmInfo(info) {
+      tuid(std::make_pair(tid, pid)) {
   validateAndInit(start_function);
 }
 
@@ -110,8 +102,7 @@ Thread::Thread(const Thread &thread)
     incomingBBIndex(thread.incomingBBIndex),
     enabled(thread.enabled),
     waitingList(thread.waitingList),
-    tuid(thread.tuid),
-    nvmInfo(NvmHeuristicBuilder::copy(thread.nvmInfo)) {}
+    tuid(thread.tuid) {}
 
 /* Debugging helper */
 void Thread::dumpStack(llvm::raw_ostream &out) const {

@@ -34,14 +34,90 @@
  */
 #ifndef _KLEE_THREADING_H_
 #define _KLEE_THREADING_H_
-#include "klee/Internal/Module/KInstIterator.h"
-#include "klee/Internal/Module/KModule.h"
+#include "klee/Module/KInstIterator.h"
+#include "klee/Module/KModule.h"
 
 #include "llvm/Support/raw_ostream.h"
 
-#include "../../lib/Core/NvmHeuristics.h"
-
 namespace klee {
+
+/// Contains information related to unwinding (Itanium ABI/2-Phase unwinding)
+class UnwindingInformation {
+public:
+  enum class Kind {
+    SearchPhase, // first phase
+    CleanupPhase // second phase
+  };  
+
+private:
+  const Kind kind;
+
+public:
+  // _Unwind_Exception* of the thrown exception, used in both phases
+  ref<ConstantExpr> exceptionObject;
+
+  Kind getKind() const { return kind; }
+
+  explicit UnwindingInformation(ref<ConstantExpr> exceptionObject, Kind k)
+      : kind(k), exceptionObject(exceptionObject) {}
+  virtual ~UnwindingInformation() = default;
+
+  virtual std::unique_ptr<UnwindingInformation> clone() const = 0;
+};
+
+struct SearchPhaseUnwindingInformation : public UnwindingInformation {
+  // Keeps track of the stack index we have so far unwound to.
+  std::size_t unwindingProgress;
+
+  // MemoryObject that contains a serialized version of the last executed
+  // landingpad, so we can clean it up after the personality fn returns.
+  MemoryObject *serializedLandingpad = nullptr;
+
+  SearchPhaseUnwindingInformation(ref<ConstantExpr> exceptionObject,
+                                  std::size_t const unwindingProgress)
+      : UnwindingInformation(exceptionObject,
+                             UnwindingInformation::Kind::SearchPhase),
+        unwindingProgress(unwindingProgress) {}
+
+  std::unique_ptr<UnwindingInformation> clone() const {
+    return std::make_unique<SearchPhaseUnwindingInformation>(*this);
+  }
+
+  static bool classof(const UnwindingInformation *u) {
+    return u->getKind() == UnwindingInformation::Kind::SearchPhase;
+  }
+};
+
+struct CleanupPhaseUnwindingInformation : public UnwindingInformation {
+  // Phase 1 will try to find a catching landingpad.
+  // Phase 2 will unwind up to this landingpad or return from
+  // _Unwind_RaiseException if none was found.
+
+  // The selector value of the catching landingpad that was found
+  // during the search phase.
+  ref<ConstantExpr> selectorValue;
+
+  // Used to know when we have to stop unwinding and to
+  // ensure that unwinding stops at the frame for which
+  // we first found a handler in the search phase.
+  const std::size_t catchingStackIndex;
+
+  CleanupPhaseUnwindingInformation(ref<ConstantExpr> exceptionObject,
+                                   ref<ConstantExpr> selectorValue,
+                                   const std::size_t catchingStackIndex)
+      : UnwindingInformation(exceptionObject,
+                             UnwindingInformation::Kind::CleanupPhase),
+        selectorValue(selectorValue),
+        catchingStackIndex(catchingStackIndex) {}
+
+  std::unique_ptr<UnwindingInformation> clone() const {
+    return std::make_unique<CleanupPhaseUnwindingInformation>(*this);
+  }
+
+  static bool classof(const UnwindingInformation *u) {
+    return u->getKind() == UnwindingInformation::Kind::CleanupPhase;
+  }
+};
 
 class CallPathNode;
 struct Cell;
@@ -103,6 +179,9 @@ private:
   /// (i.e. to select the right phi values)
   unsigned incomingBBIndex;
 
+  /// @brief Keep track of unwinding state while unwinding, otherwise empty
+  std::unique_ptr<UnwindingInformation> unwindingInformation;
+
   /// @brief If this thread is active (should be scheduled). Disabled threads
   /// are either sleeping or terminated.
   bool enabled;
@@ -113,15 +192,11 @@ private:
   /// processes, so the pid is always be 0 for now.
   thread_uid_t tuid;
 
-  /// @brief (iangneal): Information about the current state of NVM and the predicted state
-  std::shared_ptr<NvmHeuristicInfo> nvmInfo;
-
   void validateAndInit(KFunction *start_function);
 
 public:
   Thread(thread_id_t tid, process_id_t pid, Executor *e, KFunction *start_function);
-  Thread(thread_id_t tid, process_id_t pid, 
-         std::shared_ptr<NvmHeuristicInfo> &&info, KFunction *start_function);
+  Thread(thread_id_t tid, process_id_t pid, KFunction *start_function);
   
   // (iangneal): we need a custom copy constructor so that the nvmInfo is properly
   // separated.

@@ -12,7 +12,6 @@
 
 #include "Context.h"
 #include "TimingSolver.h"
-#include "RootCause.h"
 
 #include "klee/Expr/Expr.h"
 
@@ -248,13 +247,13 @@ public:
   readAll(const Array *initialValues=nullptr) const;
 
   // return bytes written.
-  virtual void write(const ExecutionState &state, unsigned offset, ref<Expr> value);
-  virtual void write(const ExecutionState &state, ref<Expr> offset, ref<Expr> value);
+  virtual void write(unsigned offset, ref<Expr> value);
+  virtual void write(ref<Expr> offset, ref<Expr> value);
 
-  virtual void write8(const ExecutionState &state, unsigned offset, uint8_t value);
-  virtual void write16(const ExecutionState &state, unsigned offset, uint16_t value);
-  virtual void write32(const ExecutionState &state, unsigned offset, uint32_t value);
-  virtual void write64(const ExecutionState &state, unsigned offset, uint64_t value);
+  virtual void write8(unsigned offset, uint8_t value);
+  virtual void write16(unsigned offset, uint16_t value);
+  virtual void write32(unsigned offset, uint32_t value);
+  virtual void write64(unsigned offset, uint64_t value);
   virtual void print() const;
 
   /*
@@ -272,8 +271,8 @@ protected:
   void makeSymbolic();
 
   virtual ref<Expr> read8(ref<Expr> offset) const;
-  virtual void write8(const ExecutionState &state, unsigned offset, ref<Expr> value);
-  virtual void write8(const ExecutionState &state, ref<Expr> offset, ref<Expr> value);
+  virtual void write8(unsigned offset, ref<Expr> value);
+  virtual void write8(ref<Expr> offset, ref<Expr> value);
 
   void fastRangeCheckOffset(ref<Expr> offset, unsigned *base_r, 
                             unsigned *size_r) const;
@@ -291,266 +290,6 @@ protected:
   void setKnownSymbolic(unsigned offset, Expr *value);
 
   ArrayCache *getArrayCache() const;
-};
-
-/// \brief A subclass of ObjectState used for tracking the state of a
-/// persistent MemoryObject.
-///
-/// Tracks updates to a symbolic Array of bools that represents the
-/// dirtiness/persistedness of each cache line that the MemoryObject spans.
-class PersistentState : public ObjectState {
-  private:
-    TimingSolver *solver;
-    /// Both of these UpdateLists share one underlying symbolic bool Array.
-    /// The Array has one entry per cache line: 1 if persisted, 0 if not.
-    /// Each write and each cache line flush are tracked as updates to this array.
-    ///
-    /// These two update lists diverge during a persistence epoch (epochs are
-    /// delimited by memory fences).
-    /// Until the next sfence, cacheLineUpdates contains only the writes made
-    /// during the current epoch, while pendingCacheLineUpdates contains both
-    /// the writes and flushes.
-    ///
-    /// Queries about the persistence of cache lines are formed using
-    /// cacheLineUpdates rather than pendingCacheLineUpdates.
-    /// Thus, any persistence queries made during the middle of an epoch will
-    /// not falsely report that writes have been persisted.
-    ///
-    /// When the epoch ends, the pending flushes are added to cacheLineUpdates,
-    /// preserving their original ordering WRT the writes.
-    ///
-    /// Example program:
-    ///   WRITE cache line 0
-    ///   FLUSH cache line 0
-    ///   SFENCE              // end of epoch 0
-    ///   WRITE cache line 2
-    ///   FLUSH cache line 2
-    ///   WRITE cache line 2
-    ///   SFENCE              // end of epoch 1
-    ///
-    /// Contents of update lists:
-    ///
-    ///   At start of epoch 1:
-    ///     v pendingCacheLineUpdates
-    ///     [0]=1 -> [0]=0 -> nullptr
-    ///     ^ cacheLineUpdates
-    ///
-    ///   Before the second SFENCE:
-    ///     v pendingCacheLineUpdates
-    ///     [2]=0 -> [2]=1 -> [2]=0 ->
-    ///                                [0]=1 -> [0]=0 -> nullptr
-    ///              [2]=0 -> [2]=0 ->
-    ///              ^ cacheLineUpdates
-    ///
-    ///   After the second SFENCE:
-    ///     v pendingCacheLineUpdates
-    ///     [2]=0 -> [2]=1 -> [2]=0 -> [0]=1 -> [0]=0 -> nullptr
-    ///     ^ cacheLineUpdates
-    ///
-    UpdateList cacheLineUpdates;
-    UpdateList pendingCacheLineUpdates;
-
-    /// This will be a ReadExpr on a symbolic offset into this object.
-    /// Retrieved with getAnyOffsetExpr().
-    ref<Expr> idxUnbounded;
-
-    /**
-     * (iangneal): We want symbolic root-cause detection. 
-     * 
-     * This is why:
-     * Each symbolic write can dirty a potentially large range of values if a
-     * symbolic offset is used as part of the write. At the extreme, the program
-     * could write at an unconstrained offset, potentially dirtying any 
-     * cacheline!
-     * 
-     * We already have facilities for solving whether or not a cacheline is 
-     * dirty or clean. However, for each cacheline we determine to not be clean,
-     * we would also like to know where it was most recently modified. This way,
-     * we can let the developer know where they might need to add some persists,
-     * or at least begin their search for finding the bug. Without this 
-     * information, it is nearly impossible to figure out where the bug is for
-     * programs of non-trivial size.
-     * 
-     * To track these root causes, we use a similar symbolic cacheline
-     * construction to how we track clean/dirty bits. Every time we dirty a 
-     * cache line, we update the state of the cacheline, and also write a 
-     * unique ID value into the root cause update list at the same symbolic 
-     * offset. When we perform a flush, we write a 0, equivalent to "no root
-     * cause." As a performance optimization, we only solve this array when we
-     * determine that the entire system is not guaranteed to be persistent.
-     * 
-     * We chose to do this symbolically for several reasons:
-     * 1. We can natively handle the symbolic offsets that dirty the cachelines.
-     * 2. We can use the solver to determine which root causes are still
-     * relevant (i.e. not flushed) at the time of the check. For example, the
-     * system may write at symbolic offset A, write at symbolic offset B, and 
-     * flush at symbolic offset C. Resolving if A is flushed or if B is flushed
-     * (A and B could also resolve to the same set of cache lines and both be
-     * flushed, or C could flush unrelated addresses) is a task for the solver.
-     * We can then iterate over all known root causes to see if each cacheline 
-     * could have been dirtied by that location (cachelines could also 
-     * potentially be dirtied by different locations, so the most recent 
-     * location could be multiple values.)
-     * 3. It was easy to implement and reason about given the current 
-     * infrastructure.
-     * 
-     * This is how:
-     * Every time we dirty a cacheline, we create an update to those same 
-     * cachelines with a pointer value. This pointer will point to a program
-     * location. We will also track a set with all possible locations, as we
-     * need to resolve a root cause by checking against each value in the
-     * list.
-     * 
-     * On a flush, we write nullptr.
-     * 
-     * At any given point, if all cache lines are persisted, we can reset the 
-     * set.
-     */
-    UpdateList rootCauseWrites;
-    UpdateList pendingRootCauseWrites;
-    UpdateList rootCauseFlushes;
-    // We could use pending flushes as an indicator for lacking fences.
-    // Would need to clear them.
-    UpdateList pendingRootCauseFlushes;
-    Expr::Width rootCauseWidth;
-    // We store all of the unique root cause locations. We can't use the pointer
-    // due to copies, but we can make unique IDs
-    std::shared_ptr<RootCauseManager> rootCauseMgr;
-
-    // This should function like a stack
-    std::list<ref<Expr>> ignoreBytes;
-
-    /// DO NOT USE. Use clone() instead.
-    PersistentState(const PersistentState &ps);
-
-  public:
-
-    static uint64_t MaxSize;
-    /// Create a new persistent object state from the given non-persistent
-    /// object state and symbolic bool array of cache lines. Also requires
-    /// a symbolic void* array (int64) for root cause.
-    ///
-    /// We now take the state to add the array names to state.arrayNames and 
-    /// fail if any arrays we create internally already exist.
-    PersistentState(TimingSolver *solver, 
-                    ExecutionState &state, 
-                    const ObjectState *os);
-
-    ObjectState *clone() const override;
-
-    virtual Kind getKind() const override { return Persistent; }
-
-    static bool classof(const ObjectState *os) {
-      return os->getKind() == Persistent;
-    }
-
-    void write8(const ExecutionState &state, 
-                unsigned offset, 
-                uint8_t value) override;
-    void write8(const ExecutionState &state, 
-                unsigned offset, 
-                ref<Expr> value) override;
-    void write8(const ExecutionState &state, 
-                ref<Expr> offset, 
-                ref<Expr> value) override;
-    
-    /**
-     * write8's at this offset will not dirty the cacheline
-     */
-    void addIgnoreByte(ref<Expr> offset);
-    void addIgnoreOffset(ref<Expr> offset, uint64_t width);
-    /**
-     * Removes the offset from the ignore list.
-     */
-    void removeIgnoreByte(const ExecutionState &state, ref<Expr> offset);
-    void removeIgnoreOffset(const ExecutionState &state, ref<Expr> offset, uint64_t width);
-
-    void dirtyCacheLineAtOffset(const ExecutionState &state, unsigned offset);
-    void dirtyCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset);
-
-    // Make a *pending* persist of the cache line containing offset.
-    void persistCacheLineAtOffset(const ExecutionState &state, unsigned offset);
-    void persistCacheLineAtOffset(const ExecutionState &state, ref<Expr> offset);
-
-    /**
-     * Returns true if there were any pending persists to commit. Otherwise,
-     * returns false.
-     */
-    bool commitPendingPersists(const ExecutionState &state);
-    
-    /**
-     * Get an expression which will evaluate to 1 if all writes to the given
-     * offset have been persisted and fenced.
-     * If pending=true, then expression will also evaluate to 1 even if not fenced
-     * (used to detect redundant flushes).
-     */
-    ref<Expr> getIsOffsetPersistedExpr(ref<Expr> offset,
-                                       bool pending=false) const;
-
-    /**
-     * Returns a reference to a symbolic offset into this object.
-     * Combine this with getBoundsCheckOffset to constrain the solver
-     * while checking for persistence.
-     */
-    ref<Expr> getAnyOffsetExpr() const;
-
-    // If we are known to be persistent, do this to optimize.
-    void clearRootCauses();
-
-    /**
-     * If we have duplicate flushes/otherwise, we mark the flush that we 
-     * just executed at that location as a bug. We also return the ID we 
-     * just marked as a bug for immediate test case generation.
-     */
-    uint64_t markFlushAsBug(ExecutionState &state, ref<Expr> offset) const;
-
-    /**
-     * Mark all the writes that are unpersisted as bugs.
-     */
-    std::unordered_set<uint64_t> 
-    markNonPersistedWritesAsBugs(ExecutionState &state) const;
-
-    ref<ConstantExpr> createRootCauseIdExpr(const ExecutionState &state, 
-                                            RootCauseReason reason);
-
-    ref<ConstantExpr> createRootCauseIdExpr(const ExecutionState &state, 
-                                            RootCauseReason reason,
-                                            std::unordered_set<uint64_t> prev);
-
-    // check from PENDING cache line updates if it's clean or not
-    ref<Expr> isOffsetAlreadyPersisted(ref<Expr> offset) const;
-
-    static ref<ConstantExpr> getPersistedExpr();
-    static ref<ConstantExpr> getDirtyExpr();
-    static ref<ConstantExpr> getNullptr();
-
-    /**
-     * Resets all cache line state to the default.
-     */
-    void flushAll();
-
-  private:
-    ref<Expr> isCacheLinePersisted(unsigned offset, bool pending=false) const;
-    ref<Expr> isCacheLinePersisted(ref<Expr> offset, bool pending=false) const;
-
-    std::unordered_set<uint64_t> getRootCauses(ExecutionState &state,
-                                               const UpdateList &ul) const;
-
-    std::unordered_set<uint64_t> getRootCause(const ExecutionState &state,
-                                              const UpdateList &ul, 
-                                              unsigned offset) const;
-
-    std::unordered_set<uint64_t> getRootCause(const ExecutionState &state, 
-                                              const UpdateList &ul,
-                                              ref<Expr> offset) const;
-
-    static ref<Expr> ptrAsExpr(void *kinst);
-
-    ref<Expr> getCacheLine(ref<Expr> offset) const;
-    unsigned numCacheLines() const;
-    unsigned cacheLineSize() const;
-
-    std::string getUniqueArrayName(ExecutionState &state, const char *suffix) const;
 };
   
 } // End klee namespace

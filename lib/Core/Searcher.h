@@ -43,16 +43,6 @@ namespace klee {
   /// A Searcher implements an exploration strategy for the Executor by selecting
   /// states for further exploration using different strategies or heuristics.
   class Searcher {
-    friend class BatchingSearcher;
-    friend class MergingSearcher;
-    friend class InterleavedSearcher;
-    friend class IterativeDeepeningTimeSearcher;
-
-  protected:
-    Executor &executor;
-
-    virtual ExecutionState &selectState() = 0;
-
   public:
     virtual ~Searcher() = default;
 
@@ -86,9 +76,7 @@ namespace klee {
       NURS_RP,
       NURS_ICnt,
       NURS_CPICnt,
-      NURS_QC,
-      // (iangneal): Option for driving search towards NVM-modifying instructions.
-      NvmMod
+      NURS_QC
     };
   };
 
@@ -159,9 +147,6 @@ namespace klee {
 
     double getWeight(ExecutionState*);
 
-  protected:
-    ExecutionState &selectState();
-
   public:
     /// \param type The WeightType that determines the underlying heuristic.
     /// \param RNG A random number generator.
@@ -212,87 +197,6 @@ namespace klee {
     void printName(llvm::raw_ostream &os) override;
   };
 
-  /**
-   * (iangneal): The heuristic driver for NVM-modifying states.
-   *
-   * Essentially, we want the most NVM successors.
-   */
-  class NvmPathSearcher : public Searcher {
-    /**
-     * The three fields are:
-     * 1. The execution state. Naturally.
-     * 2. The generation of the execution state.
-     * 3. The priority of the execution state.
-     *
-     * The "generation" is a way to prioritize coverage. If we fork some state,
-     * and it has a common post-dominator with the same successors, it is likely
-     * redundant to run, so it will be suspended until the current generation
-     * is over.
-     */
-    struct StatePriority {
-      ExecutionState *state;
-      size_t generation;
-      size_t priority;
-
-      StatePriority(ExecutionState *s, size_t g, size_t p) :
-          state(s), generation(g), priority(p) {}
-      /**
-       * Determine if LHS < RHS
-       * If the generation of rhs is higher, it has lower priority. If it has
-       * the same generation, the priority is lower by standard rules.
-       * To break ties, newer states have lower priority.
-       */
-      bool operator<(const StatePriority &other) const;
-    };
-
-    /**
-     * This is updated whenever we select a state.
-     */
-    size_t currentGen = 0;
-
-    std::priority_queue<StatePriority> statePriorities;
-
-    std::unordered_set<ExecutionState*> removed;
-    ExecutionState *lastState;
-
-    std::unordered_map<ExecutionState*, bool> generateTest;
-    std::unordered_set<const llvm::BasicBlock*> covered;
-
-    /**
-     * Add execState to the queue. current used for generation calc.
-     */
-    void addState(ExecutionState *current, ExecutionState *execState);
-
-    /**
-     * Removes removed states from the queue only if they are selected as the 
-     * next state to run. Lazy removal.
-     */
-    ExecutionState* filterState(ExecutionState *);
-
-    /**
-     * Given the current state, see if a newly added state should go in a second
-     * generation.
-     * 
-     */
-    size_t calculateGeneration(ExecutionState *current, ExecutionState *added);
-
-  protected:
-    ExecutionState &selectState();
-
-  public:
-    NvmPathSearcher(Executor &_executor);
-    ~NvmPathSearcher();
-
-    void update(ExecutionState *current,
-                const std::vector<ExecutionState *> &addedStates,
-                const std::vector<ExecutionState *> &removedStates);
-    bool empty();
-    void printName(llvm::raw_ostream &os) {
-      os << "NvmPathSearcher\n";
-    }
-
-  };
-
   extern llvm::cl::opt<bool> UseIncompleteMerge;
   class MergeHandler;
   class MergingSearcher final : public Searcher {
@@ -304,9 +208,6 @@ namespace klee {
 
     /// States that have been paused by the 'pauseState' function
     std::vector<ExecutionState*> pausedStates;
-
-    protected:
-    ExecutionState &selectState();
 
     public:
     /// \param baseSearcher The underlying searcher (takes ownership).
@@ -352,8 +253,6 @@ namespace klee {
     ExecutionState *lastState {nullptr};
     time::Point lastStartTime;
     unsigned lastStartInstructions;
-  protected:
-    ExecutionState &selectState();
 
   public:
     /// \param baseSearcher The underlying searcher (takes ownership).
@@ -380,9 +279,6 @@ namespace klee {
     time::Point startTime;
     time::Span time {time::seconds(1)};
     std::set<ExecutionState*> pausedStates;
-
-  protected:
-    ExecutionState &selectState();
 
   public:
     /// \param baseSearcher The underlying searcher (takes ownership).

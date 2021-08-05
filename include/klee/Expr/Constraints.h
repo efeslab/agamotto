@@ -11,7 +11,6 @@
 #define KLEE_CONSTRAINTS_H
 
 #include "klee/Expr/Expr.h"
-#include <unordered_set>
 
 namespace klee {
 
@@ -21,12 +20,7 @@ class ConstraintSet {
   friend class ConstraintManager;
 
 public:
-  struct Hash {
-    uint64_t operator()(const ref<Expr> &e) const {
-      return e->hash();
-    }
-  };
-  using constraints_ty = std::unordered_set<ref<Expr>, Hash>;
+  using constraints_ty = std::vector<ref<Expr>>;
   using iterator = constraints_ty::iterator;
   using const_iterator = constraints_ty::const_iterator;
 

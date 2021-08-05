@@ -324,32 +324,14 @@ void KModule::optimiseAndPrepare(
 
   // Add internal functions which are not used to check if instructions
   // have been already visited
-  if (opts.CheckDivZero) {
+  if (opts.CheckDivZero)
     addInternalFunction("klee_div_zero_check");
-    addInternalFunction("klee_div_one_check");
-  }
   if (opts.CheckOvershift)
     addInternalFunction("klee_overshift_check");
 
-  // Inject calls to all static library constructor functions.
   // Needs to happen after linking (since ctors/dtors can be modified)
   // and optimization (since global optimization can rewrite lists).
-
-  // If POSIX runtime is enabled, we want to run the ctors *after*
-  // klee_init_env (so they can use POSIX stuff if they want).
-  // So insert the call in that function instead of at the EntryPoint
-  // and instead of passing to uclibc's app_init.
-  if (module->getFunction("__klee_posix_ctor_stub_insert_point")) {
-    injectStaticConstructorsAndDestructors(module.get(),
-                                           "__klee_posix_ctor_stub_insert_point");
-  }
-  else if (opts.LibcMainFunction.empty()) {
-    injectStaticConstructorsAndDestructors(module.get(), opts.EntryPoint);
-  } else {
-    fillUclibcMainInitAndFiniArgs(module.get(),
-                                  opts.EntryPoint,
-                                  opts.LibcMainFunction);
-  }
+  injectStaticConstructorsAndDestructors(module.get(), opts.EntryPoint);
   
 
   // Finally, run the passes that maintain invariants we expect during
@@ -369,12 +351,6 @@ void KModule::optimiseAndPrepare(
   pm3.add(createScalarizerPass());
   pm3.add(new PhiCleanerPass());
   pm3.add(new FunctionAliasPass());
-
-  // if (opts.EnableNvmInfo) {
-  //   klee_warning("NVM info requires isolating call instructions to separate "
-  //                "basic blocks. Adding block-splitting pass...");
-  //   pm3.add(new IsolateCallInstsPass());
-  // }
 
   pm3.run(*module);
 }

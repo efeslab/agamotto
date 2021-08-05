@@ -82,7 +82,7 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor) {
       addConstraintInternal(e); // enable further reductions
       changed = true;
     } else {
-      constraints.insert(ce);
+      constraints.push_back(ce);
     }
   }
 
@@ -145,12 +145,12 @@ void ConstraintManager::addConstraintInternal(const ref<Expr> &e) {
 	rewriteConstraints(visitor);
       }
     }
-    constraints.insert(e);
+    constraints.push_back(e);
     break;
   }
 
   default:
-    constraints.insert(e);
+    constraints.push_back(e);
     break;
   }
 }

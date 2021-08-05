@@ -64,13 +64,7 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b, Module &M) {
         continue;
 
       switch (ii->getIntrinsicID()) {
-
-      //for now, just ignore instruction
-      case Intrinsic::x86_clwb:
-      case Intrinsic::x86_sse_sfence:
-        ii->eraseFromParent();
-        break;
-
+        
       case Intrinsic::vastart:
       case Intrinsic::vaend:
       case Intrinsic::fabs:
@@ -80,13 +74,15 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b, Module &M) {
 #endif
         break;
 
-        // Leave non-volatile memory intrinsics untouched.
-        // The interpreter will detect and act upon these.
+      // Erase persistent memory related intrinsics.
       case Intrinsic::x86_clflushopt:
       case Intrinsic::x86_clwb:
       case Intrinsic::x86_sse2_clflush:
       case Intrinsic::x86_sse2_mfence:
       case Intrinsic::x86_sse_sfence:
+      case Intrinsic::x86_sse2_pause:
+        ii->eraseFromParent();
+        dirty = true;
         break;
 
 #ifdef SUPPORT_CRC32
@@ -97,18 +93,6 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b, Module &M) {
       case Intrinsic::x86_sse42_crc32_64_64:
         break;
 #endif
-
-        // Probably safely ignorable.
-      case Intrinsic::x86_sse2_pause:
-        klee_warning_once(0, "Ignoring intrinsic function %s",
-                          ii->getName().str().c_str());
-        // intentional fallthrough
-
-        // Safely ignorable.
-      case Intrinsic::prefetch:
-        ii->eraseFromParent();
-        dirty = true;
-        break;
 
         // Lower vacopy so that object resolution etc is handled by
         // normal instructions.

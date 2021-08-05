@@ -57,9 +57,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
-#if LLVM_VERSION_CODE < LLVM_VERSION(8, 0)
 #include "llvm/IR/CallSite.h"
-#endif
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
@@ -304,7 +302,6 @@ cl::list<Executor::TerminateReason> ExitOnErrorType(
         clEnumValN(Executor::Free, "Free", "Freeing invalid memory"),
         clEnumValN(Executor::Model, "Model", "Memory model limit hit"),
         clEnumValN(Executor::Overflow, "Overflow", "An overflow occurred"),
-        clEnumValN(Executor::PMem, "PMem", "Persistent memory error"),
         clEnumValN(Executor::Ptr, "Ptr", "Pointer error"),
         clEnumValN(Executor::ReadOnly, "ReadOnly", "Write to read-only memory"),
         clEnumValN(Executor::ReportError, "ReportError",
@@ -467,7 +464,6 @@ const char *Executor::TerminateReasonNames[] = {
   [ Free ] = "free",
   [ Model ] = "model",
   [ Overflow ] = "overflow",
-  [ PMem ] = "pmem",
   [ Ptr ] = "ptr",
   [ ReadOnly ] = "readonly",
   [ ReportError ] = "reporterror",
@@ -483,8 +479,6 @@ const char *Executor::TerminateReasonNames[] = {
 Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
                    InterpreterHandler *ih)
     : Interpreter(opts), interpreterHandler(ih), searcher(0),
-      rootCauseMgr(new RootCauseManager()),
-      customCheckerHandler(nullptr),
       externalDispatcher(new ExternalDispatcher(ctx)), statsTracker(0),
       pathWriter(0), symPathWriter(0), specialFunctionHandler(0), timers{time::Span(TimerInterval)},
       replayKTest(0), replayPath(0), usingSeeds(0),
@@ -549,9 +543,6 @@ Executor::setModule(std::vector<std::unique_ptr<llvm::Module>> &modules,
                     const ModuleOptions &opts) {
   assert(!kmodule && !modules.empty() &&
          "can only register one module"); // XXX gross
-
-  modOpts = opts;
-  // klee_warning("Module options for NVM: %d => %d", opts.EnableNvmInfo, modOpts.EnableNvmInfo);
 
   kmodule = std::unique_ptr<KModule>(new KModule());
 
@@ -634,7 +625,7 @@ void Executor::initializeGlobalObject(ExecutionState &state, ObjectState *os,
   } else if (isa<ConstantAggregateZero>(c)) {
     unsigned i, size = targetData->getTypeStoreSize(c->getType());
     for (i=0; i<size; i++)
-      os->write8(state, offset+i, (uint8_t) 0);
+      os->write8(offset+i, (uint8_t) 0);
   } else if (const ConstantArray *ca = dyn_cast<ConstantArray>(c)) {
     unsigned elementSize =
       targetData->getTypeStoreSize(ca->getType()->getElementType());
@@ -663,7 +654,7 @@ void Executor::initializeGlobalObject(ExecutionState &state, ObjectState *os,
     if (StoreBits > C->getWidth())
       C = C->ZExt(StoreBits);
 
-    os->write(state, offset, C);
+    os->write(offset, C);
   }
 }
 
@@ -674,7 +665,7 @@ MemoryObject * Executor::addExternalObject(ExecutionState &state,
                                   size, nullptr);
   ObjectState *os = bindObjectInState(state, mo, false);
   for(unsigned i = 0; i < size; i++)
-    os->write8(state, i, ((uint8_t*)addr)[i]);
+    os->write8(i, ((uint8_t*)addr)[i]);
   if(isReadOnly)
     os->setReadOnly(true);
   return mo;
@@ -1018,7 +1009,7 @@ ref<Expr> Executor::maxStaticPctChecks(ExecutionState &current,
     return condition;
 
   StatisticManager &sm = *theStatisticManager;
-  CallPathNode *cpn = current.stack.back().callPathNode;
+  CallPathNode *cpn = current.stack().back().callPathNode;
 
   bool reached_max_fork_limit =
       (MaxStaticForkPct < 1. &&
@@ -1050,7 +1041,7 @@ ref<Expr> Executor::maxStaticPctChecks(ExecutionState &current,
     std::string msg("skipping fork and concretizing condition (MaxStatic*Pct "
                     "limit reached) at ");
     llvm::raw_string_ostream os(msg);
-    os << current.prevPC->getSourceLocation();
+    os << current.prevPC()->getSourceLocation();
     klee_warning_once(0, "%s", os.str().c_str());
 
     addConstraint(current, EqExpr::create(value, condition));
@@ -1437,14 +1428,14 @@ void Executor::printDebugInstructions(ExecutionState &state) {
   //   [src]     src location:asm line:state ID
   if (!DebugPrintInstructions.isSet(STDERR_COMPACT) &&
       !DebugPrintInstructions.isSet(FILE_COMPACT)) {
-    (*stream) << "     " << state.pc->getSourceLocation() << ':';
+    (*stream) << "     " << state.pc()->getSourceLocation() << ':';
   }
 
-  (*stream) << state.pc->info->assemblyLine << ':' << state.getID();
+  (*stream) << state.pc()->info->assemblyLine << ':' << state.getID();
 
   if (DebugPrintInstructions.isSet(STDERR_ALL) ||
       DebugPrintInstructions.isSet(FILE_ALL))
-    (*stream) << ':' << *(state.pc->inst);
+    (*stream) << ':' << *(state.pc()->inst);
 
   (*stream) << '\n';
 
@@ -1614,7 +1605,7 @@ void Executor::unwindToNextLandingpad(ExecutionState &state) {
     lowestStackIndex = 0;
     popFrames = false;
   } else if (auto *cui = dyn_cast<CleanupPhaseUnwindingInformation>(ui)) {
-    startIndex = state.stack.size() - 1;
+    startIndex = state.stack().size() - 1;
     lowestStackIndex = cui->catchingStackIndex;
     popFrames = true;
   } else {
@@ -1622,7 +1613,7 @@ void Executor::unwindToNextLandingpad(ExecutionState &state) {
   }
 
   for (std::size_t i = startIndex; i > lowestStackIndex; i--) {
-    auto const &sf = state.stack.at(i);
+    auto const &sf = state.stack().at(i);
 
     Instruction *inst = sf.caller ? sf.caller->inst : nullptr;
 
@@ -1668,15 +1659,15 @@ void Executor::unwindToNextLandingpad(ExecutionState &state) {
             kmodule->module->getFunction("_klee_eh_cxx_personality");
         KFunction *kf = kmodule->functionMap[personality_fn];
 
-        state.pushFrame(state.prevPC, kf);
-        state.pc = kf->instructions;
+        state.pushFrame(state.prevPC(), kf);
+        state.pc() = kf->instructions;
         bindArgument(kf, 0, state, sui->exceptionObject);
         bindArgument(kf, 1, state, clauses_mo->getSizeExpr());
         bindArgument(kf, 2, state, clauses_mo->getBaseExpr());
 
         if (statsTracker) {
           statsTracker->framePushed(state,
-                                    &state.stack[state.stack.size() - 2]);
+                                    &state.stack()[state.stack().size() - 2]);
         }
 
         // make sure we remember our search progress afterwards
@@ -1930,7 +1921,6 @@ void Executor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
         return;
       }
 
-      StackFrame &sf = state.stack().back();
       // Only x86-32 and x86-64 are supported
       Expr::Width WordSize = Context::get().getPointerWidth();
       assert(((WordSize == Expr::Int32) || (WordSize == Expr::Int64)) &&
@@ -2013,7 +2003,7 @@ void Executor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
         }
       }
 
-      StackFrame &sf = state.stack.back();
+      StackFrame &sf = state.stack().back();
       MemoryObject *mo = sf.varargs =
           memory->allocate(size, true, false, state.prevPC()->inst,
                            (requires16ByteAlignment ? 16 : 8));
@@ -2313,22 +2303,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           }
 
           bindLocal(kcaller, state, result);
-
-          // (iangneal): update NVM allocation sites
-          if (state.nvmInfo() && 
-              result->getWidth() == Context::get().getPointerWidth() &&
-              utils::isNvmAllocationSite(kmodule->module.get(), kcaller->inst)) {
-            
-            if (ri->getFunction() == kmodule->module->getFunction("mmap") ||
-                ri->getFunction() == kmodule->module->getFunction("mmap64")) {
-              ObjectPair op;
-          
-              bool success;
-              assert(state.addressSpace.resolveOne(state, solver, result, op, success));
-              assert(success);
-              executeUpdateNvmInfo(state, kcaller, op.second);
-            }
-          }
         }
       } else {
         // We check that the return value has no users instead of
@@ -2591,11 +2565,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     unsigned numArgs = cs.arg_size();
     Function *f = getTargetFunction(fp, state);
     InlineAsm *ia = nullptr;
-
-    // (iangneal): It helps NVM heuristics to resolve function pointers.
-    if (state.nvmInfo()) {
-      state.nvmInfo()->resolveFunctionCall(ki, f);
-    }
 
     // (iangneal): there's some inline assembly we want to run!
     if ((ia = dyn_cast<InlineAsm>(fp))) {
@@ -2946,9 +2915,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   case Instruction::Store: {
     ref<Expr> base = eval(ki, 1, state).value;
     ref<Expr> value = eval(ki, 0, state).value;
-    bool isNontemporal =
-      ki->inst->getMetadata(LLVMContext::MD_nontemporal) != nullptr;
-    executeMemoryOperation(state, true, base, value, 0, isNontemporal);
+    executeMemoryOperation(state, true, base, value, 0);
     break;
   }
 
@@ -3465,7 +3432,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     ref<ConstantExpr> selectorValue;
 
     // check on which frame we are currently
-    if (state.stack.size() - 1 == cui->catchingStackIndex) {
+    if (state.stack().size() - 1 == cui->catchingStackIndex) {
       // we are in the target stack frame, return the selector value
       // that was returned by the personality fn in phase 1 and stop unwinding.
       selectorValue = cui->selectorValue;
@@ -3512,21 +3479,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 }
 
 void Executor::updateStates(ExecutionState *current) {
-  /**
-   * (iangneal): Update the heuristic first, so that the priorities are up
-   * to date for the NvmPathSearcher.
-   */ 
-  if (current && current->nvmInfo()) {
-    std::vector<ExecutionState*> toUpdate;
-    toUpdate.push_back(current);
-    toUpdate.insert(toUpdate.end(), addedStates.begin(), addedStates.end());
-
-    for (ExecutionState *s : toUpdate) {
-      assert(s && s->nvmInfo());
-      s->nvmInfo()->stepState(s, s->prevPC(), s->pc());
-    }
-  }
-  
   if (searcher) {
     searcher->update(current, addedStates, removedStates);
   }
@@ -3684,16 +3636,6 @@ void Executor::doDumpStates() {
   updateStates(nullptr);
 }
 
-void Executor::dumpRootCauses() {
-  auto textPtr = interpreterHandler->openOutputFile("all.pmem.err");
-  auto csvPtr = interpreterHandler->openOutputFile("all_pmem_errs.csv");
-  assert(textPtr && csvPtr && "could not open files!");
-  
-  interpreterHandler->getInfoStream() << rootCauseMgr->getSummary();
-  rootCauseMgr->dumpText(*textPtr);
-  rootCauseMgr->dumpCSV(*csvPtr);
-}
-
 void Executor::run(ExecutionState &initialState) {
   bindModuleConstants();
 
@@ -3715,7 +3657,6 @@ void Executor::run(ExecutionState &initialState) {
     while (!seedMap.empty()) {
       if (haltExecution) {
         doDumpStates();
-        dumpRootCauses();
         return;
       }
 
@@ -3729,10 +3670,6 @@ void Executor::run(ExecutionState &initialState) {
       stepInstruction(state);
 
       executeInstruction(state, ki);
-      if (EnableCustomCheckers) {
-        assert(customCheckerHandler);
-        customCheckerHandler->handle(state);
-      }
       timers.invoke();
       if (::dumpStates) dumpStates();
       if (::dumpPTree) dumpPTree();
@@ -3777,20 +3714,15 @@ void Executor::run(ExecutionState &initialState) {
 
   // main interpreter loop
   while (!states.empty() && !haltExecution) {
-    if (!searcher->empty()) {
-      ExecutionState &state = searcher->selectStateAndUpdateInfo();
-      KInstruction *ki = state.pc();
-      stepInstruction(state);
+    ExecutionState &state = searcher->selectState();
+    KInstruction *ki = state.pc();
+    stepInstruction(state);
 
-      executeInstruction(state, ki);
-      if (EnableCustomCheckers) {
-        assert(customCheckerHandler);
-        customCheckerHandler->handle(state);
-      }
+    executeInstruction(state, ki);
 
-      timers.invoke();
-      if (::dumpStates) dumpStates();
-      if (::dumpPTree) dumpPTree();
+    timers.invoke();
+    if (::dumpStates) dumpStates();
+    if (::dumpPTree) dumpPTree();
 
     updateStates(&state);
 
@@ -3804,11 +3736,10 @@ void Executor::run(ExecutionState &initialState) {
   searcher = nullptr;
 
   doDumpStates();
-  dumpRootCauses();
 }
 
 std::string Executor::getAddressInfo(ExecutionState &state,
-                                     ref<Expr> address) const{
+                                     ref<Expr> address) const {
   std::string Str;
   llvm::raw_string_ostream info(Str);
   info << "\taddress: " << address << "\n";
@@ -3895,21 +3826,9 @@ void Executor::terminateStateEarly(ExecutionState &state,
   terminateState(state);
 }
 
-void Executor::terminateStateEarlyPmem(ExecutionState &state) {
-  // (iangneal): Sometimes, a program can forget to call close or unmap.
-  // We need to ensure that the persistence of a program is checked at least
-  // once.
-  std::unordered_set<std::string> errors;
-  if (getAllPersistenceErrors(state, errors)) {
-    terminateStateOnPmemError(state, errors);
-  } else {
-    terminateState(state);
-  }
-}
-
 void Executor::terminateStateOnExit(ExecutionState &state) {
   if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
-      (AlwaysOutputSeeds && seedMap.count(&state))) {
+      (AlwaysOutputSeeds && seedMap.count(&state)))
     interpreterHandler->processTestCase(state, 0, 0);
   interpreterHandler->incPathsCompleted();
   terminateState(state);
@@ -4022,62 +3941,6 @@ void Executor::terminateStateOnError(ExecutionState &state,
   if (shouldExitOn(termReason))
     haltExecution = true;
 }
-
-void Executor::emitPmemError(ExecutionState &state,
-                             const std::unordered_set<std::string> &errors) {
-  Instruction * lastInst;
-  const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
-
-  assert(errors.size() && "no errors to terminate with!");
-
-  std::string info_str;
-  llvm::raw_string_ostream info(info_str);
-
-  for (const std::string &err : errors) {
-    if (pmemErrorDescriptions.insert(err).second) {
-      if (ii.file != "") {
-        klee_message("ERROR: %s:%d: %s", ii.file.c_str(), ii.line, TerminateReasonNames[TerminateReason::PMem]);
-      } else {
-        klee_message("ERROR: (location information missing) %s", TerminateReasonNames[TerminateReason::PMem]);
-      }
-
-      info << pmemErrorDescriptions.size() << ") " << err << "\n";
-    }
-  }
-
-  if (info.str() != "") {
-    std::string MsgString;
-    llvm::raw_string_ostream msg(MsgString);
-    msg << "Error: persistent memory violation!\n";
-    if (ii.file != "") {
-      msg << "File: " << ii.file << "\n";
-      msg << "Line: " << ii.line << "\n";
-      msg << "assembly.ll line: " << ii.assemblyLine << "\n";
-    }
-    msg << "Stack: \n";
-    state.dumpStack(msg);
-
-    msg << "Errors: \n" << info.str();
-
-    std::string suffix_buf;
-    suffix_buf = TerminateReasonNames[TerminateReason::PMem];
-    suffix_buf += ".err";
-
-    interpreterHandler->processTestCase(state, msg.str().c_str(), suffix_buf.c_str());
-  }  
-}
-
-void Executor::terminateStateOnPmemError(ExecutionState &state,
-                                         const std::unordered_set<std::string> &errors) {
-
-  emitPmemError(state, errors);
-  terminateState(state);
-
-  if (shouldExitOn(TerminateReason::PMem)) {
-    haltExecution = true;
-  }
-}
-
 
 // XXX shoot me
 static const char *okExternalsList[] = { "printf",
@@ -4289,7 +4152,7 @@ void Executor::executeAlloc(ExecutionState &state,
       if (reallocFrom) {
         unsigned count = std::min(reallocFrom->size, os->size);
         for (unsigned i=0; i<count; i++)
-          os->write(state, i, reallocFrom->read8(i));
+          os->write(i, reallocFrom->read8(i));
         state.addressSpace.unbindObject(reallocFrom->getObject());
       }
     }
@@ -4444,8 +4307,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                                       bool isWrite,
                                       ref<Expr> address,
                                       ref<Expr> value /* undef if read */,
-                                      KInstruction *target /* undef if write */,
-                                      bool isNontemporal /* false if read */) {
+                                      KInstruction *target /* undef if write */) {
   Expr::Width type = (isWrite ? value->getWidth() :
                      getWidthForLLVMType(target->inst->getType()));
   unsigned bytes = Expr::getMinBytesForWidth(type);
@@ -4463,16 +4325,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                                 ReadOnly);
         } else {
           ObjectState *wos = state.addressSpace.getWriteable(mo, os);
-          wos->write(state, offset, value);
-          if (PersistentState *ps = dyn_cast<PersistentState>(wos)) {
-            if (isNontemporal) {
-              // llvm::errs() << "nontemporal store! " << mo->address << ": " << *offset << "\n";
-
-              // Nontemporal writes don't dirty the cache, but they must
-              // still cause an error until a fence happens.
-              ps->persistCacheLineAtOffset(state, offset);
-            }
-          }
+          wos->write(offset, value);
         }
       } else {
         ref<Expr> result = os->read(offset, type);
@@ -4529,7 +4382,6 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     if (inBounds) {
       const ObjectState *os = op.second;
-      executeUpdateNvmInfo(state, state.prevPC(), os);
       // Actually do the read or write
       doOperation(state, mo, os, offset);
       return;
@@ -4559,7 +4411,6 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     // bound can be 0 on failure or overlapped
     if (bound) {
-      executeUpdateNvmInfo(state, state.prevPC(), os);
       // Actually do the read or write
       doOperation(*bound, mo, os, mo->getOffsetExpr(address));
     }
@@ -4578,274 +4429,6 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                             NULL, getAddressInfo(*unbound, address));
     }
   }
-}
-
-void Executor::executeMarkPersistent(ExecutionState &state,
-                                     ref<ConstantExpr> address) {
-  ObjectPair op;
-  if (!state.addressSpace.resolveOne(address, op)) {
-    klee_error("could not resolve address of persistent variable.");
-  }
-
-  const MemoryObject *mo = op.first;
-  executeMarkPersistent(state, mo);
-}
-
-void Executor::executeMarkPersistent(ExecutionState &state,
-                                     const MemoryObject *mo) {
-  state.persistentObjects.insert(mo);
-
-  const ObjectState *os = state.addressSpace.findObject(mo);
-  assert(os && "Cannot mark unbound MemoryObject persistent");
-
-  // Construct a persistent ObjectState and bind it to the memory object.
-  state.addressSpace.bindObject(mo, new PersistentState(solver, state, os));
-
-  /* std::string name; */
-  /* mo->getAllocInfo(name); */
-  /* klee_message("Found non-volatile memory pointer: %s", name.c_str()); */
-  /* klee_message("NVM pointer is at: %p", mo->address); */
-}
-
-bool Executor::isPersistentMemory(ExecutionState &state, const MemoryObject *mo) {
-  // for (const MemoryObject* m : state.persistentObjects) {
-  //   klee_warning("(isPersistentMemory) MemoryObject %p points to %p", m, (void*)m->address);
-  // }
-  if (state.persistentObjects.count(mo)) {
-    const ObjectState *os = state.addressSpace.findObject(mo);
-    // klee_warning("Checking if %p is persistent memory", (void*)mo->address);
-    assert(dyn_cast<PersistentState>(os) != nullptr &&
-           "MemoryObject marked persistent but not bound to any PersistentState");
-    return true;
-  }
-  return false;
-}
-
-void Executor::executeUpdateNvmInfo(ExecutionState &state, 
-                                    KInstruction *loc, 
-                                    const ObjectState *cos) {
-  if (state.nvmInfo() && loc && cos) {
-    assert(cos->getObject() && "I don't know what to do!");
-    if (!cos->getObject()->allocSite) {
-      // errs() << __func__ << " object: " << cos->getObject()->name << "\n";
-      // errs() << __func__ << " usage: " << *loc->inst << " @ " << loc->inst->getFunction()->getName() << "\n";
-      return;
-    }
-    assert(cos->getObject()->allocSite && "What do we do if alloc site is null???");
-    if (isa<AllocaInst>(cos->getObject()->allocSite)) {
-      return;
-    }
-    if (isa<LoadInst>(loc->inst)) return;
-    state.nvmInfo()->updateCurrentState(&state, loc, isa<PersistentState>(cos));
-  }
-}
-
-void Executor::executePersistentMemoryFlush(ExecutionState &state,
-                                            const MemoryObject *mo,
-                                            PersistentState *ps,
-                                            ref<Expr> offset) {
-  // Check if offset already flushed.
-  ref<Expr> check = ps->getIsOffsetPersistedExpr(offset,
-                                                 true /* allow pending */);
-  bool isAlreadyPersisted;
-  bool success = solver->mustBeTrue(state, check, isAlreadyPersisted);
-  assert(success && "FIXME: Unhandled solver failure");
-
-  // Warn if already flushed, otherwise process normally.
-  if (isAlreadyPersisted) {
-    // klee_warning("Unnecessary Flush");
-    // errs() << mo->address << ": " << *offset << "\n";
-    // avoid masking later bugs; emit error, but continue
-    std::unordered_set<std::string> errStrs;
-    errStrs.insert(rootCauseMgr->getRootCauseString(ps->markFlushAsBug(state, offset)));
-
-    emitPmemError(state, errStrs);
-  } else {
-    // klee_warning("Good Flush");
-    // errs() << mo->address << ": " << *offset << "\n";
-    // state.dumpStack();
-    ps->persistCacheLineAtOffset(state, offset);
-  }
-}
-
-void Executor::executePersistentMemoryFlush(ExecutionState &state,
-                                            ref<Expr> address) {
-  address = optimizer.optimizeExpr(address, true);
-
-  ref<Expr> rangeBegin = memory->alignToCache(address);
-  ref<Expr> rangeEnd = AddExpr::create(rangeBegin,
-                                       memory->getCacheAlignmentExpr());
-
-  ResolutionList rl;
-  solver->setTimeout(coreSolverTimeout);
-  bool incomplete = state.addressSpace.resolveRange(state, solver,
-                                                    rangeBegin, rangeEnd,
-                                                    rl, 0, coreSolverTimeout);
-  solver->setTimeout(time::Span());
-
-  // XXX bgreeves debugging
-  /* std::string msg; */
-  /* llvm::raw_string_ostream out(msg); */
-  /* out << "ResolutionList[size=" << rl.size() << "]: "; */
-  /* for (ResolutionList::iterator i = rl.begin(), ie = rl.end(); i != ie; ++i) { */
-  /*   const MemoryObject *mo = i->first; */
-  /*   out << mo->name << "["; */
-  /*   out.write_hex(mo->address); */
-  /*   out << "] "; */
-  /* } */
-  /* klee_warning("%s", out.str().c_str()); */
-
-  if (incomplete) {
-    terminateStateEarly(state, "Query timed out (resolve).");
-  } else if (rl.empty()) {
-    terminateStateOnError(state, "memory error: out of bound pointer", Ptr,
-                          NULL, getAddressInfo(state, address));
-    return;
-  }
-
-  for (ResolutionList::iterator i = rl.begin(), ie = rl.end(); i != ie; ++i) {
-    const MemoryObject *mo = i->first;
-    const ObjectState *os = i->second;
-    if (isPersistentMemory(state, mo)) {
-      ObjectState *wos = state.addressSpace.getWriteable(mo, os);
-      PersistentState *ps = dyn_cast<PersistentState>(wos);
-
-      // We found this MemoryObject by resolving within a range;
-      // the actual address we're flushing may not fall within the
-      // bounds of the object.
-      // If address < object base, then the object's *first* cache line
-      // still overlaps with the cache line being flushed.
-      // If offset >= object size, then the object's *last* cache line
-      // still overlaps with the cache line being flushed.
-
-      // If address less than object base, flush offset 0
-      ref<Expr> check = UltExpr::create(address, mo->getBaseExpr());
-      StatePair result = fork(state, check, true);
-      ExecutionState *less = result.first;
-      ExecutionState *remaining = result.second;
-      if (less) {
-        ref<Expr> firstByte = ConstantExpr::create(0, Expr::Int32);
-        executePersistentMemoryFlush(*less, mo, ps, firstByte);
-      }
-
-      // Definitely less than?
-      if (!remaining)
-        continue;
-
-      ref<Expr> offset = mo->getOffsetExpr(address);
-
-      // If offset >= size, flush the last offset
-      check = UgeExpr::create(offset, mo->getSizeExpr());
-      result = fork(*remaining, check, true);
-      ExecutionState *greater = result.first;
-      remaining = result.second;
-      if (greater) {
-        ref<Expr> lastByte = ConstantExpr::create(mo->size - 1, Expr::Int32);
-        executePersistentMemoryFlush(*greater, mo, ps, lastByte);
-      }
-
-      // Definitely not in bounds?
-      if (!remaining)
-        continue;
-
-      executePersistentMemoryFlush(*remaining, mo, ps, offset);
-
-    } else {
-      if (ConstantExpr *CE = dyn_cast<ConstantExpr>(address)) {
-        klee_warning("Flushing volatile memory at address %lx",
-                     CE->getZExtValue());
-      } else {
-        klee_warning("Flushing volatile memory at symbolic address");
-      }
-    }
-  }
-}
-
-void Executor::executePersistentMemoryFence(ExecutionState &state) {
-  // llvm::errs() << "Fence\n";
-  bool fenceNecessary = false;
-  for (const MemoryObject *mo : state.persistentObjects) {
-    const ObjectState *os = state.addressSpace.findObject(mo);
-    assert(os);
-    ObjectState *wos = state.addressSpace.getWriteable(mo, os);
-    PersistentState *ps = dyn_cast<PersistentState>(wos);
-    bool commitNecessary = ps->commitPendingPersists(state);
-    // Only one needs to be true to make the commit necessary.
-    // I like doing this as a separate statement to avoid short circuit issues.
-    fenceNecessary = commitNecessary || fenceNecessary;
-  }
-
-  if (!fenceNecessary) {
-    auto id = rootCauseMgr->getRootCauseLocationID(state, nullptr, 
-                                                   state.prevPC(), 
-                                                   PM_UnnecessaryFence);
-    rootCauseMgr->markAsBug(id);
-    std::unordered_set<std::string> errs;
-    errs.insert(rootCauseMgr->getRootCauseString(id));
-    emitPmemError(state, errs);
-  }
-}
-
-std::unordered_set<uint64_t> 
-Executor::markPersistenceErrors(ExecutionState &state, 
-                                const MemoryObject *mo,
-                                const PersistentState *ps) {
-  // Get a symbolic offset into the object and constrain it to be within
-  // the object's bounds.
-  auto anyOffset = ps->getAnyOffsetExpr();
-  auto inBoundsConstraint = mo->getBoundsCheckOffset(anyOffset);
-  state.constraints.addConstraint(inBoundsConstraint);
-
-  bool isPersisted = true;
-  bool success = solver->mustBeTrue(state, ps->getIsOffsetPersistedExpr(anyOffset),
-                                    isPersisted);
-  assert(success && "FIXME: Unhandled solver failure");
-
-  state.constraints.removeConstraint(inBoundsConstraint);
-
-  if (!isPersisted) {
-    return ps->markNonPersistedWritesAsBugs(state);
-  }
-
-  return std::unordered_set<uint64_t>();
-}
-
-bool Executor::getPersistenceErrors(ExecutionState &state,
-                                    const MemoryObject *mo,
-                                    std::unordered_set<std::string> &errors) {
-
-  const ObjectState *os = state.addressSpace.findObject(mo);
-  assert(os);
-  const PersistentState *ps = dyn_cast<PersistentState>(os);
-  assert(ps);
-
-  auto rootCauses = markPersistenceErrors(state, mo, ps);
-
-  if (rootCauses.empty()) return false;
-
-  for (auto id : rootCauses) {
-    errors.insert(rootCauseMgr->getRootCauseString(id));
-  }
-
-  return true;
-}
-
-bool Executor::getAllPersistenceErrors(ExecutionState &state,
-                                       std::unordered_set<std::string> &errors) {
-  bool hasErr = false;
-  if (state.persistentObjects.size()) {
-    for (const MemoryObject *mo : state.persistentObjects) {
-      if (haltExecution) {
-        klee_warning("Halting execution while solving for persistence errors. "
-                     "Results will be incomplete.");
-        return hasErr;
-      }
-      bool objHasErr = getPersistenceErrors(state, mo, errors);
-      hasErr = hasErr || objHasErr;
-    }
-  }
-
-  return hasErr;
 }
 
 /* Multi-threading related function */                                           
@@ -4919,16 +4502,6 @@ void Executor::executeThreadExit(ExecutionState &state) {
                                                                                   
   if (!schedule(state, false))                                                   
     return;
-
-  /**
-   * Currently, thread scheduling only occurs at synchronization points.
-   * It makes sense to me that if a thread has unpersisted writes between
-   * synchronization points, something may be wrong.
-   */
-  std::unordered_set<std::string> errors;
-  if (getAllPersistenceErrors(state, errors)) {
-    emitPmemError(state, errors);
-  }
                                                              
   state.terminateThread(thrIt);                                                  
 }   
@@ -5002,7 +4575,7 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
         terminateStateOnError(state, "replay size mismatch", User);
       } else {
         for (unsigned i=0; i<mo->size; i++)
-          os->write8(state, i, obj->bytes[i]);
+          os->write8(i, obj->bytes[i]);
       }
     }
   }
@@ -5058,7 +4631,7 @@ void Executor::runFunctionAsMain(Function *f,
     }
   }
 
-  ExecutionState *state = new ExecutionState(kmodule->functionMap[f]);
+  ExecutionState *state = new ExecutionState(this, kmodule->functionMap[f]);
 
   if (pathWriter) 
     state->pathOS = pathWriter->open();
@@ -5078,7 +4651,7 @@ void Executor::runFunctionAsMain(Function *f,
     for (int i=0; i<argc+1+envc+1+1; i++) {
       if (i==argc || i>=argc+1+envc) {
         // Write NULL pointer
-        argvOS->write(*state, i * NumPtrBytes, Expr::createPointer(0));
+        argvOS->write(i * NumPtrBytes, Expr::createPointer(0));
       } else {
         char *s = i<argc ? argv[i] : envp[i-(argc+1)];
         int j, len = strlen(s);
@@ -5090,19 +4663,15 @@ void Executor::runFunctionAsMain(Function *f,
           klee_error("Could not allocate memory for function arguments");
         ObjectState *os = bindObjectInState(*state, arg, false);
         for (j=0; j<len+1; j++)
-          os->write8(*state, j, s[j]);
+          os->write8(j, s[j]);
 
         // Write pointer to newly allocated and initialised argv/envp c-string
-        argvOS->write(*state, i * NumPtrBytes, arg->getBaseExpr());
+        argvOS->write(i * NumPtrBytes, arg->getBaseExpr());
       }
     }
   }
 
   initializeGlobals(*state);
-
-  if (EnableCustomCheckers) {
-    customCheckerHandler.reset(new CustomCheckerHandler(*this));
-  }
 
   processTree = std::make_unique<PTree>(state);
   run(*state);
@@ -5223,8 +4792,8 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
   // The program may have written to parts of the symbolic memory object,
   // so our output should reflect those changes.
   for (unsigned i = 0; i != state.symbolics.size(); ++i) {
-    const MemoryObject *mo = state.symbolics[i].first;
-    const ObjectState *os = state.addressSpace.findObject(mo);
+    ref<const MemoryObject> mo = state.symbolics[i].first;
+    const ObjectState *os = state.addressSpace.findObject(mo.get());
     if (!os)
       continue;
 
@@ -5282,7 +4851,7 @@ void Executor::doImpliedValueConcretization(ExecutionState &state,
         assert(!os->readOnly &&
                "not possible? read only object with static read?");
         ObjectState *wos = state.addressSpace.getWriteable(mo, os);
-        wos->write(state, CE, it->second);
+        wos->write(CE, it->second);
       }
     }
   }

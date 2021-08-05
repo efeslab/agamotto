@@ -23,9 +23,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "../Core/UserSearcher.h"
 #include "Executor.h"
-#include "RootCause.h"
+#include "UserSearcher.h"
 
 #include <cassert>
 #include <ctime>
@@ -52,23 +51,23 @@ std::uint32_t ExecutionState::nextID = 1;
 
 /***/
 
-StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
-  : caller(_caller), kf(_kf), callPathNode(0), 
-    minDistToUncoveredOnReturn(0), varargs(0) {
-  locals = new Cell[kf->numRegisters];
-}
+// StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
+//   : caller(_caller), kf(_kf), callPathNode(0), 
+//     minDistToUncoveredOnReturn(0), varargs(0) {
+//   locals = new Cell[kf->numRegisters];
+// }
 
-StackFrame::StackFrame(const StackFrame &s) 
-  : caller(s.caller),
-    kf(s.kf),
-    callPathNode(s.callPathNode),
-    allocas(s.allocas),
-    minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn),
-    varargs(s.varargs) {
-  locals = new Cell[s.kf->numRegisters];
-  for (unsigned i=0; i<s.kf->numRegisters; i++)
-    locals[i] = s.locals[i];
-}
+// StackFrame::StackFrame(const StackFrame &s) 
+//   : caller(s.caller),
+//     kf(s.kf),
+//     callPathNode(s.callPathNode),
+//     allocas(s.allocas),
+//     minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn),
+//     varargs(s.varargs) {
+//   locals = new Cell[s.kf->numRegisters];
+//   for (unsigned i=0; i<s.kf->numRegisters; i++)
+//     locals[i] = s.locals[i];
+// }
 
 void ExecutionState::setupMain(KFunction *kf) {
   // single process, make its id always be 0
@@ -96,11 +95,6 @@ ExecutionState::ExecutionState(Executor *executor, KFunction *kf) :
   setID();
 }
 
-ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
-  : wlistCounter(1), 
-    constraints(assumptions),
-    ptreeNode(0) {}
-
 ExecutionState::~ExecutionState() {
   for (threads_ty::value_type &tit: threads) {
     Thread &t = tit.second;
@@ -113,35 +107,21 @@ ExecutionState::~ExecutionState() {
 }
 
 ExecutionState::ExecutionState(const ExecutionState& state):
-    pc(state.pc),
-    prevPC(state.prevPC),
-    stack(state.stack),
-    incomingBBIndex(state.incomingBBIndex),
-    depth(state.depth),
     addressSpace(state.addressSpace),
+    depth(state.depth),
     constraints(state.constraints),
     threads(state.threads),
     waitingLists(state.waitingLists),
     wlistCounter(state.wlistCounter),
     stateTime(state.stateTime),
-
-    rootCauseMgr(state.rootCauseMgr),
-
-    addressSpace(state.addressSpace),
-    constraints(state.constraints),
-
-    depth(state.depth),
-
     pathOS(state.pathOS),
     symPathOS(state.symPathOS),
     coveredLines(state.coveredLines),
     symbolics(state.symbolics),
-    persistentObjects(state.persistentObjects),
     arrayNames(state.arrayNames),
     openMergeStack(state.openMergeStack),
     steppedInstructions(state.steppedInstructions),
-    executor_(state.executor_)
-{
+    executor_(state.executor_),
     instsSinceCovNew(state.instsSinceCovNew),
     unwindingInformation(state.unwindingInformation
                              ? state.unwindingInformation->clone()
@@ -162,17 +142,6 @@ ExecutionState *ExecutionState::branch() {
   falseState->coveredLines.clear();
 
   return falseState;
-}
-
-void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {
-  stack.emplace_back(StackFrame(caller, kf));
-}
-
-void ExecutionState::popFrame() {
-  const StackFrame &sf = stack.back();
-  for (const auto * memoryObject : sf.allocas)
-    addressSpace.unbindObject(memoryObject);
-  stack.pop_back();
 }
 
 void ExecutionState::addSymbolic(const MemoryObject *mo, const Array *array) {
@@ -344,7 +313,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
     for (unsigned i=0; i<mo->size; i++) {
       ref<Expr> av = wos->read8(i);
       ref<Expr> bv = otherOS->read8(i);
-      wos->write(*this, i, SelectExpr::create(inA, av, bv));
+      wos->write(i, SelectExpr::create(inA, av, bv));
     }
   }
 
@@ -364,7 +333,7 @@ void ExecutionState::pushFrame(Thread &t, KInstIterator caller, KFunction *kf) {
 }
 
 void ExecutionState::popFrame(Thread &t) {
-  StackFrame &sf = t.stack().back();
+  StackFrame &sf = t.stack.back();
   for (std::vector<const MemoryObject*>::iterator it = sf.allocas.begin(), 
          ie = sf.allocas.end(); it != ie; ++it) {
     const MemoryObject *mo = *it;
@@ -373,45 +342,20 @@ void ExecutionState::popFrame(Thread &t) {
     addressSpace.unbindObject(mo);
   }
   
-  t.stack().pop_back();
+  t.stack.pop_back();
 }
 
 void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
-  unsigned idx = 0;
-  const KInstruction *target = prevPC;
-  for (ExecutionState::stack_ty::const_reverse_iterator
-         it = stack.rbegin(), ie = stack.rend();
-       it != ie; ++it) {
-    const StackFrame &sf = *it;
-    Function *f = sf.kf->function;
-    const InstructionInfo &ii = *target->info;
-    out << "\t#" << idx++;
-    std::stringstream AssStream;
-    AssStream << std::setw(8) << std::setfill('0') << ii.assemblyLine;
-    out << AssStream.str();
-    out << " in " << f->getName().str() << " (";
-    // Yawn, we could go up and print varargs if we wanted to.
-    unsigned index = 0;
-    for (Function::arg_iterator ai = f->arg_begin(), ae = f->arg_end();
-         ai != ae; ++ai) {
-      if (ai!=f->arg_begin()) out << ", ";
-
-      out << ai->getName().str();
-      // XXX should go through function
-      ref<Expr> value = sf.locals[sf.kf->getArgRegister(index++)].value;
-      if (isa_and_nonnull<ConstantExpr>(value))
-        out << "=" << value;
-    }
-    addressSpace.unbindObject(mo);
+  out << "Current Thread: " << crtThread().tuid.first << '\n';
+  for (const threads_ty::value_type &tit : threads) {
+    tit.second.dumpStack(out);
   }
-  
-  t.stack.pop_back();
 }
 
 /* Multithreading related function  */
 Thread &ExecutionState::createThread(thread_id_t tid, KFunction *kf) {
   // we currently assume there is only one process and its id is 0
-  Thread newThread = Thread(tid, 0, NvmHeuristicBuilder::copy(nvmInfo()), kf);
+  Thread newThread = Thread(tid, 0, kf);
   
   std::pair<threads_ty::iterator, bool> res =
       threads.insert(std::make_pair(newThread.tuid, newThread));
@@ -470,16 +414,8 @@ void ExecutionState::notifyAll(wlist_id_t wlist) {
   waitingLists.erase(wlist);
 }
 
-/* Debugging helper */
-void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
-  out << "Current Thread: " << crtThread().tuid.first << '\n';
-  for (const threads_ty::value_type &tit : threads) {
-    tit.second.dumpStack(out);
-  }
-}
-
 void ExecutionState::dumpConstraints(llvm::raw_ostream &out) const {
-  for (ConstraintManager::const_iterator i = constraints.begin();
+  for (ConstraintSet::const_iterator i = constraints.begin();
       i != constraints.end(); i++) {
     out << '*';
     (*i)->print(out);
