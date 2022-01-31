@@ -326,6 +326,29 @@ This should provide output similar to the following:
 Number of unique reproduced bugs: 5
 ```
 
+### 5. Manually inspecting <span style="font-variant:small-caps;">Agamotto</span>'s output
+
+If you would like to inspect 
+
+For example, if we want to look at the bottom for each stack frame for all bugs found in `memcached-pmem`, we could run the following commands (assumes you have already run the `memcached-pmem` test):
+
+```sh
+cd artifacts/results
+python3
+> import pandas as pd
+> df = pd.read_csv('klee-memcached-static/all_pmem_errs.csv')
+> df['StackFrame0'].unique()
+
+array(['do_item_link_q at items.c:423', 'lru_pull_tail at items.c:1176',
+       'do_item_unlink_q at items.c:469', 'do_item_update at items.c:626',
+       'assoc_delete at assoc.c:197', 'do_item_remove at items.c:591',
+       'do_item_link at items.c:538',
+       'pmem_clwb at ../../src/../src/libpmem2/x86_64/flush.h:48', # This is the perf bug, which is at StackFrame4 at "do_item_link at items.c:516"
+       'do_slabs_free at slabs.c:540', 'do_slabs_free at slabs.c:550',
+       'do_item_unlink_q at items.c:470', 'do_item_link at items.c:541',
+       'do_item_link_q at items.c:421', 'assoc_insert at assoc.c:167',
+       'do_item_get at items.c:1023'], dtype=object)
+```
 
 [//]: # (Links below)
 
