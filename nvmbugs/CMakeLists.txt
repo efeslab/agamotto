@@ -7,7 +7,7 @@ find_package(PkgConfig REQUIRED)
 include(ProcessorCount)
 ProcessorCount(N)
 
-set(KLEE_FLAGS "-g -O1 -Xclang -disable-llvm-passes -D__NO_STRING_INLINES -DVALGRIND_ENABLED=0")
+set(KLEE_FLAGS "-g -O1 -Xclang -disable-llvm-passes -D__NO_STRING_INLINES -DVALGRIND_ENABLED=0 -Wno-error=unused-parameter")
 
 ################################################################################
 # Here, we download and build PMDK
@@ -22,7 +22,7 @@ set(PMDK_LIB_DIR ${PMDK_INSTALL_DIR}/lib/pmdk_debug)
 if(NOT EXISTS "${PMDK_ROOT_DIR}")
     message("no pmdk at ${PMDK_ROOT_DIR}")
     execute_process(COMMAND git clone https://github.com/pmem/pmdk.git ${PMDK_ROOT_DIR})
-    # execute_process(COMMAND git -C ${PMDK_ROOT_DIR} checkout tags/1.7)
+    execute_process(COMMAND git -C ${PMDK_ROOT_DIR} checkout tags/1.7)
     execute_process(COMMAND git -C ${PMDK_ROOT_DIR} checkout master)
 endif()
 
@@ -68,6 +68,7 @@ foreach(shared IN LISTS pmdk_libs)
 endforeach(shared)
 
 if((NOT EXISTS ${PMDK_INCLUDE_DIR}) OR (NOT EXISTS ${PMDK_LIB_DIR}))
+    execute_process(COMMAND rm -rf "${PMDK_ROOT_DIR}")
     message(FATAL_ERROR "PMDK build and installation failed!")
 endif()
 
