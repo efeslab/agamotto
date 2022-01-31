@@ -4,9 +4,11 @@
 This repository contains the code and experiments for the OSDI '20 paper 
 ["<span style="font-variant:small-caps;">Agamotto</span>: How Persistent is your Persistent Memory Application?"](https://www.usenix.org/conference/osdi20/presentation/neal) <span style="font-variant:small-caps;">Agamotto</span> is based on <span style="font-variant:small-caps;">Klee</span> (described below).
 
+[**Here are the instructions for running/using the OSDI'20 artifact.**](https://github.com/efeslab/agamotto/tree/artifact-eval-osdi20/artifact#agamotto-osdi-20-artifact)
+
 ## Core Additions and Layout
 
-`artifact/`: This directory contains all of the information needed to build <span style="font-variant:small-caps;">Agamotto</span> and reproduce the key results from the paper.
+`artifact/`: This directory contains all of the information needed to build <span style="font-variant:small-caps;">Agamotto</span> and reproduce the key results from the paper. This directory also contains a [README](https://github.com/efeslab/agamotto/tree/artifact-eval-osdi20/artifact#agamotto-osdi-20-artifact) with instructions explaining how to run and use the OSDI'20 Artifact.
 
 `lib/Core/NvmHeuristics.{cpp,h}`: This contains the core logic behind <span style="font-variant:small-caps;">Agamotto</span>'s search strategy.
 
