@@ -334,6 +334,7 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
         sym_file_descriptor_t *sfd = &fid.sym_files[fid.n_sym_files++];
         sfd->file_type = PURE_SYMBOLIC;
         sfd->file_size = sym_file_len;
+        sfd->pmem_type = NOT_PMEM;
       }
     } else if (__streq(argv[k], "--sym-file") ||
                __streq(argv[k], "-sym-file")) {

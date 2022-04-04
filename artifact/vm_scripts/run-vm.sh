@@ -16,12 +16,12 @@ exec qemu-system-x86_64 \
           -hda $IMG_NAME \
           -m $MEM \
           --append "console=ttyS0,115200n8, root=/dev/sda1" \
-          -balloon virtio \
           -smp $(nproc) \
           -cpu host,$CPU_FEATURES_DISABLE \
           -net user,hostfwd=tcp::5000-:22 \
-          -net nic 
+          -net nic
 
-          #-netdev user,id=mynet \
-          #-device virtio-net-pci,netdev=mynet \
-          #-nographic -no-reboot \
+        # -balloon virtio \
+        #-netdev user,id=mynet \
+        #-device virtio-net-pci,netdev=mynet \
+        #-nographic -no-reboot \

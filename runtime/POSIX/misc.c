@@ -75,7 +75,7 @@ unsigned int sleep(unsigned int seconds) {
   return 0;
 }
 
-int gettimeofday(struct timeval *tv, struct timezone *tz) {
+int gettimeofday(struct timeval *tv, void *tz) {
   if (tv) {
     uint64_t ktime = klee_get_time();
     tv->tv_sec = ktime / 1000000;
@@ -83,8 +83,9 @@ int gettimeofday(struct timeval *tv, struct timezone *tz) {
   }
 
   if (tz) {
-    tz->tz_dsttime = 0;
-    tz->tz_minuteswest = 0;
+    // tz->tz_dsttime = 0;
+    // tz->tz_minuteswest = 0;
+    klee_warning("ignoring timezone get request");
   }
 
   return 0;

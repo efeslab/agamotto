@@ -2,6 +2,8 @@
 
 This document describes the artifact for our OSDI '20 paper on <span style="font-variant:small-caps;">Agamotto</span>, a symbolic-execution based approach for systematically finding bugs in persistent memory applications and libraries. The remainder of this document describes how to run <span style="font-variant:small-caps;">Agamotto</span> and reproduce the key results from our paper.
 
+If you are looking for some guidance on how to test new systems with <span style="font-variant:small-caps;">Agamotto</span>, look at the [`nvmbugs/testing_examples` README](../nvmbugs/testing_example/README.md).
+
 ### Resources
 
 - [A Google Sheet](https://docs.google.com/spreadsheets/d/1cwNR_5lKvxLAHp56luGM2KZ5dMcEsjibxQjAuSUV7BQ/edit?usp=sharing) which contains our two appendices; the results of the bug study and the bugs we found in our evaluation.
@@ -43,8 +45,9 @@ The procedure for building <span style="font-variant:small-caps;">Agamotto</span
 #### Creating the VM (optional)
 
 ```
+sudo apt-get install libguestfs-tools
 ./vm_scripts/install-vm.sh
-# configure 
+# configure
 
 mkdir -p mnt; mkdir -p boot
 sudo guestmount -a agamotto.qcow2 -i -o allow_other mnt
@@ -56,7 +59,7 @@ sudo guestunmount mnt
 ./run-vm.sh
 # --- from inside the VM
 cd ~/
-git clone https://github.com/efeslab/klee-nvm.git agamotto 
+git clone https://github.com/efeslab/agamotto.git agamotto
 git submodule init
 git submodule update
 mkdir -p build
@@ -68,14 +71,15 @@ cd build
 #### Using the prebuilt VM (recommended)
 
 ```
+sudo apt-get install libguestfs-tools
 # Download agamotto.qcow2 from the Google drive link
 mv agamotto.qcow2 artifact/vm_scripts
 
 # This is necessary to extract the vmlinuz and initrd.img for the run-vm.sh script
 mkdir -p mnt; mkdir -p boot
 sudo guestmount -a agamotto.qcow2 -i -o allow_other mnt
-cp mnt/vmlinuz boot
-cp mnt/initrd.img boot
+sudo cp mnt/vmlinuz boot
+sudo cp mnt/initrd.img boot
 sudo guestunmount mnt
 
 ./run-vm.sh

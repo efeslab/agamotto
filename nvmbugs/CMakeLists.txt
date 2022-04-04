@@ -203,3 +203,5 @@ add_subdirectory(003_heuristic_functional)
 add_subdirectory(004_heuristic_correctness)
 add_subdirectory(005_nvm_direct)
 add_subdirectory(hashmap_atomic)
+
+add_subdirectory(testing_example)
