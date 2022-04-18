@@ -17,6 +17,14 @@ If you are looking for some guidance on how to test new systems with <span style
 - Username: `reviewer`
 - Password: `osdi2020_agamotto` (you should probably change this after you log in)
 
+An easy method of downloading is to use `gdown` ([reference](https://stackoverflow.com/questions/25010369/wget-curl-large-file-from-google-drive)):
+
+```sh
+sudo -H pip3 install gdown
+cd agamotto/artifact/vm_scripts
+gdown 1UG29UOcxE6INndZqMX0G_9VSBrCd-xUg
+```
+
 ## Artifact Overview
 
 
@@ -180,7 +188,7 @@ to running <span style="font-variant:small-caps;">Klee</span> (see [this tutoria
 visible via `klee --help`)
 
 General arguments:
-- `--search=nvm --nvm-heuristic-type=static`: This causes <span style="font-variant:small-caps;">Klee</span> to use <span style="font-variant:small-caps;">Agamotto</span>'s PM-aware heuristic search. 
+- `--search=nvm --nvm-heuristic-type=static`: This causes <span style="font-variant:small-caps;">Klee</span> to use <span style="font-variant:small-caps;">Agamotto</span>'s PM-aware heuristic search.
 - `--custom-checkers=true`: This enables the use of semantic bug oracles.
 
 POSIX runtime arguments (part of the [symbolic environment model](https://klee.github.io/tutorials/using-symbolic/)):
@@ -196,7 +204,7 @@ are symbolic on initialization and can represent any value.
 There are four main results from <span style="font-variant:small-caps;">Agamotto</span>:
 
 1. The number of new bugs found.
-2. The performance of <span style="font-variant:small-caps;">Agamotto</span>'s 
+2. The performance of <span style="font-variant:small-caps;">Agamotto</span>'s
 search strategy compared to <span style="font-variant:small-caps;">Klee</span>'s default search strategy.
 3. The overhead of <span style="font-variant:small-caps;">Agamotto</span>'s static analysis.
 4. The number of bugs reproduced from prior work.
@@ -217,7 +225,7 @@ cd artifact/targets
 ./run_redis_eval.sh
 ```
 
-This creates <span style="font-variant:small-caps;">Klee</span> output files under `artifact/results`. These are the same as running standard <span style="font-variant:small-caps;">Klee</span> tests, but additionally outputs `all_pmem_err.csv` and `all.pmem.err`, which provide tabular and textual descriptions of all 
+This creates <span style="font-variant:small-caps;">Klee</span> output files under `artifact/results`. These are the same as running standard <span style="font-variant:small-caps;">Klee</span> tests, but additionally outputs `all_pmem_err.csv` and `all.pmem.err`, which provide tabular and textual descriptions of all
 encountered PM bugs, respectively. In the `artifact/results` directory, we provide a number of scripts
 to parse <span style="font-variant:small-caps;">Agamotto</span>'s output automatically.
 
@@ -263,10 +271,10 @@ sudo -H pip3 install -r requirements.txt
 
 This generates `{pmdk,recipe,memcached,nvm-direct,redis}.pdf` in the same directory. These
 graphs represent the performance of <span style="font-variant:small-caps;">Agamotto</span>'s search strategy
-versus <span style="font-variant:small-caps;">Klee</span>'s default search strategy, and should be 
+versus <span style="font-variant:small-caps;">Klee</span>'s default search strategy, and should be
 similar to the results shown in the evaluation in our paper.
 
-Note that this experiment is dependent on the underlying CPU for timing and 
+Note that this experiment is dependent on the underlying CPU for timing and
 may vary.
 
 
@@ -292,9 +300,9 @@ pmdk              0.596972
 Name: Offline Overhead (minutes), dtype: float64
 ```
 
-Note that this experiment is dependent on the underlying CPU for timing and 
+Note that this experiment is dependent on the underlying CPU for timing and
 may vary. In addition, we have modified our alias analysis algorithm from our original submission,
-so the precise numbers may vary. 
+so the precise numbers may vary.
 
 ### 4. Reproducing bugs from prior work
 
@@ -332,7 +340,7 @@ Number of unique reproduced bugs: 5
 
 ### 5. Manually inspecting <span style="font-variant:small-caps;">Agamotto</span>'s output
 
-If you would like to inspect 
+If you would like to inspect
 
 For example, if we want to look at the bottom for each stack frame for all bugs found in `memcached-pmem`, we could run the following commands (assumes you have already run the `memcached-pmem` test):
 

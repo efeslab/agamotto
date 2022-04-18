@@ -32,7 +32,7 @@ static void __emit_error(const char *msg) {
 
 /* Helper function that converts a string to an integer, and
    terminates the program with an error message is the string is not a
-   proper number */   
+   proper number */
 static long int __str_to_int(char *s, const char *error_msg) {
   long int res = 0;
   char c;
@@ -82,7 +82,7 @@ static char *__get_sym_str(int numChars, char *name) {
 
   for (i=0; i<numChars; i++)
     klee_posix_prefer_cex(s, __isprint(s[i]));
-  
+
   s[numChars] = '\0';
   return s;
 }
@@ -96,7 +96,7 @@ static void __add_arg(int *argc, char **argv, char *arg, int argcMax) {
   }
 }
 
-static char help_msg[] = 
+static char help_msg[] =
 "klee_init_env\n\n"
 "usage: (klee_init_env) [options] [program arguments]\n"
 "\n"
@@ -189,7 +189,7 @@ static int __parse_optional_sock_handler_args(int argc, char **argv, int k,
 
     int shargc = 0;
     char **shargv = NULL;
-    
+
     if (++k >= argc) {
       __emit_error(msg);
     }
@@ -291,15 +291,15 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
 
       if (sym_arg_num + max_argvs > 99)
         __emit_error("No more than 100 symbolic arguments allowed.");
-        
-      
-      // Instead of using a symboclic number of args, 
+
+
+      // Instead of using a symboclic number of args,
       // we set the number of symbolic args as the max-argvs
       for (i = 0; i < n_args; i++) {
         sym_arg_name[3] = '0' + sym_arg_num / 10;
         sym_arg_name[4] = '0' + sym_arg_num % 10;
         sym_arg_num++;
-        
+
         __add_arg(&new_argc, new_argv, __get_sym_str(max_len, sym_arg_name),
                   1024);
       }
@@ -383,7 +383,7 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
         __emit_error("The second argument to --sym-pmem (file size) cannot be 0\n");
       }
       __add_symfs_file(&fid, SYMBOLIC, PMEM_SYMBOLIC, file_name, file_size);
-    } else if (__streq(argv[k], "--sym-pmem-init-from") || 
+    } else if (__streq(argv[k], "--sym-pmem-init-from") ||
                __streq(argv[k], "-sym-pmem-init-from")) {
       const char *msg = "--sym-pmem-init-from expects one string <init_from_path>";
       if (k + 1 >= argc)
@@ -391,7 +391,7 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
       k++;
       const char *file_path = argv[k++];
       __add_symfs_file(&fid, SYMBOLIC, PMEM_FROM_CONCRETE, file_path, 0);
-    } else if (__streq(argv[k], "--sym-pmem-zeroed") || 
+    } else if (__streq(argv[k], "--sym-pmem-zeroed") ||
                __streq(argv[k], "-sym-pmem-zeroed")) {
       const char *msg = "--sym-pmem-zeroed expects one string argument "
                         "<filename> and one integer argument <size>";
@@ -403,7 +403,7 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
         __emit_error("--sym-pmem-zeroed file size cannot be 0\n");
       }
       __add_symfs_file(&fid, SYMBOLIC, PMEM_SYM_ZERO, file_name, file_size);
-    } else if (__streq(argv[k], "--sym-pmem-delay") || 
+    } else if (__streq(argv[k], "--sym-pmem-delay") ||
                __streq(argv[k], "-sym-pmem-delay")) {
       const char *msg = "--sym-pmem-delay expects one string argument "
                         "<filename> and one integer argument <size>";
@@ -529,7 +529,7 @@ void klee_init_env(int *argcPtr, char ***argvPtr) {
   klee_mark_global(final_argv);
   memcpy(final_argv, new_argv, new_argc * sizeof(*final_argv));
   final_argv[new_argc] = 0;
-  
+
   *argcPtr = new_argc;
   *argvPtr = final_argv;
 

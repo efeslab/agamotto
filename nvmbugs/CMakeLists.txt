@@ -39,18 +39,18 @@ endif()
 # Doing CC.... make doesn't work. Need to have the command first, then the variables
 
 # set(KLEE_FLAGS "-g -O0 -Xclang -disable-O0-optnone -D__NO_STRING_INLINES")
-execute_process(COMMAND make 
+execute_process(COMMAND make
                         DEBUG=1
-                        CC=wllvm 
+                        CC=wllvm
                         CXX=wllvm++
                         EXTRA_CFLAGS=${KLEE_FLAGS}
                         EXTRA_CXXFLAGS=${KLEE_FLAGS}
                         NDCTL_ENABLE=n
                         AVX512F_AVAILABLE=n
                         -C ${PMDK_ROOT_DIR} -j${N})
-execute_process(COMMAND make 
+execute_process(COMMAND make
                         DEBUG=1
-                        CC=wllvm 
+                        CC=wllvm
                         CXX=wllvm++
                         EXTRA_CFLAGS=${KLEE_FLAGS}
                         EXTRA_CXXFLAGS=${KLEE_FLAGS}
@@ -89,7 +89,7 @@ if(NOT EXISTS "${LIBEVENT_ROOT_DIR}")
     execute_process(COMMAND ${LIBEVENT_ROOT_DIR}/autogen.sh
                 WORKING_DIRECTORY ${LIBEVENT_ROOT_DIR})
 
-    execute_process(COMMAND env CC=wllvm CXX=wllvm++ CFLAGS=${KLEE_FLAGS} 
+    execute_process(COMMAND env CC=wllvm CXX=wllvm++ CFLAGS=${KLEE_FLAGS}
                             ${LIBEVENT_ROOT_DIR}/configure --disable-openssl
                     WORKING_DIRECTORY ${LIBEVENT_ROOT_DIR})
 endif()
@@ -129,19 +129,19 @@ if(NOT EXISTS "${MEMCACHED_ROOT_DIR}")
     message("no memcached at ${memcached_ROOT_DIR}")
     execute_process(COMMAND git clone https://github.com/lenovo/memcached-pmem ${MEMCACHED_ROOT_DIR})
     execute_process(COMMAND git -C ${MEMCACHED_ROOT_DIR} checkout master)
-    
+
     set(MEMCACHED_LIBS_FLAGS "-levent -lpmem")
     set(MEMCACHED_LDFLAGS_FLAGS "-L${LIBEVENT_LIB_DIR} -L${PMDK_LIB_DIR}")
     set(MEMCACHED_CFLAGS_FLAGS "-I${LIBEVENT_INCLUDE_DIR} -I${PMDK_INCLUDE_DIR} ${KLEE_FLAGS}")
     set(MEMCACHED_LD_PATH "${LIBEVENT_LIB_DIR}:${PMDK_LIB_DIR}")
-    
+
     set(ENV{LD_LIBRARY_PATH} "${MEMCACHED_LD_PATH}")
     execute_process(COMMAND env
                             LIBS=${MEMCACHED_LIBS_FLAGS}
                             LDFLAGS=${MEMCACHED_LDFLAGS_FLAGS}
                             CFLAGS=${MEMCACHED_CFLAGS_FLAGS}
-                            CC=wllvm 
-                            CXX=wllvm++ 
+                            CC=wllvm
+                            CXX=wllvm++
                             ${MEMCACHED_ROOT_DIR}/configure --enable-pslab
                     WORKING_DIRECTORY ${MEMCACHED_ROOT_DIR})
 endif()
@@ -149,9 +149,9 @@ endif()
 execute_process(COMMAND make -j${N} -C ${MEMCACHED_ROOT_DIR})
 # message("${CMAKE_BINARY_DIR}/bin/memcached.bc")
 execute_process(COMMAND extract-bc "memcached" -o "${CMAKE_BINARY_DIR}/bin/memcached.bc"
-                WORKING_DIRECTORY ${MEMCACHED_ROOT_DIR})      
-# add_custom_command(COMMAND extract-bc $<TARGET_FILE:${MEMCACHED_ROOT_DIR}/memcached> 
-#                            -o $<TARGET_FILE_DIR:klee>/memcached.bc)         
+                WORKING_DIRECTORY ${MEMCACHED_ROOT_DIR})
+# add_custom_command(COMMAND extract-bc $<TARGET_FILE:${MEMCACHED_ROOT_DIR}/memcached>
+#                            -o $<TARGET_FILE_DIR:klee>/memcached.bc)
 
 ################################################################################
 
@@ -169,14 +169,14 @@ if(NOT EXISTS "${MEMCACHED_ROOT_DIR}")
     set(MEMCACHED_LDFLAGS_FLAGS "-L${LIBEVENT_LIB_DIR} -L${PMDK_LIB_DIR}")
     set(MEMCACHED_CFLAGS_FLAGS "-I${LIBEVENT_INCLUDE_DIR} -I${PMDK_INCLUDE_DIR} ${KLEE_FLAGS}")
     set(MEMCACHED_LD_PATH "${LIBEVENT_LIB_DIR}:${PMDK_LIB_DIR}")
-    
+
     set(ENV{LD_LIBRARY_PATH} "${MEMCACHED_LD_PATH}")
     execute_process(COMMAND env
                             LIBS=${MEMCACHED_LIBS_FLAGS}
                             LDFLAGS=${MEMCACHED_LDFLAGS_FLAGS}
                             CFLAGS=${MEMCACHED_CFLAGS_FLAGS}
-                            CC=wllvm 
-                            CXX=wllvm++ 
+                            CC=wllvm
+                            CXX=wllvm++
                             ${MEMCACHED_ROOT_DIR}/configure --enable-pslab
                     WORKING_DIRECTORY ${MEMCACHED_ROOT_DIR})
 endif()
@@ -185,7 +185,7 @@ execute_process(COMMAND git -C ${MEMCACHED_ROOT_DIR} pull)
 execute_process(COMMAND make -j${N} clean -C ${MEMCACHED_ROOT_DIR})
 execute_process(COMMAND make -j${N} -C ${MEMCACHED_ROOT_DIR})
 execute_process(COMMAND extract-bc "memcached" -o "${CMAKE_BINARY_DIR}/bin/memcached-patched.bc"
-                WORKING_DIRECTORY ${MEMCACHED_ROOT_DIR})    
+                WORKING_DIRECTORY ${MEMCACHED_ROOT_DIR})
 
 ################################################################################
 
@@ -196,7 +196,7 @@ add_custom_target(set_wllvm_env COMMAND export LLVM_COMPILER=clang; export LLVM_
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 add_subdirectory(000_pmdk_btree_map)
-add_subdirectory(001_simple)  
+add_subdirectory(001_simple)
 add_subdirectory(002_simple_symbolic)
 add_subdirectory(003_pmdk_rbtree_map)
 add_subdirectory(003_heuristic_functional)

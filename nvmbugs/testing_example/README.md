@@ -27,6 +27,15 @@ run the application. For example, I read the main function of [`main.c`](Level_H
 I also have to read the original Makefiles/build system to find what libraries the
 application may depend on when I add a new application to Agamotto's build system (this is how I derive the commands in the CMakeLists.txt file).
 
+When adding something new to the build system, you need to refresh the CMake files under the build directory:
+
+```sh
+cd build
+cmake ..
+```
+
+Note that since CMake caches previous values of options set (see `build/CMakeCache.txt`), you can just run `cmake ..` if you have previously run `cmake` and you will preserve the same configuration.
+
 ## Running Level Hashing
 
 Normally, you'd run this test using a command like this:

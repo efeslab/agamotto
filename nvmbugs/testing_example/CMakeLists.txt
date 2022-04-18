@@ -19,6 +19,9 @@ set(LEVEL_HASHING_SOURCES
 set(CMAKE_C_FLAGS
   "${CMAKE_C_FLAGS} -g -O1 -Xclang -disable-llvm-passes -D__NO_STRING_INLINES -D_FORTIFY_SOURCE=0 -U__OPTIMIZE__")
 
+include_directories(${PMDK_INCLUDE_DIR} "./Level_Hashing/include")
+link_directories(${PMDK_LIB_DIR})
+
 # This command is defined in $REPO_DIR/cmake/klee_add_test_executable.cmake
 # It simplifies some of the repeated compilation tasks.
 # This will also automatically create a ExLevelHashing.bc file, which is what
@@ -27,8 +30,3 @@ set(CMAKE_C_FLAGS
 klee_add_test_executable(TARGET ExLevelHashing
                          SOURCES ${LEVEL_HASHING_SOURCES}
                          EXTRA_LIBS pmemobj pmem m)
-target_include_directories(ExLevelHashing
-                           PUBLIC ${PMDK_INCLUDE_DIR}
-                           PUBLIC "./Level_Hashing/include")
-target_link_directories(ExLevelHashing
-                        PUBLIC ${PMDK_LIB_DIR})

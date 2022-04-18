@@ -264,7 +264,7 @@ int munmap(void *addr, size_t length) {
   return -1;
 #endif // HAVE_MODEL_MMAP
 }
-#endif 
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 // Low-level Memory Manipulation Routines

@@ -20,8 +20,3 @@ exec qemu-system-x86_64 \
           -cpu host,$CPU_FEATURES_DISABLE \
           -net user,hostfwd=tcp::5000-:22 \
           -net nic
-
-        # -balloon virtio \
-        #-netdev user,id=mynet \
-        #-device virtio-net-pci,netdev=mynet \
-        #-nographic -no-reboot \
