@@ -41,9 +41,16 @@ Note that since CMake caches previous values of options set (see `build/CMakeCac
 Normally, you'd run this test using a command like this:
 
 ```sh
-cd build
+$ cd build
+# ./bin/ExLevelHashing <path to PM file> <size of PM file> <name of layout> <path to operations file> <start operation> <operation to skip> <output file path>
+$ ./bin/ExLevelHashing lhl.pmem 32 lhl ../nvmbugs/testing_example/Level_Hashing/random/op_file_small.txt 0 -1 output.txt
 
-./bin/ExLevelHashing /mnt/pmem/lhl.pmem 32 lhl ../nvmbugs/testing_example/Level_Hashing/random/op_file_small.txt 0 -1 output.txt
+Creating a new level hash.
+Level hashing: ASSOC_NUM 4, KEY_LEN 16, VALUE_LEN 15 
+The number of top-level buckets: 4
+The number of all buckets: 6
+The number of all entries: 24
+The level hash table initialization succeeds!
 ```
 
 However, we want to run this under KLEE.
