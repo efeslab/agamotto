@@ -75,7 +75,8 @@ unsigned int sleep(unsigned int seconds) {
   return 0;
 }
 
-int gettimeofday(struct timeval *tv, void *tz) {
+#if 0
+int gettimeofday(struct timeval *__restrict tv, void *tz) {
   if (tv) {
     uint64_t ktime = klee_get_time();
     tv->tv_sec = ktime / 1000000;
@@ -90,6 +91,7 @@ int gettimeofday(struct timeval *tv, void *tz) {
 
   return 0;
 }
+#endif
 
 int settimeofday(const struct timeval *tv, const struct timezone *tz) {
   if (tv) {
